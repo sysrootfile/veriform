@@ -46,6 +46,15 @@ describe("createInMemoryPanelStore", () => {
     );
   });
 
+  it("getSite var olan siteyi döndürür, bilinmeyeni null verir", async () => {
+    const store = createInMemoryPanelStore();
+    const tenant = await store.createTenant({ name: "A", kind: "direct" });
+    const client = await store.createClient({ tenantId: tenant.id, name: "M" });
+    const site = await store.createSite({ clientId: client.id, url: "https://musteri1.com" });
+    expect((await store.getSite(site.id))?.url).toBe("https://musteri1.com");
+    expect(await store.getSite("yok")).toBeNull();
+  });
+
   it("tarama kronolojik kaydedilir; döndürülen nesne izole kopyadır", async () => {
     const store = createInMemoryPanelStore();
     const tenant = await store.createTenant({ name: "A", kind: "direct" });
