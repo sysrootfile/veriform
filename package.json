@@ -9,7 +9,9 @@
     "test:watch": "vitest",
     "build:embed": "esbuild src/embed/main.ts --bundle --format=iife --target=es2020 --outfile=dist/veriform-embed.js --log-level=info",
     "build:scan": "esbuild src/scanner/cli.ts --bundle --platform=node --format=esm --packages=external --outfile=dist/scan.mjs --log-level=silent",
-    "scan": "pnpm build:scan && node dist/scan.mjs"
+    "scan": "pnpm build:scan && node dist/scan.mjs",
+    "build:demo": "esbuild src/report/demo.ts --bundle --platform=node --format=esm --packages=external --outfile=dist/demo.mjs --log-level=silent",
+    "demo": "pnpm build:demo && node dist/demo.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",
