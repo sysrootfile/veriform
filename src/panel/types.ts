@@ -44,4 +44,12 @@ export interface StoredScan {
   observedTargets: RequestTarget[];
 }
 
+export interface PanelUser {
+  id: string;
+  tenantId: string;
+  email: string;
+  passwordHash: string;
+  createdAt: string;
+}
+
 export type { ConsentReceipt };

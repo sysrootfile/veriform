@@ -2,7 +2,7 @@ import type { RequestTarget } from "../collector/targets.js";
 import type { ConsentReceipt } from "../consent/receipt.js";
 import type { FormInventoryReport } from "../report/types.js";
 import { makeChainEntry, verifyStoredChain, verifyReceiptSelfHash, type StoredReceiptEntry } from "./chain.js";
-import type { Client, ScanCookie, Site, StoredScan, Tenant, TenantKind } from "./types.js";
+import type { Client, PanelUser, ScanCookie, Site, StoredScan, Tenant, TenantKind } from "./types.js";
 
 /**
  * Ajans paneli depolama portu — Postgres adapter'ı (RLS'li, bkz. schema.sql)
@@ -28,6 +28,8 @@ export interface PanelStore {
   /** Client kanıtının selfHash'i doğrulanır; zincir bağını sunucu hesaplar. */
   appendReceipt(input: { siteId: string; receipt: ConsentReceipt }): Promise<StoredReceiptEntry>;
   verifySiteChain(siteId: string): Promise<boolean>;
+  createUser(input: { tenantId: string; email: string; passwordHash: string }): Promise<PanelUser>;
+  findUserByEmail(email: string): Promise<PanelUser | null>;
 }
 
 export function createInMemoryPanelStore(): PanelStore {
@@ -36,6 +38,7 @@ export function createInMemoryPanelStore(): PanelStore {
   const sites: Site[] = [];
   const scans: StoredScan[] = [];
   const receiptEntries: StoredReceiptEntry[] = [];
+  const users: PanelUser[] = [];
 
   const clone = <T>(value: T): T => structuredClone(value);
 
@@ -137,6 +140,26 @@ function randomIngestToken(): string {
 
     async verifySiteChain(siteId) {
       return verifyStoredChain(receiptEntries.filter((e) => e.siteId === siteId));
+    },
+
+    async createUser(input) {
+      if (users.some((u) => u.email === input.email)) {
+        throw new Error("e-posta zaten kayıtlı");
+      }
+      const user: PanelUser = {
+        id: crypto.randomUUID(),
+        tenantId: input.tenantId,
+        email: input.email,
+        passwordHash: input.passwordHash,
+        createdAt: new Date().toISOString(),
+      };
+      users.push(user);
+      return clone(user);
+    },
+
+    async findUserByEmail(email) {
+      const user = users.find((u) => u.email === email);
+      return user ? clone(user) : null;
     },
   };
 }

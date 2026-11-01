@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { StoredScan } from "./types.js";
-import { renderClientsPage, renderSitePage } from "./render.js";
+import { renderClientsPage, renderLoginPage, renderRegisterPage, renderSitePage } from "./render.js";
 
 function scan(over: Partial<StoredScan> = {}): StoredScan {
   return {
@@ -102,5 +102,29 @@ describe("renderSitePage", () => {
       scans: [],
     });
     expect(html).not.toContain("<script>alert");
+  });
+});
+
+describe("renderLoginPage / renderRegisterPage", () => {
+  it("giriş formu POST /login'e e-posta+şifre alanlarıyla çizilir", () => {
+    const html = renderLoginPage();
+    expect(html).toContain('action="/login"');
+    expect(html).toContain('name="email"');
+    expect(html).toContain('name="password"');
+  });
+
+  it("hata kodu statik metne çevrilir (kullanıcı verisi HTML'e girmez)", () => {
+    const html = renderLoginPage({ hasError: true });
+    expect(html).toContain("E-posta veya şifre hatalı");
+    const reg = renderRegisterPage({ errorKind: "duplicate" });
+    expect(reg).toContain("zaten kayıtlı");
+  });
+
+  it("kayıt formu ajans adı + e-posta + şifre ister ve POST /register'e gider", () => {
+    const html = renderRegisterPage();
+    expect(html).toContain('action="/register"');
+    expect(html).toContain('name="name"');
+    expect(html).toContain('name="email"');
+    expect(html).toContain('name="password"');
   });
 });

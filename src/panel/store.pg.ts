@@ -9,7 +9,7 @@ import {
   type StoredReceiptEntry,
 } from "./chain.js";
 import type { PanelStore } from "./store.js";
-import type { Client, ScanCookie, Site, StoredScan, Tenant, TenantKind } from "./types.js";
+import type { Client, PanelUser, ScanCookie, Site, StoredScan, Tenant, TenantKind } from "./types.js";
 
 /**
  * PanelStore portunun gerçek Postgres adapter'ı — src/panel/schema.sql üstünde.
@@ -57,6 +57,16 @@ function mapScan(row: pg.QueryResultRow): StoredScan {
     report: row.report as FormInventoryReport,
     cookies: row.cookies as ScanCookie[],
     observedTargets: row.observed_targets as RequestTarget[],
+  };
+}
+
+function mapUser(row: pg.QueryResultRow): PanelUser {
+  return {
+    id: String(row.id),
+    tenantId: String(row.tenant_id),
+    email: String(row.email),
+    passwordHash: String(row.password_hash),
+    createdAt: iso(row.created_at as Date),
   };
 }
 
@@ -187,6 +197,27 @@ export function createPostgresPanelStore(connectionString: string): PostgresPane
         chainHash: String(row.chain_hash),
       }));
       return verifyStoredChain(entries);
+    },
+
+    async createUser(input) {
+      try {
+        const result = await pool.query(
+          "insert into users (tenant_id, email, password_hash) values ($1, $2, $3) returning *",
+          [input.tenantId, input.email, input.passwordHash],
+        );
+        return clone(mapUser(result.rows[0]!));
+      } catch (error) {
+        // Postgres benzersizlik ihlali (23505) → port sözleşmesindeki mesaj
+        if (typeof error === "object" && error !== null && "code" in error && (error as { code?: string }).code === "23505") {
+          throw new Error(`e-posta zaten kayıtlı: ${input.email}`);
+        }
+        throw error;
+      }
+    },
+
+    async findUserByEmail(email) {
+      const result = await pool.query("select * from users where email = $1", [email]);
+      return result.rows[0] ? clone(mapUser(result.rows[0])) : null;
     },
 
     async close() {

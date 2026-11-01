@@ -54,6 +54,7 @@ export interface ClientRow {
 export function renderClientsPage(input: {
   tenantName: string;
   clients: ClientRow[];
+  demoSiteHref?: string | undefined;
 }): string {
   const e = escapeHtml;
   const rows = input.clients.length
@@ -65,9 +66,14 @@ export function renderClientsPage(input: {
         .join("\n")
     : '<tr><td class="empty">Henüz müşteri eklenmedi.</td></tr>';
 
+  const demoLink = input.demoSiteHref
+    ? `<p class="empty">Demo: <a href="${e(input.demoSiteHref)}">örnek site sayfası</a></p>`
+    : "";
+
   return page(
     input.tenantName,
     `<h1>Veriform Panel · ${e(input.tenantName)}</h1>
+${demoLink}
 <h2>Müşteriler</h2>
 <table>${rows}</table>
 <form method="post" action="/clients">
@@ -105,5 +111,42 @@ export function renderSitePage(input: {
 <tr><th>Tarih</th><th class="num">Form</th><th class="num">Risk</th><th class="num">Çerez ihlali</th></tr>
 ${rows}
 </table>`,
+  );
+}
+
+/** Giriş/kayıt hata metinleri — rota yalnızca kod/boolean geçirir, metin sabittir. */
+export const LOGIN_ERROR_TEXT = "E-posta veya şifre hatalı";
+export const REGISTER_ERRORS: Record<"duplicate" | "generic", string> = {
+  duplicate: "Bu e-posta zaten kayıtlı — başka bir e-posta deneyin.",
+  generic: "Kayıt başarısız — girdileri kontrol edin.",
+};
+
+export function renderLoginPage(options: { hasError?: boolean } = {}): string {
+  return page(
+    "Giriş",
+    `<h1>Veriform Panel · Giriş</h1>
+${options.hasError ? `<p class="badge-warn">${LOGIN_ERROR_TEXT}</p>` : ""}
+<form method="post" action="/login">
+  <input name="email" type="email" placeholder="E-posta" required>
+  <input name="password" type="password" placeholder="Şifre" required>
+  <button type="submit">Giriş yap</button>
+</form>
+<p class="empty">Hesabın yok mu? <a href="/register">Ajansını kaydet</a></p>`,
+  );
+}
+
+export function renderRegisterPage(options: { errorKind?: "duplicate" | "generic" } = {}): string {
+  const errorText = options.errorKind ? REGISTER_ERRORS[options.errorKind] : undefined;
+  return page(
+    "Kayıt",
+    `<h1>Veriform Panel · Ajans Kaydı</h1>
+${errorText ? `<p class="badge-warn">${errorText}</p>` : ""}
+<form method="post" action="/register">
+  <input name="name" placeholder="Ajans adı" required>
+  <input name="email" type="email" placeholder="E-posta" required>
+  <input name="password" type="password" placeholder="Şifre" minlength="8" required>
+  <button type="submit">Kaydol</button>
+</form>
+<p class="empty">Zaten hesabın var mı? <a href="/login">Giriş yap</a></p>`,
   );
 }

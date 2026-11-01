@@ -19,6 +19,7 @@ services:
     environment:
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-veriform}@db:5432/veriform
       PORT: "4620"
+      SESSION_SECRET: ${SESSION_SECRET:-dev-secret-change-me}
     ports:
       - "4620:4620"
     depends_on:
