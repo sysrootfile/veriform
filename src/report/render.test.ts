@@ -64,4 +64,32 @@ describe("renderReportHtml", () => {
     expect(html).toContain("https://bos.com");
     expect(html).toContain("0");
   });
+
+  it("rıza öncesi çerezler: yalnızca zorunlu olmayanlar listelenir ve sayılır", () => {
+    const cookies = [
+      { name: "_fbp", domain: ".site.com", category: "marketing" },
+      { name: "PHPSESSID", domain: ".site.com", category: "necessary" },
+      { name: "ab_test", domain: ".", category: "unknown" },
+    ];
+    const html = renderReportHtml(sample, { cookies });
+    expect(html).toContain("Rıza Öncesi Çerezler");
+    expect(html).toContain("_fbp");
+    expect(html).toContain("ab_test");
+    expect(html).toContain("Pazarlama");
+    expect(html).toContain("Sınıflandırılamadı");
+    // zorunlu çerez ihlal değildir — listede yer almaz
+    expect(html).not.toContain("PHPSESSID");
+  });
+
+  it("çerez verilmezse çerez bölümü hiç render edilmez", () => {
+    expect(renderReportHtml(sample)).not.toContain("Rıza Öncesi Çerezler");
+  });
+
+  it("XSS: çerez adları HTML'e kaçırılır", () => {
+    const html = renderReportHtml(sample, {
+      cookies: [{ name: '"><script>x()</script>', domain: ".", category: "marketing" }],
+    });
+    expect(html).not.toContain("<script>x()");
+    expect(html).toContain("&lt;script&gt;");
+  });
 });
