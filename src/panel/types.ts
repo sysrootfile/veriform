@@ -24,6 +24,8 @@ export interface Site {
   id: string;
   clientId: string;
   url: string;
+  /** Embed/scanner'ın tarama ve kanıt POST'laması için gizli anahtar (64 hex). */
+  ingestToken: string;
   createdAt: string;
 }
 
