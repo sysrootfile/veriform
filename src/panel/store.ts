@@ -15,6 +15,7 @@ export interface PanelStore {
   createClient(input: { tenantId: string; name: string }): Promise<Client>;
   listClients(tenantId: string): Promise<Client[]>;
   createSite(input: { clientId: string; url: string }): Promise<Site>;
+  getSite(siteId: string): Promise<Site | null>;
   saveScan(input: {
     siteId: string;
     report: FormInventoryReport;
@@ -78,6 +79,11 @@ export function createInMemoryPanelStore(): PanelStore {
       };
       sites.push(site);
       return clone(site);
+    },
+
+    async getSite(siteId) {
+      const site = sites.find((s) => s.id === siteId);
+      return site ? clone(site) : null;
     },
 
     async saveScan(input) {
