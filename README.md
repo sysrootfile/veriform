@@ -17,6 +17,13 @@ pnpm test        # vitest run
 pnpm test:watch  # vitest
 ```
 
+Postgres entegrasyon testleri yalnızca `PG_URL` verilince koşar (örn. docker'da
+`postgres:16-alpine` + `src/panel/schema.sql` uygulanmış veritabanı):
+
+```bash
+PG_URL=postgresql://postgres:veriform@127.0.0.1:54329/veriform pnpm test -- src/panel/store.pg.test.ts
+```
+
 ## Mimari ilkeler
 
 1. **İzleyici ham veri saklamaz** — script yalnızca alan adı/meta veri kaydeder; değer içeriği sunucuya hiç gitmez.

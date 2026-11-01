@@ -21,10 +21,11 @@ create table clients (
 create index clients_tenant_idx on clients (tenant_id);
 
 create table sites (
-  id         uuid primary key default gen_random_uuid(),
-  client_id  uuid not null references clients (id) on delete cascade,
-  url        text not null,
-  created_at timestamptz not null default now()
+  id           uuid primary key default gen_random_uuid(),
+  client_id    uuid not null references clients (id) on delete cascade,
+  url          text not null,
+  ingest_token text not null unique,
+  created_at   timestamptz not null default now()
 );
 create index sites_client_idx on sites (client_id);
 
