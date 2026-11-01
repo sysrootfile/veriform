@@ -18,7 +18,10 @@ if (!url) {
 const result = await scanSite(url, { embedSource: await buildEmbedSource() });
 await closeSharedBrowser(); // tarayıcı çocuğu açık kalırsa süreç kapanmaz
 
-const html = renderReportHtml(result.report, { scannedAt: new Date().toISOString() });
+const html = renderReportHtml(result.report, {
+  scannedAt: new Date().toISOString(),
+  cookies: result.cookies,
+});
 await mkdir(dirname(out), { recursive: true });
 await writeFile(out, html, "utf8");
 console.log(`Rapor yazıldı: ${out} (${result.report.formCount} form, ${result.report.riskFlags.length} risk)`);

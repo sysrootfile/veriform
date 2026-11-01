@@ -30,14 +30,34 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 const label = (category: string): string => CATEGORY_LABELS[category] ?? category;
 
+const COOKIE_LABELS: Record<string, string> = {
+  necessary: "Zorunlu",
+  functional: "İşlevsel",
+  analytics: "Analitik",
+  marketing: "Pazarlama/Reklam",
+  unknown: "Sınıflandırılamadı",
+};
+
 const RISK_LABELS: Record<string, string> = {
   "get-with-sensitive": "GET formunda hassas veri — URL sorgu sızıntısı riski",
   "cross-origin-target": "Farklı kaynağa (3. tarafa) veri gönderimi",
 };
 
+/** Taramadan gelen çerez envanteri — yapısal tip (scanner'a bağımlılık yok). */
+export interface RenderCookie {
+  name: string;
+  domain: string;
+  category: string;
+}
+
+export interface RenderOptions {
+  scannedAt?: string;
+  cookies?: ReadonlyArray<RenderCookie>;
+}
+
 export function renderReportHtml(
   report: FormInventoryReport,
-  options: { scannedAt?: string } = {},
+  options: RenderOptions = {},
 ): string {
   const e = escapeHtml;
   const scannedAt = options.scannedAt
@@ -78,6 +98,26 @@ export function renderReportHtml(
         .join("\n")
     : '<tr><td colspan="4">Onay bekleyen sınıflandırma yok.</td></tr>';
 
+  // Rıza öncesi çerezler: tarama rıza vermeden gezindiği için zorunlu
+  // olmayan her çerez kendiliğinden ihlal kanıtıdır. Zorunlular listelenmez.
+  const scannedCookies = options.cookies ?? [];
+  const violations = scannedCookies.filter((c) => c.category !== "necessary");
+  const cookieSection = scannedCookies.length
+    ? `
+<h2>Rıza Öncesi Çerezler</h2>
+<p class="meta">Tarama kullanıcı kararı alınmadan gezindi — aşağıdaki çerezler rıza alınmadan atıldı.</p>
+<div class="cards">
+  <div class="card"><b>${violations.length}</b> ihlal şüphesi</div>
+  <div class="card"><b>${scannedCookies.length}</b> toplam çerez</div>
+</div>
+<table>${violations
+        .map(
+          (c) =>
+            `<tr><td>${e(c.name)}</td><td>${e(c.domain)}</td><td>${e(COOKIE_LABELS[c.category] ?? c.category)}</td></tr>`,
+        )
+        .join("\n")}</table>`
+    : "";
+
   return `<!doctype html>
 <html lang="tr">
 <head>
@@ -111,6 +151,7 @@ export function renderReportHtml(
 <table>${categories || '<tr><td>Kategori bulunamadı.</td></tr>'}</table>
 <h2>Veri Hedefleri</h2>
 <table>${destinations || '<tr><td>Gözlemlenen hedef yok.</td></tr>'}</table>
+${cookieSection}
 <h2>Risk İşaretleri</h2>
 <ul>${risks}</ul>
 <h2>İnsan Onayı Bekleyen Sınıflandırmalar</h2>
