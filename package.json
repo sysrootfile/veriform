@@ -4,6 +4,9 @@
   "private": true,
   "type": "module",
   "description": "Veriform — form veri akış izleyici ve uyum katmanı",
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"]
+  },
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
