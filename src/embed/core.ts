@@ -28,7 +28,20 @@ export interface EmbedOptions {
 
 export function initVeriform(doc: Document, win: NetworkWindow, options: EmbedOptions = {}): EmbedHandle {
   const siteUrl = options.siteUrl ?? win.location.href;
-  const scanned = snapshotForms(discoverForms(doc), siteUrl);
+  // addInitScript document_start anında koşar — DOM henüz boş olabilir.
+  // Gözlemciler hemen bağlanır; keşif DOM hazır olunca yapılır.
+  let scanned: ReturnType<typeof snapshotForms> = [];
+  if (doc.readyState === "loading") {
+    doc.addEventListener(
+      "DOMContentLoaded",
+      () => {
+        scanned = snapshotForms(discoverForms(doc), siteUrl);
+      },
+      { once: true },
+    );
+  } else {
+    scanned = snapshotForms(discoverForms(doc), siteUrl);
+  }
   const observed: RequestTarget[] = [];
 
   const record = (target: RequestTarget): void => {

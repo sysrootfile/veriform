@@ -10,7 +10,7 @@ declare global {
  * Tarayıcı giriş noktası (IIFE bundle) — test edilebilir tüm mantık core.ts'te;
  * burada yalnızca gerçek global'lerle bağlanır ve global tanıtıcı açılır.
  */
-const w = window as Window & { __veriform?: EmbedHandle };
+const w = window as (Window & typeof globalThis) & { __veriform?: EmbedHandle };
 const handle = initVeriform(document, w);
 w.__veriform = handle;
 
