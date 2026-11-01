@@ -19,3 +19,11 @@ export function getSharedBrowser(): Promise<Browser> {
   browserPromise ??= launchOnce();
   return browserPromise;
 }
+
+/** Paylaşımlı tarayıcıyı kapatır — süreçli kullanımda (CLI) çıkışı mümkün kılar. */
+export async function closeSharedBrowser(): Promise<void> {
+  if (!browserPromise) return;
+  const browser = await browserPromise;
+  browserPromise = undefined;
+  await browser.close();
+}

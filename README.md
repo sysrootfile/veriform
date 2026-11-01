@@ -45,6 +45,14 @@ __veriform.detach()             // tüm gözlemcileri söker
 
 İlke: script **alan değerlerini okumaz**; yalnızca meta veri (name/label/type), kategori tahmini ve hedef origin+path kaydeder.
 
+## Tarama (sunucu tarafı)
+
+```bash
+pnpm scan -- https://ornek-site.com.tr   # JSON rapor + canlı hedefler
+```
+
+Gerçek headless tarayıcıya (kurulu chromium; yoksa Windows'ta Edge kanalı) embed'i enjekte eder, sayfayı yükler, `FormInventoryReport` + gözlemlenen `fetch`/`XHR` hedeflerini JSON olarak basar. Testleri yerel fixture sunucuyla koşar — dış ağ bağımlılığı yok.
+
 ## Durum
 
 Faz 0 — MVP (8 hafta): embed script çekirdeği (form keşfi + PII sınıflandırma) → hedef tespiti + rapor v1 → çerez tarayıcı + Consent Mode v2 banner + rıza kanıtı → white-label ajans paneli + pilot (3–5 ajans).
