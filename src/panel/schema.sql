@@ -20,6 +20,16 @@ create table clients (
 );
 create index clients_tenant_idx on clients (tenant_id);
 
+-- Kiracı sahibi girişi: scrypt hash'li şifre (bkz. src/panel/auth.ts)
+create table users (
+  id            uuid primary key default gen_random_uuid(),
+  tenant_id     uuid not null references tenants (id) on delete cascade,
+  email         text not null unique,
+  password_hash text not null,
+  created_at    timestamptz not null default now()
+);
+create index users_tenant_idx on users (tenant_id);
+
 create table sites (
   id           uuid primary key default gen_random_uuid(),
   client_id    uuid not null references clients (id) on delete cascade,
@@ -59,9 +69,14 @@ alter table clients enable row level security;
 alter table sites  enable row level security;
 alter table scans  enable row level security;
 alter table consent_receipts enable row level security;
+alter table users   enable row level security;
 
 create policy tenant_self on tenants
   using (id = current_setting('app.current_tenant', true)::uuid);
+
+create policy tenant_users on users
+  using (tenant_id = current_setting('app.current_tenant', true)::uuid)
+  with check (tenant_id = current_setting('app.current_tenant', true)::uuid);
 
 create policy tenant_clients on clients
   using (tenant_id = current_setting('app.current_tenant', true)::uuid)

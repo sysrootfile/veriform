@@ -46,6 +46,23 @@ describe("createInMemoryPanelStore", () => {
     );
   });
 
+  it("kullanıcı oluşturulur ve e-posta ile bulunur; e-posta benzersizdir", async () => {
+    const store = createInMemoryPanelStore();
+    const tenant = await store.createTenant({ name: "A", kind: "direct" });
+    const user = await store.createUser({
+      tenantId: tenant.id,
+      email: "owner@ajans.com",
+      passwordHash: "scrypt:aa:bb",
+    });
+    expect(user.email).toBe("owner@ajans.com");
+    expect(user.tenantId).toBe(tenant.id);
+    expect((await store.findUserByEmail("owner@ajans.com"))?.id).toBe(user.id);
+    expect(await store.findUserByEmail("yok@ajans.com")).toBeNull();
+    await expect(
+      store.createUser({ tenantId: tenant.id, email: "owner@ajans.com", passwordHash: "scrypt:cc:dd" }),
+    ).rejects.toThrow(/e-posta/);
+  });
+
   it("getSite var olan siteyi döndürür, bilinmeyeni null verir", async () => {
     const store = createInMemoryPanelStore();
     const tenant = await store.createTenant({ name: "A", kind: "direct" });
