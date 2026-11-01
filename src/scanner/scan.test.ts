@@ -13,7 +13,12 @@ const FIXTURE_HTML = `<!doctype html>
 <form action="/bulten" method="post">
   <label for="e2">E-Posta</label><input id="e2" name="email" type="email">
 </form>
-<script>fetch('/api/track', { method: 'POST' });</script>
+<script>
+document.cookie = "PHPSESSID=abc123; path=/";
+document.cookie = "_ga=GA1.1.123456789; path=/";
+document.cookie = "_fbp=fb.1.1234567890; path=/";
+fetch('/api/track', { method: 'POST' });
+</script>
 </body></html>`;
 
 let server: Server;
@@ -53,6 +58,17 @@ describe("scanSite (gerçek headless tarayıcı + yerel fixture)", () => {
       expect(result.report.categoryCounts).toContainEqual({ category: "email", forms: 2 });
       expect(result.observedTargets).toContainEqual(
         expect.objectContaining({ path: "/api/track", via: "fetch", method: "POST" }),
+      );
+      // RIZA ÖNCESİ ÇEREZLER: tarayıcı rıza vermeden gezindi — bulunan her
+      // zorunlu-olmayan çerez ihlal kanıtıdır
+      expect(result.cookies).toContainEqual(
+        expect.objectContaining({ name: "PHPSESSID", category: "necessary" }),
+      );
+      expect(result.cookies).toContainEqual(
+        expect.objectContaining({ name: "_ga", category: "analytics" }),
+      );
+      expect(result.cookies).toContainEqual(
+        expect.objectContaining({ name: "_fbp", category: "marketing" }),
       );
       // RAPOR SÖZLEŞMESİ: tarayıcıdan gelen her şey JSON-güvenli
       expect(JSON.parse(JSON.stringify(result)).report).toEqual(result.report);
