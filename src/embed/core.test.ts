@@ -71,4 +71,22 @@ describe("initVeriform", () => {
     expect(dump).not.toContain('"value"');
     handle.detach();
   });
+
+  it("document_start anında (readyState=loading) DOMContentLoaded sonrası tarar", () => {
+    setupPage();
+    Object.defineProperty(document, "readyState", {
+      value: "loading",
+      configurable: true,
+    });
+    const handle = initVeriform(document, win());
+    expect(handle.getReport().formCount).toBe(0); // henüz taranmadı
+
+    document.dispatchEvent(new Event("DOMContentLoaded"));
+    Object.defineProperty(document, "readyState", {
+      value: "complete",
+      configurable: true,
+    });
+    expect(handle.getReport().formCount).toBe(2); // DOM hazır olunca tarandı
+    handle.detach();
+  });
 });
