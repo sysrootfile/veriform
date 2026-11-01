@@ -6,9 +6,11 @@
   "description": "Veriform — form veri akış izleyici ve uyum katmanı",
   "scripts": {
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "build:embed": "esbuild src/embed/main.ts --bundle --format=iife --target=es2020 --outfile=dist/veriform-embed.js --log-level=info"
   },
   "devDependencies": {
+    "esbuild": "^0.28.2",
     "happy-dom": "^21.0.4",
     "typescript": "^7.0.2",
     "vitest": "^5.0.5"
