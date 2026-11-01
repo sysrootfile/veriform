@@ -1,10 +1,22 @@
 // @vitest-environment happy-dom
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { initVeriform, type EmbedHandle } from "./core.js";
 import type { NetworkWindow } from "../collector/observe.js";
 import type { RequestTarget } from "../collector/targets.js";
+import type { BannerTexts } from "../consent/banner.js";
 
 const win = () => window as unknown as NetworkWindow;
+
+beforeEach(() => {
+  localStorage.clear();
+});
+
+const bannerTexts: BannerTexts = {
+  title: "Çerez Tercihleriniz",
+  description: "Çerezleri kullanıyoruz.",
+  acceptAll: "Tümünü Kabul Et",
+  rejectAll: "Sadece Zorunlu",
+};
 
 function setupPage(): void {
   document.body.innerHTML = `
@@ -87,6 +99,59 @@ describe("initVeriform", () => {
       configurable: true,
     });
     expect(handle.getReport().formCount).toBe(2); // DOM hazır olunca tarandı
+    handle.detach();
+  });
+
+  it("banner verilmezse davranış değişmez ve kanıt listesi boş kalır", () => {
+    setupPage();
+    const handle = initVeriform(document, win());
+    expect(document.querySelector('[data-vf="accept"]')).toBeNull();
+    expect(handle.getConsentReceipts()).toEqual([]);
+    handle.detach();
+  });
+
+  it("banner konfigürasyonu verilirse bannerı çizer ve kararı kanıt olarak toplar", async () => {
+    setupPage();
+    const handle = initVeriform(document, win(), {
+      banner: { bannerVersion: "banner-2026-11", texts: bannerTexts },
+    });
+
+    const accept = document.querySelector('[data-vf="accept"]')!;
+    expect(accept).not.toBeNull();
+    accept.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+    await vi.waitFor(() => expect(handle.getConsentReceipts()).toHaveLength(1));
+    const receipt = handle.getConsentReceipts()[0]!;
+    expect(receipt.decisions).toEqual({
+      analytics: true,
+      marketing: true,
+      personalization: true,
+    });
+    expect(receipt.site).toBe("http://localhost:3000/");
+    expect(document.querySelector('[data-vf="accept"]')).toBeNull(); // banner kalktı
+    handle.detach();
+  });
+
+  it("document_start anında banner da ertelenir (body henüz yokken mount hatası vermez)", async () => {
+    setupPage();
+    Object.defineProperty(document, "readyState", {
+      value: "loading",
+      configurable: true,
+    });
+    const handle = initVeriform(document, win(), {
+      banner: { bannerVersion: "banner-2026-11", texts: bannerTexts },
+    });
+    document.dispatchEvent(new Event("DOMContentLoaded"));
+    Object.defineProperty(document, "readyState", {
+      value: "complete",
+      configurable: true,
+    });
+
+    expect(document.querySelector('[data-vf="accept"]')).not.toBeNull();
+    document.querySelector('[data-vf="accept"]')!.dispatchEvent(
+      new MouseEvent("click", { bubbles: true }),
+    );
+    await vi.waitFor(() => expect(handle.getConsentReceipts()).toHaveLength(1));
     handle.detach();
   });
 });
