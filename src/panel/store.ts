@@ -16,6 +16,8 @@ export interface PanelStore {
   listClients(tenantId: string): Promise<Client[]>;
   createSite(input: { clientId: string; url: string }): Promise<Site>;
   getSite(siteId: string): Promise<Site | null>;
+  /** Ingest kimliklendirme: token → site (bilinmeyen token → null). */
+  getSiteByToken(token: string): Promise<Site | null>;
   saveScan(input: {
     siteId: string;
     report: FormInventoryReport;
@@ -36,6 +38,12 @@ export function createInMemoryPanelStore(): PanelStore {
   const receiptEntries: StoredReceiptEntry[] = [];
 
   const clone = <T>(value: T): T => structuredClone(value);
+
+/** 64 hex karakter — WebCrypto ile (tarayıcı/Node uyumlu). */
+function randomIngestToken(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  return [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
 
   return {
     async createTenant(input) {
@@ -75,10 +83,16 @@ export function createInMemoryPanelStore(): PanelStore {
         id: crypto.randomUUID(),
         clientId: input.clientId,
         url: input.url,
+        ingestToken: randomIngestToken(),
         createdAt: new Date().toISOString(),
       };
       sites.push(site);
       return clone(site);
+    },
+
+    async getSiteByToken(token) {
+      const site = sites.find((s) => s.ingestToken === token);
+      return site ? clone(site) : null;
     },
 
     async getSite(siteId) {

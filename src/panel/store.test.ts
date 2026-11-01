@@ -55,6 +55,22 @@ describe("createInMemoryPanelStore", () => {
     expect(await store.getSite("yok")).toBeNull();
   });
 
+  it("her site benzersiz ingest token'ı alır ve token'la çözümlenir", async () => {
+    const store = createInMemoryPanelStore();
+    const tenant = await store.createTenant({ name: "A", kind: "agency" });
+    const client = await store.createClient({ tenantId: tenant.id, name: "M" });
+    const site1 = await store.createSite({ clientId: client.id, url: "https://a.com" });
+    const site2 = await store.createSite({ clientId: client.id, url: "https://b.com" });
+
+    expect(site1.ingestToken).toMatch(/^[0-9a-f]{64}$/);
+    expect(site2.ingestToken).toMatch(/^[0-9a-f]{64}$/);
+    expect(site1.ingestToken).not.toBe(site2.ingestToken);
+
+    const resolved = await store.getSiteByToken(site1.ingestToken);
+    expect(resolved?.id).toBe(site1.id);
+    expect(await store.getSiteByToken("yok")).toBeNull();
+  });
+
   it("tarama kronolojik kaydedilir; döndürülen nesne izole kopyadır", async () => {
     const store = createInMemoryPanelStore();
     const tenant = await store.createTenant({ name: "A", kind: "direct" });
