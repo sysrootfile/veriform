@@ -23,6 +23,28 @@ pnpm test:watch  # vitest
 2. Multi-tenant: ajans → alt müşteri → site hiyerarşisi.
 3. Kanıt kayıtları append-only ve hash zincirli; Türkiye'de saklanır.
 
+## Embed kurulumu (v0 demo)
+
+```bash
+pnpm build:embed   # dist/veriform-embed.js (~11 KB IIFE)
+```
+
+Müşteri sitesine eklenecek snippet:
+
+```html
+<script src="https://cdn.veriform.io/v1/veriform-embed.js" async></script>
+```
+
+Script sayfada `window.__veriform` tanıtıcısını açar:
+
+```js
+__veriform.getReport()          // PII haritası: formlar, kategoriler, hedefler, risk işaretleri
+__veriform.getObservedTargets() // canlı submit/fetch/XHR hedefleri (origin+path, değer içermez)
+__veriform.detach()             // tüm gözlemcileri söker
+```
+
+İlke: script **alan değerlerini okumaz**; yalnızca meta veri (name/label/type), kategori tahmini ve hedef origin+path kaydeder.
+
 ## Durum
 
 Faz 0 — MVP (8 hafta): embed script çekirdeği (form keşfi + PII sınıflandırma) → hedef tespiti + rapor v1 → çerez tarayıcı + Consent Mode v2 banner + rıza kanıtı → white-label ajans paneli + pilot (3–5 ajans).
