@@ -1,0 +1,29 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-veriform}
+      POSTGRES_DB: veriform
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # İlk init'te şema otomatik uygulanır
+      - ./src/panel/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d veriform"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  panel:
+    build: .
+    environment:
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-veriform}@db:5432/veriform
+      PORT: "4620"
+    ports:
+      - "4620:4620"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:

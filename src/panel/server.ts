@@ -2,16 +2,19 @@ import { createServer } from "node:http";
 import { createIngestApi, IngestError } from "./ingest.js";
 import { createPanelService } from "./service.js";
 import { createInMemoryPanelStore } from "./store.js";
+import { createPostgresPanelStore } from "./store.pg.js";
 import { renderClientsPage, renderSitePage } from "./render.js";
 
 /**
- * Panel dev sunucusu (thin glue — tüm mantık service+render katmanlarında ve testlidir).
- * Faz 0: tek demo kiracısı, in-memory store; gerçek kimlik doğrulama Faz 1'de
- * oturum katmanıyla gelir. Rotalar service katmanının sahiplik guard'larından geçer.
+ * Panel sunucusu (thin glue — tüm mantık service+render katmanlarında ve testlidir).
+ * Depo seçimi ortamdan: DATABASE_URL verilirse gerçek Postgres (schema.sql uygulanmış
+ * olmalı), yoksa in-memory (geliştirme). Rotalar service guard'larından geçer.
  */
 
 const PORT = Number(process.env.PORT ?? 4620);
-const store = createInMemoryPanelStore();
+const store = process.env.DATABASE_URL
+  ? createPostgresPanelStore(process.env.DATABASE_URL)
+  : createInMemoryPanelStore();
 const tenant = await store.createTenant({ name: "Demo Ajans", kind: "agency" });
 const service = createPanelService(store, { tenantId: tenant.id });
 
@@ -25,14 +28,32 @@ const html = (body: string, status = 200): { status: number; body: string } => (
   body: body,
 });
 
+/** Glue katmanında da kaçırma ilkesi: sunucu kontrollü değerler dahi HTML'e kaçırılır. */
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", `http://127.0.0.1:${PORT}`);
   try {
+    if (req.method === "GET" && url.pathname === "/healthz") {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(
+        JSON.stringify({ ok: true, store: process.env.DATABASE_URL ? "postgres" : "memory" }),
+      );
+      return;
+    }
+
     if (req.method === "GET" && url.pathname === "/") {
       // Dev indeksi: demo kiracının site sayfasına doğrudan bağlantı
       res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
       res.end(
-        `<ul><li><a href="/clients">Müşteriler</a></li><li><a href="/sites/${demoSite.id}">${demoSite.url}</a></li></ul>`,
+        `<ul><li><a href="/sites/${escapeHtml(demoSite.id)}">${escapeHtml(demoSite.url)}</a></li></ul>`,
       );
       return;
     }
@@ -122,7 +143,7 @@ const server = createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, "127.0.0.1", () => {
+server.listen(PORT, process.env.HOST ?? "0.0.0.0", () => {
   console.log(`Veriform panel: http://127.0.0.1:${PORT}/clients`);
   console.log(`[DEV] demo site ingest token: ${demoSite.ingestToken}`);
 });
