@@ -18,7 +18,8 @@ const OPTIONAL_CATEGORIES: readonly OptionalCategory[] = [
 
 export interface ConsentState {
   isGranted(category: ConsentCategory): boolean;
-  set(category: OptionalCategory, granted: boolean): void;
+  /** necessary yoksayılır — her zaman açıktır. */
+  set(category: ConsentCategory, granted: boolean): void;
   grantAll(): void;
   denyAll(): void;
   getDecisions(): ConsentDecisions;
@@ -44,6 +45,7 @@ export function createConsentState(config: ConsentStateConfig = {}): ConsentStat
       return category === "necessary" ? true : decisions[category];
     },
     set(category, granted) {
+      if (category === "necessary") return;
       if (!enabled.has(category)) return;
       decisions[category] = granted;
     },
