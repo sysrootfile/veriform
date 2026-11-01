@@ -1,6 +1,6 @@
 # Veriform — Proje Planı
 
-*Versiyon 0.1 · 2026-11-01 · Kaynak araştırma: [kvkk-gizlilik-saas-arastirma.md](kvkk-gizlilik-saas-arastirma.md) · Kritik doğrulama (red-team) taraması sürüyor; sonuçları eklendiğinde bu dosya güncellenecek.*
+*Versiyon 0.2 · 2026-11-01 · Kaynak araştırma: [kvkk-gizlilik-saas-arastirma.md](kvkk-gizlilik-saas-arastirma.md) · Kritik doğrulama tamamlandı: [red-team-dogrulama.md](red-team-dogrulama.md) — plan bu sonuçlara göre revize edildi.*
 
 ---
 
@@ -19,7 +19,7 @@
 
 > **Veriform, web sitelerinin kişisel veri toplama gerçeğini izleyen, kanıtlayan ve müşteriye özel konfigüre edilebilen uyum katmanıdır.** Form veri akış izleyici çekirdek üründür; çerez uyumu (CMP), rıza kanıtı ve DSAR paketin geri kalanıdır. Dağıtım: ajanslara beyaz etiket, çok kiracılı panel.
 
-Çekirdek iddia (araştırmadan): form düzeyinde PII takibi — hangi form hangi kişisel veriyi topluyor, nereye aktarıyor — globalde de Türkiye'de de self-servis bir ürün olarak yok; en yakın oyuncular (Reflectiz, cside, Feroot) bunu kurumsal güvenlik ürünü olarak satıyor. Bu boşluk hem farklılaşma hem de diğer modüllerin girdi kaynağı.
+Çekirdek iddia (v0.2 revizyonu — red-team sonrası): form düzeyinde PII takibi **kurumsal bantta mevcut** (DataTrue $1.333/ay'dan; Reflectiz quote-only) — "küreselde hiç yok" iddiası geçersiz. **Boşluk, "self-servis + KOBİ fiyat bandı (~$50–200) + KVKK-referanslı" kombinasyonudur**: ne Türkiye'de ne küreselde bu bantta ürün var (en yakın: cerez.io $24–66/ay ama yalnız çerez CMP). Konumlandırma anlatısı: *"DataTrue'nun yaptığı işi, TR pazarının 1/20'si fiyatına self-servis yapmak."* Hız kritiktir — efilli boşluğu bir sürümde kapatabilir.
 
 ## 3. Sorun ve müşteri (ICP)
 
@@ -53,12 +53,12 @@
 
 **Kritik tasarım ilkesi — izleyici ham veri saklamaz:** script yalnızca alan adı/meta veri ve tip tespiti kaydeder; değer içeriği asla sunucuya gitmez (opsiyonel "gelişmiş mod"da salt per-tenant tuzlu hash). Ürün kendisi KVKK sorunu yaratmamalı; bu aynı zamanda satışta güven argümanı.
 
-**Kapsam dışı (non-goals) — sürüklenme önleyici v1 listesi:**
-1. VERBİS/doküman yönetim süiti değil (envanter yalnızca web kaynaklı bulgularla sınırlı — danışmanlık firmalarının pazarına girme).
-2. Güvenlik ürünü değil (skimmer/Magecart koruması Reflectiz'in pazarı).
-3. Danışmanlık yok — hukuk bürolarıyla ortaklık.
+**Kapsam dışı (non-goals) — v0.2, red-team kesinleştirmesiyle:**
+1. **VERBİS kaydı / veri envanteri danışmanlığı veya modülü üretmeyiz** — yalnızca web-kanalı (form + çerez) kanıtını üretir, hukukçu/ajansa API ile ihraç ederiz (BBDAS-181 istisnası bu pazarı küçültüyor ama çerez/DSAR/aydınlatma yükümlülüklerini kaldırmıyor).
+2. **Engelleme/temizlik yapmayız** (blocking, script rewrite, PCI/Magecart) — ürün read-only tespit + kanıt + rapordur; "prevent" roadmap'e girmez (Reflectiz/Feroot savaş alanı).
+3. **Hukuki metin üretimini tek başımıza yapmayız** — metin şablonları partner hukuk katmanından gelir; biz metnin *uygulandığının* kanıtını tutarız (iubenda'nın çekirdeğine saldırı değil).
 4. Publisher-side TCF/reklam gelir araçları yok (Didomi–Sourcepoint savaş alanı).
-5. Mobil SDK Faz 3+. Red-team sonuçları bu listeyi kesinleştirecek.
+5. Mobil SDK Faz 3+.
 
 ## 5. Teknik mimari
 
@@ -102,7 +102,7 @@
 | Ajans | ~₺2.990/ay + ~₺299/müşteri | white-label, çoklu müşteri paneli, ajans raporu |
 | Kurumsal | teklif | SLA, özel saklama, SSO |
 
-Hesap: 6 ayda 100 ücretli site (~₺250K MRR hedefi, karışım ile). Türk rakiplerin neredeyse tamamı teklif-üstüne — şeffaf fiyat tek başına bir farklılaşma.
+Hesap: 6 ayda 100 ücretli site (~₺250K MRR hedefi, karışım ile). Türk rakiplerin neredeyse tamamı teklif-üstüne — şeffaf fiyat tek başına bir farklılaşma. Red-team notu: TR self-serve fiyat bandının varlığı doğrulandı (cerez.io Free / Pro $24–30 / Business $66, TRY faturalama) — bandımız üstünde ama form-izleme + kanıt içerdiği için farklılaşır.
 
 ## 8. Pazarlama (GTM)
 
@@ -114,6 +114,25 @@ Hesap: 6 ayda 100 ücretli site (~₺250K MRR hedefi, karışım ile). Türk rak
 
 **KPI'lar:** taranan form sayısı, onaylı sınıflandırma sayısı, ücretsiz→ücretli dönüşüm, aktif ajans kiracı sayısı, kanıt kayıt hacmi, aylık churn (<%3 hedef).
 
+**Red-team GTM okuması:** TR'de talep öncelikle ajans/platform kanalından tetikleniyor (Cerezgo'nun İkas/T-Soft kampanyaları) — kanal önceliği bu yüzden 2 ve 3'tedir; doğrudan KOBİ satışı ücretsiz taramanın kanıt raporuyla ısıtılır.
+
+## 9.5. Red-team doğrulama özeti (2026-11-01)
+
+7 çekirdek iddia sınandı — 2 CONFIRMED, 1 kısmen DISCONFIRMED, 4 UNCERTAIN. Tam rapor ve kaynaklar: [red-team-dogrulama.md](red-team-dogrulama.md).
+
+| İddia | Sonuç |
+|---|---|
+| Küreselde self-serve form-PII ürünü yok | **Kısmen çürütüldü** — DataTrue ($1.333/ay) var; boşluk self-serve/KOBİ bandında |
+| efilli'de form/envanter/DSAR modülü yok | **Doğrulandı** (bugün itibarıyla) — roadmap gizli olabilir, hız şart |
+| TR KOBİ'ler gerçekten ödüyor | **Belirsiz** — cerez.io $24–66 bandı var; talep ajans/platform kanalından akıyor |
+| Form takibi ürün mü feature mı | **Doğrulandı** — güvenlik tarafı ucuz add-on değil (Feroot ~$5K/yıl'dan) |
+| Ajans white-label ince | **Kısmen çürütüldü** — iubenda programı olgun; derin konsol hâlâ boş |
+| KVKK talebi büyüyor | **Belirsiz** — çerez rehberi sertleşti (olumlu); VERBİS istisnası genişledi (olumsuz; çerez/DSAR yükümlülükleri duruyor) |
+| Teknik ölçeklenir, engel yok | **Doğrulandı-lean** — resmî patent taraması yapılmadı |
+
+**En yakın 3 rakip:** DataTrue (8/10), Reflectiz (7/10), Usercentrics ücretsiz scan (5/10).
+**Ana stratejik düzeltme:** anlatı "biricik ürün" değil — "kurumsal sınıf form-PII izlemede ~1/20 fiyatla self-servis + TR yasal derinliği + ajans konsolu".
+
 ## 9. Riskler ve karşı hamleler
 
 | Risk | Karşı hamle |
@@ -124,15 +143,19 @@ Hesap: 6 ayda 100 ücretli site (~₺250K MRR hedefi, karışım ile). Türk rak
 | Banner emtialaşması (Consent Mode v2) | Banner paket içi özellik; gelir rapor+kanıt+DSAR'dan |
 | Talep yavaşlığı | Ücretsiz tarayıcı kancası + hukuk bürosu kanalı |
 | Marka çakışması | TÜRKPATENT taraması MVP'de; global öncesi EUIPO/USPTO |
-| *Red-team bulguları* | *Sonuçlar geldikçe bu tablo güncellenecek* |
+| DataTrue/Reflectiz aşağı-yönlü fiyat kırması (self-serve KOBİ bandına inme) | Hız: TR'de KVKK-referanslı ilk self-serve ol; kanıt arşivi + ajans konsolu derinliği kopyalanması zor sur |
+| Doğrudan KOBİ talebi zayıf olabilir (TR'de talep ajans/platform kanalından akıyor; TR WP eklentisi <10 kurulum) | GTM'de ajans+platform kanalı öncelikli; doğrudan KOBİ satışı ücretsiz tarama kanıt raporuyla ısıtılır |
+| efilli boşluğa hızlı giriş (roadmap gizli, 1 release uzakta olabilir) | Haftalık MVP iterasyonu; hukuk bürosu/ajans referanslarını erken kilitle |
+| iubenda tarzı olgun ajans programı (26. siteden %50'ye varan indirim + white-label) | "İndirim değil konsol": per-client konfigürasyon + ajans raporlama + müşteri başına evidence arşivi derinliği |
+| Patent/ToS riski resmî olarak taranmadı | MVP öncesi USPTO/EPO patent taraması (script-based data collection monitoring) vekil ile |
 
 ## 10. Açık kararlar ve hemen yapılacaklar
 
 1. veriform.io tescili (acil, ~$30–40/yıl) + veriform.com park/aktif kontrolü.
-2. TÜRKPATENT marka taraması (patent vekili ile, MVP dönemi içinde tescil başvurusu).
+2. TÜRKPATENT marka taraması (patent vekili ile, MVP dönemi içinde tescil başvurusu) + USPTO/EPO patent taraması (red-team bulgusu: resmî tarama yapılmadı).
 3. Pilot ajans listesi (20 ajans) + demo raporu mock-up'ı.
 4. Faz 0 detaylı teknik şartnamesi (embed script sözleşmesi, sınıflandırma pipeline'ı, veri modeli DDL).
-5. Red-team sonuçlarının plana işlenmesi (ajan çalışıyor).
+5. ~~Red-team sonuçlarının plana işlenmesi~~ — tamamlandı (v0.2).
 
 ---
 
