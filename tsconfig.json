@@ -8,8 +8,7 @@
     "exactOptionalPropertyTypes": true,
     "noEmit": true,
     "isolatedModules": true,
-    "skipLibCheck": true,
-    "include": ["src"]
+    "skipLibCheck": true
   },
   "include": ["src"]
 }
