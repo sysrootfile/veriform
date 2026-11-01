@@ -1,4 +1,5 @@
 import { build } from "esbuild";
+import { classifyCookie, type CookieCategory } from "../cookies/classify.js";
 import type { RequestTarget } from "../collector/targets.js";
 import type { FormInventoryReport } from "../report/types.js";
 import { getSharedBrowser } from "./browser.js";
@@ -17,11 +18,19 @@ export interface ScanOptions {
   timeoutMs?: number;
 }
 
+export interface ScannedCookie {
+  name: string;
+  domain: string;
+  category: CookieCategory;
+}
+
 export interface ScanResult {
   url: string;
   finalUrl: string;
   report: FormInventoryReport;
   observedTargets: RequestTarget[];
+  /** Tarama sırasında (rıza ÖNCESİ) atılmış çerezler — sınıflandırılmış. */
+  cookies: ScannedCookie[];
 }
 
 let sourcePromise: Promise<string> | undefined;
@@ -60,11 +69,18 @@ export async function scanSite(url: string, options: ScanOptions): Promise<ScanR
       throw new Error(`Veriform embed sayfada başlatılamadı: ${url}`);
     }
 
+    const cookies = (await context.cookies()).map((c) => ({
+      name: c.name,
+      domain: c.domain,
+      category: classifyCookie(c.name),
+    }));
+
     return {
       url,
       finalUrl: page.url(),
       report: data.report as FormInventoryReport,
       observedTargets: data.observedTargets as RequestTarget[],
+      cookies,
     };
   } finally {
     await context.close();
