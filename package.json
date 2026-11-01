@@ -11,7 +11,9 @@
     "build:scan": "esbuild src/scanner/cli.ts --bundle --platform=node --format=esm --packages=external --outfile=dist/scan.mjs --log-level=silent",
     "scan": "pnpm build:scan && node dist/scan.mjs",
     "build:demo": "esbuild src/report/demo.ts --bundle --platform=node --format=esm --packages=external --outfile=dist/demo.mjs --log-level=silent",
-    "demo": "pnpm build:demo && node dist/demo.mjs"
+    "demo": "pnpm build:demo && node dist/demo.mjs",
+    "build:panel": "esbuild src/panel/server.ts --bundle --platform=node --format=esm --packages=external --outfile=dist/panel.mjs --log-level=silent",
+    "panel": "pnpm build:panel && node dist/panel.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",
