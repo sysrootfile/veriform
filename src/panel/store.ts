@@ -144,7 +144,7 @@ function randomIngestToken(): string {
 
     async createUser(input) {
       if (users.some((u) => u.email === input.email)) {
-        throw new Error(`e-posta zaten kayıtlı: ${input.email}`);
+        throw new Error("e-posta zaten kayıtlı");
       }
       const user: PanelUser = {
         id: crypto.randomUUID(),

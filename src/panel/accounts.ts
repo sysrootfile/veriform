@@ -12,7 +12,7 @@ export async function registerTenant(
   input: { name: string; kind: TenantKind; email: string; password: string },
 ): Promise<{ tenant: Tenant }> {
   if (await store.findUserByEmail(input.email)) {
-    throw new Error(`e-posta zaten kayıtlı: ${input.email}`);
+    throw new Error("e-posta zaten kayıtlı");
   }
   const tenant = await store.createTenant({ name: input.name, kind: input.kind });
   await store.createUser({
