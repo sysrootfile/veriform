@@ -103,8 +103,14 @@ export function renderSitePage(input: {
     ? '<span class="badge-ok">Kanıt zinciri geçerli ✓</span>'
     : '<span class="badge-warn">⚠ Zincir doğrulaması başarısız — kurcalama şüphesi</span>';
 
-  const rows = input.scans.length
-    ? input.scans
+  const visible = input.scans.slice(-10);
+  const paginationNote =
+    input.scans.length > 10
+      ? `<p class="empty">${input.scans.length} taramanın son 10'u gösteriliyor.</p>`
+      : "";
+
+  const rows = visible.length
+    ? visible
         .map((s) => {
           const violations = s.cookies.filter((c) => c.category !== "necessary").length;
           return `<tr><td>${e(s.scannedAt)}</td><td class="num">${s.report.formCount}</td><td class="num">${s.report.riskFlags.length}</td><td class="num">${violations}</td></tr>`;
@@ -122,6 +128,7 @@ export function renderSitePage(input: {
 <p>${badge}</p>
 ${draftLink}
 <h2>Taramalar</h2>
+${paginationNote}
 <table>
 <tr><th>Tarih</th><th class="num">Form</th><th class="num">Risk</th><th class="num">Çerez ihlali</th></tr>
 ${rows}
