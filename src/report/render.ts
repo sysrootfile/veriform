@@ -15,7 +15,7 @@ function escapeHtml(value: string): string {
     .replaceAll("'", "&#39;");
 }
 
-const CATEGORY_LABELS: Record<string, string> = {
+export const CATEGORY_LABELS: Record<string, string> = {
   tckn: "TC Kimlik No",
   iban: "IBAN",
   card: "Kart Bilgisi",
@@ -30,7 +30,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 const label = (category: string): string => CATEGORY_LABELS[category] ?? category;
 
-const COOKIE_LABELS: Record<string, string> = {
+export const COOKIE_LABELS: Record<string, string> = {
   necessary: "Zorunlu",
   functional: "İşlevsel",
   analytics: "Analitik",

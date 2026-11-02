@@ -95,6 +95,7 @@ export function renderSitePage(input: {
   siteUrl: string;
   chainValid: boolean;
   scans: StoredScan[];
+  draftHref?: string | undefined;
 }): string {
   const e = escapeHtml;
   const badge = input.chainValid
@@ -110,10 +111,15 @@ export function renderSitePage(input: {
         .join("\n")
     : '<tr><td colspan="4" class="empty">Henüz tarama yok — `pnpm demo -- <site-url>` ile ilk taramayı çalıştırın.</td></tr>';
 
+  const draftLink = input.draftHref
+    ? `<p><a href="${e(input.draftHref)}">Aydınlatma metni taslağı (yazdırılabilir) →</a></p>`
+    : "";
+
   return page(
     input.siteUrl,
     `<h1>${e(input.siteUrl)}</h1>
 <p>${badge}</p>
+${draftLink}
 <h2>Taramalar</h2>
 <table>
 <tr><th>Tarih</th><th class="num">Form</th><th class="num">Risk</th><th class="num">Çerez ihlali</th></tr>
