@@ -1,5 +1,7 @@
 import type { RequestTarget } from "../collector/targets.js";
 import type { ConsentReceipt } from "../consent/receipt.js";
+import { computeDeadline, extendDeadline } from "../dsar/deadline.js";
+import type { DsarRequest, DsarStatus, DsarType } from "../dsar/types.js";
 import type { FormInventoryReport } from "../report/types.js";
 import { makeChainEntry, verifyStoredChain, verifyReceiptSelfHash, type StoredReceiptEntry } from "./chain.js";
 import type { Client, PanelUser, ScanCookie, Site, StoredScan, Tenant, TenantKind } from "./types.js";
@@ -32,6 +34,19 @@ export interface PanelStore {
   verifySiteChain(siteId: string): Promise<boolean>;
   createUser(input: { tenantId: string; email: string; passwordHash: string }): Promise<PanelUser>;
   findUserByEmail(email: string): Promise<PanelUser | null>;
+  saveDsar(input: {
+    siteId: string;
+    type: DsarType;
+    subjectName: string;
+    subjectEmail: string;
+    message?: string | undefined;
+    receivedAt?: string | undefined;
+  }): Promise<DsarRequest>;
+  listDsars(siteId: string): Promise<DsarRequest[]>;
+  updateDsar(
+    dsarId: string,
+    patch: { status?: DsarStatus | undefined; responseNote?: string | undefined; extend?: boolean | undefined },
+  ): Promise<DsarRequest>;
 }
 
 export function createInMemoryPanelStore(): PanelStore {
@@ -41,6 +56,7 @@ export function createInMemoryPanelStore(): PanelStore {
   const scans: StoredScan[] = [];
   const receiptEntries: StoredReceiptEntry[] = [];
   const users: PanelUser[] = [];
+  const dsars: DsarRequest[] = [];
 
   const clone = <T>(value: T): T => structuredClone(value);
 
@@ -172,6 +188,49 @@ function randomIngestToken(): string {
     async findUserByEmail(email) {
       const user = users.find((u) => u.email === email);
       return user ? clone(user) : null;
+    },
+
+    async saveDsar(input) {
+      if (!sites.some((s) => s.id === input.siteId)) {
+        throw new Error(`site bulunamadı: ${input.siteId}`);
+      }
+      const receivedAt = input.receivedAt ?? new Date().toISOString();
+      const dsar: DsarRequest = {
+        id: crypto.randomUUID(),
+        siteId: input.siteId,
+        type: input.type,
+        subjectName: input.subjectName,
+        subjectEmail: input.subjectEmail,
+        ...(input.message ? { message: input.message } : {}),
+        receivedAt,
+        deadlineAt: computeDeadline(receivedAt),
+        status: "new",
+      };
+      dsars.push(dsar);
+      return clone(dsar);
+    },
+
+    async listDsars(siteId) {
+      return clone(dsars.filter((d) => d.siteId === siteId));
+    },
+
+    async updateDsar(dsarId, patch) {
+      const dsar = dsars.find((d) => d.id === dsarId);
+      if (!dsar) throw new Error(`başvuru bulunamadı: ${dsarId}`);
+
+      if (patch.extend) {
+        if (dsar.extended) throw new Error("süre zaten uzatılmış — KVKK m.13 tek uzatma hakkı verir");
+        dsar.deadlineAt = extendDeadline(dsar.deadlineAt);
+        dsar.extended = true;
+      }
+      if (patch.status) {
+        dsar.status = patch.status;
+        if (patch.status === "completed" || patch.status === "rejected") {
+          dsar.respondedAt = new Date().toISOString();
+        }
+      }
+      if (patch.responseNote !== undefined) dsar.responseNote = patch.responseNote;
+      return clone(dsar);
     },
   };
 }

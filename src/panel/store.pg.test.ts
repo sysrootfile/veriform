@@ -97,4 +97,31 @@ d("createPostgresPanelStore (GERÇEK Postgres — docker veriform-pg)", () => {
 
     expect(await store.verifySiteChain(site.id)).toBe(true);
   });
+
+  it("DSAR gerçek veritabanında saklanır: süre hesabı, uzatma, durum geçişi", async () => {
+    const tenant = await store.createTenant({ name: "C", kind: "direct" });
+    const client = await store.createClient({ tenantId: tenant.id, name: "M3" });
+    const site = await store.createSite({ clientId: client.id, url: "https://pg3.com" });
+
+    const dsar = await store.saveDsar({
+      siteId: site.id,
+      type: "silme",
+      subjectName: "Mehmet Kaya",
+      subjectEmail: "mehmet@example.com",
+      receivedAt: "2026-11-02T10:00:00.000Z",
+    });
+    expect(dsar.deadlineAt).toBe("2026-12-02T10:00:00.000Z");
+
+    const extended = await store.updateDsar(dsar.id, { extend: true });
+    expect(extended.deadlineAt).toBe("2027-01-01T10:00:00.000Z");
+    await expect(store.updateDsar(dsar.id, { extend: true })).rejects.toThrow(/zaten/);
+
+    const done = await store.updateDsar(dsar.id, {
+      status: "completed",
+      responseNote: "Silme işlemi tamamlandı",
+    });
+    expect(done.status).toBe("completed");
+    expect(done.respondedAt).toBeDefined();
+    expect((await store.listDsars(site.id))).toHaveLength(1);
+  });
 });

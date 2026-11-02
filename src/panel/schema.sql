@@ -63,6 +63,23 @@ create table consent_receipts (
 );
 create index receipts_site_idx on consent_receipts (site_id, received_at);
 
+-- Veri sahibi başvuruları (DSAR) — deadline KVKK m.13: alım + 30 gün
+create table dsar_requests (
+  id            uuid primary key default gen_random_uuid(),
+  site_id       uuid not null references sites (id) on delete cascade,
+  type          text not null,
+  subject_name  text not null,
+  subject_email text not null,
+  message       text,
+  received_at   timestamptz not null default now(),
+  deadline_at   timestamptz not null,
+  status        text not null default 'new' check (status in ('new', 'in-review', 'completed', 'rejected')),
+  extended      boolean not null default false,
+  responded_at  timestamptz,
+  response_note text
+);
+create index dsar_site_idx on dsar_requests (site_id, received_at);
+
 -- ---- RLS: kiracı izolasyonu -------------------------------------------------
 
 alter table tenants enable row level security;
@@ -71,6 +88,7 @@ alter table sites  enable row level security;
 alter table scans  enable row level security;
 alter table consent_receipts enable row level security;
 alter table users   enable row level security;
+alter table dsar_requests enable row level security;
 
 create policy tenant_self on tenants
   using (id = current_setting('app.current_tenant', true)::uuid);
@@ -115,6 +133,16 @@ create policy tenant_receipts on consent_receipts
       select 1
       from sites s join clients c on c.id = s.client_id
       where s.id = consent_receipts.site_id
+        and c.tenant_id = current_setting('app.current_tenant', true)::uuid
+    )
+  );
+
+create policy tenant_dsars on dsar_requests
+  using (
+    exists (
+      select 1
+      from sites s join clients c on c.id = s.client_id
+      where s.id = dsar_requests.site_id
         and c.tenant_id = current_setting('app.current_tenant', true)::uuid
     )
   );
