@@ -47,16 +47,41 @@ describe("createInMemoryPanelStore", () => {
     );
   });
 
-  it("getTenant kiracıyı döndürür, bilinmeyeni null verir; marka rengi saklanır", async () => {
+  it("deleteClient: client + siteleri gider, zincir kanıtlarıyla birlikte silinir", async () => {
+    const store = createInMemoryPanelStore();
+    const tenant = await store.createTenant({ name: "A", kind: "agency" });
+    const client = await store.createClient({ tenantId: tenant.id, name: "Gidecek" });
+    const site = await store.createSite({ clientId: client.id, url: "https://gidecek.com" });
+    const receipt = await buildConsentReceipt({
+      site: "https://gidecek.com",
+      bannerVersion: "b",
+      textsHash: "t",
+      decisions: { analytics: true, marketing: false, personalization: false },
+      timestamp: "2026-11-02T10:00:00.000Z",
+    });
+    await store.appendReceipt({ siteId: site.id, receipt });
+
+    await store.deleteClient(client.id);
+
+    expect((await store.listClients(tenant.id))).toHaveLength(0);
+    expect(await store.listSites(client.id)).toEqual([]);
+    expect(await store.listScans(site.id)).toEqual([]);
+    expect(await store.verifySiteChain(site.id)).toBe(true); // boş zincir = silindi
+    await expect(store.deleteClient("yok")).rejects.toThrow(/client/);
+  });
+
+  it("getTenant kiracıyı döndürür, bilinmeyeni null verir; marka rengi ve logosu saklanır", async () => {
     const store = createInMemoryPanelStore();
     const tenant = await store.createTenant({
       name: "Ajans A",
       kind: "agency",
       brandColor: "#127a3d",
+      brandLogoUrl: "https://ajans.com/logo.png",
     });
     const fetched = await store.getTenant(tenant.id);
     expect(fetched?.name).toBe("Ajans A");
     expect(fetched?.brandColor).toBe("#127a3d");
+    expect(fetched?.brandLogoUrl).toBe("https://ajans.com/logo.png");
     expect(await store.getTenant("yok")).toBeNull();
   });
 

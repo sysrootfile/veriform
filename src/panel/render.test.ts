@@ -101,6 +101,28 @@ describe("renderSitePage", () => {
     expect(html).toContain("Henüz tarama yok");
   });
 
+  it("10'dan fazla taramada son 10'u gösterilir ve toplam belirtilir", () => {
+    const many = Array.from({ length: 12 }, (_, i) =>
+      scan({ id: `s${i}`, scannedAt: `2026-11-0${(i % 9) + 1}T10:00:00.000Z` }),
+    );
+    const html = renderSitePage({
+      siteUrl: "https://musteri1.com",
+      chainValid: true,
+      scans: many,
+    });
+    expect(html).toContain("12 taramanın son 10'u");
+    expect(html).not.toContain("Henüz tarama yok");
+  });
+
+  it("10 veya daha az taramada sayfalama notu çıkmaz", () => {
+    const html = renderSitePage({
+      siteUrl: "https://musteri1.com",
+      chainValid: true,
+      scans: [scan()],
+    });
+    expect(html).not.toContain("son 10'u");
+  });
+
   it("site URL'i HTML'e kaçırılır", () => {
     const html = renderSitePage({
       siteUrl: 'https://x.com/?"><script>alert(1)</script>',
@@ -125,6 +147,21 @@ describe("white-label accent", () => {
     });
     expect(html).not.toContain("javascript:");
     expect(html).toContain("--accent: #16161f");
+  });
+
+  it("http(s) logosu img olarak basılır; javascript: şeması engellenir", () => {
+    const ok = renderClientsPage({
+      tenantName: "X",
+      clients: [],
+      logoUrl: "https://ajans.com/logo.png",
+    });
+    expect(ok).toContain('<img src="https://ajans.com/logo.png"');
+    const evil = renderClientsPage({
+      tenantName: "X",
+      clients: [],
+      logoUrl: "javascript:alert(1)",
+    });
+    expect(evil).not.toContain("javascript:alert(1)");
   });
 });
 

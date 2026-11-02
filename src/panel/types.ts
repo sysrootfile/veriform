@@ -12,6 +12,8 @@ export interface Tenant {
   kind: TenantKind;
   /** White-label vurgu rengi — yalnızca #rrggbb biçimi kabul edilir. */
   brandColor?: string | undefined;
+  /** White-label logosu — yalnızca http(s) URL kabul edilir. */
+  brandLogoUrl?: string | undefined;
   createdAt: string;
 }
 

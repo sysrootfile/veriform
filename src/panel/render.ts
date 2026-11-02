@@ -28,12 +28,18 @@ const STYLE = `
   form { margin: 1rem 0; display: flex; gap: .5rem; }
   input, button { padding: .45rem .7rem; border: 1px solid #ccc; border-radius: 6px; font-size: .92rem; }
   button { background: var(--accent); color: #fff; border: none; cursor: pointer; }
+  button.danger { background: #8b1d1d; }
   footer { color: #888; font-size: .8rem; border-top: 1px solid #eee; margin-top: 2rem; padding-top: .8rem; }
 `;
 
 /** White-label vurgu rengi — yalnızca #rrggbb; başka her şey (CSS enjeksiyonu dahil) yoksayılır. */
 function safeAccent(color?: string | undefined): string | undefined {
   return color && /^#[0-9a-fA-F]{6}$/.test(color) ? color : undefined;
+}
+
+/** White-label logosu — yalnızca http(s) URL; javascript:/data: engellenir. */
+function safeLogoUrl(url?: string | undefined): string | undefined {
+  return url && /^https?:\/\/\S+$/i.test(url) ? url : undefined;
 }
 
 const page = (title: string, body: string, accent?: string | undefined): string =>
@@ -62,8 +68,13 @@ export function renderClientsPage(input: {
   clients: ClientRow[];
   demoSiteHref?: string | undefined;
   accent?: string | undefined;
+  logoUrl?: string | undefined;
 }): string {
   const e = escapeHtml;
+  const logoUrl = safeLogoUrl(input.logoUrl);
+  const logo = logoUrl
+    ? `<img src="${e(logoUrl)}" alt="${e(input.tenantName)}" style="height:30px;vertical-align:middle;margin-right:.5rem">`
+    : "";
   const rows = input.clients.length
     ? input.clients
         .map(
@@ -79,7 +90,7 @@ export function renderClientsPage(input: {
 
   return page(
     input.tenantName,
-    `<h1>Veriform Panel · ${e(input.tenantName)}</h1>
+    `<h1>${logo}Veriform Panel · ${e(input.tenantName)}</h1>
 ${demoLink}
 <h2>Müşteriler</h2>
 <table>${rows}</table>
@@ -102,8 +113,14 @@ export function renderSitePage(input: {
     ? '<span class="badge-ok">Kanıt zinciri geçerli ✓</span>'
     : '<span class="badge-warn">⚠ Zincir doğrulaması başarısız — kurcalama şüphesi</span>';
 
-  const rows = input.scans.length
-    ? input.scans
+  const visible = input.scans.slice(-10);
+  const paginationNote =
+    input.scans.length > 10
+      ? `<p class="empty">${input.scans.length} taramanın son 10'u gösteriliyor.</p>`
+      : "";
+
+  const rows = visible.length
+    ? visible
         .map((s) => {
           const violations = s.cookies.filter((c) => c.category !== "necessary").length;
           return `<tr><td>${e(s.scannedAt)}</td><td class="num">${s.report.formCount}</td><td class="num">${s.report.riskFlags.length}</td><td class="num">${violations}</td></tr>`;
@@ -121,6 +138,7 @@ export function renderSitePage(input: {
 <p>${badge}</p>
 ${draftLink}
 <h2>Taramalar</h2>
+${paginationNote}
 <table>
 <tr><th>Tarih</th><th class="num">Form</th><th class="num">Risk</th><th class="num">Çerez ihlali</th></tr>
 ${rows}
@@ -163,6 +181,11 @@ ${rows}
 <form method="post" action="${e(input.clientHref)}/sites">
   <input name="url" type="url" placeholder="https://musteri-sitesi.com" required>
   <button type="submit">Site ekle</button>
+</form>
+<h2>Tehlikeli Bölge</h2>
+<p class="empty">Silmek kalıcıdır: müşterinin tüm siteleri, taramaları ve <strong>rıza kanıt zinciri</strong> birlikte silinir.</p>
+<form method="post" action="${e(input.clientHref)}/delete">
+  <button type="submit" class="danger">Müşteriyi kalıcı sil</button>
 </form>`,
     input.accent,
   );

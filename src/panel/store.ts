@@ -13,9 +13,16 @@ import type { Client, PanelUser, ScanCookie, Site, StoredScan, Tenant, TenantKin
  */
 
 export interface PanelStore {
-  createTenant(input: { name: string; kind: TenantKind; brandColor?: string | undefined }): Promise<Tenant>;
+  createTenant(input: {
+    name: string;
+    kind: TenantKind;
+    brandColor?: string | undefined;
+    brandLogoUrl?: string | undefined;
+  }): Promise<Tenant>;
   getTenant(tenantId: string): Promise<Tenant | null>;
   createClient(input: { tenantId: string; name: string }): Promise<Client>;
+  /** Hard delete: client + siteleri + taramaları + kanıt zinciri (KVKK saklama yükümlülüğü dışında kalıcı silme talebi için). */
+  deleteClient(clientId: string): Promise<void>;
   listClients(tenantId: string): Promise<Client[]>;
   createSite(input: { clientId: string; url: string }): Promise<Site>;
   listSites(clientId: string): Promise<Site[]>;
@@ -73,6 +80,7 @@ function randomIngestToken(): string {
         name: input.name,
         kind: input.kind,
         ...(input.brandColor ? { brandColor: input.brandColor } : {}),
+        ...(input.brandLogoUrl ? { brandLogoUrl: input.brandLogoUrl } : {}),
         createdAt: new Date().toISOString(),
       };
       tenants.push(tenant);
@@ -100,6 +108,25 @@ function randomIngestToken(): string {
 
     async listClients(tenantId) {
       return clone(clients.filter((c) => c.tenantId === tenantId));
+    },
+
+    async deleteClient(clientId) {
+      const idx = clients.findIndex((c) => c.id === clientId);
+      if (idx === -1) throw new Error(`client bulunamadı: ${clientId}`);
+      const siteIds = sites.filter((s) => s.clientId === clientId).map((s) => s.id);
+      clients.splice(idx, 1);
+      for (let i = sites.length - 1; i >= 0; i--) {
+        if (siteIds.includes(sites[i]!.id)) sites.splice(i, 1);
+      }
+      for (let i = scans.length - 1; i >= 0; i--) {
+        if (siteIds.includes(scans[i]!.siteId)) scans.splice(i, 1);
+      }
+      for (let i = receiptEntries.length - 1; i >= 0; i--) {
+        if (siteIds.includes(receiptEntries[i]!.siteId)) receiptEntries.splice(i, 1);
+      }
+      for (let i = dsars.length - 1; i >= 0; i--) {
+        if (siteIds.includes(dsars[i]!.siteId)) dsars.splice(i, 1);
+      }
     },
 
     async createSite(input) {
