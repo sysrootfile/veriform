@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildConsentReceipt } from "../consent/receipt.js";
+import { computeDeadline } from "../dsar/deadline.js";
 import type { FormInventoryReport } from "../report/types.js";
 import { createInMemoryPanelStore } from "./store.js";
 
@@ -68,6 +69,39 @@ describe("createInMemoryPanelStore", () => {
     const sites = await store.listSites(client.id);
     expect(sites.map((s) => s.url)).toEqual(["https://b.com", "https://a.com"]);
     expect(await store.listSites("yok")).toEqual([]);
+  });
+
+  it("DSAR kaydedilir: süre otomatik hesaplanır; durum güncelleme ve tek seferlik uzatma", async () => {
+    const store = createInMemoryPanelStore();
+    const tenant = await store.createTenant({ name: "A", kind: "direct" });
+    const client = await store.createClient({ tenantId: tenant.id, name: "M" });
+    const site = await store.createSite({ clientId: client.id, url: "https://musteri1.com" });
+
+    const dsar = await store.saveDsar({
+      siteId: site.id,
+      type: "silme",
+      subjectName: "Ayşe Yılmaz",
+      subjectEmail: "ayse@example.com",
+      message: "Verilerimi silin",
+      receivedAt: "2026-11-02T10:00:00.000Z",
+    });
+    expect(dsar.status).toBe("new");
+    expect(dsar.deadlineAt).toBe(computeDeadline("2026-11-02T10:00:00.000Z"));
+    expect((await store.listDsars(site.id))).toHaveLength(1);
+
+    const extended = await store.updateDsar(dsar.id, { extend: true });
+    expect(extended.extended).toBe(true);
+
+    await expect(store.updateDsar(dsar.id, { extend: true })).rejects.toThrow(/zaten/);
+
+    const done = await store.updateDsar(dsar.id, {
+      status: "completed",
+      responseNote: "Veriler silindi",
+    });
+    expect(done.status).toBe("completed");
+    expect(done.respondedAt).toBeDefined();
+
+    await expect(store.updateDsar("yok", { status: "completed" })).rejects.toThrow(/başvuru/);
   });
 
   it("kullanıcı oluşturulur ve e-posta ile bulunur; e-posta benzersizdir", async () => {

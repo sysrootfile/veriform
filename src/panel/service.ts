@@ -1,5 +1,6 @@
 import type { RequestTarget } from "../collector/targets.js";
 import type { ConsentReceipt } from "../consent/receipt.js";
+import type { DsarRequest, DsarStatus } from "../dsar/types.js";
 import type { FormInventoryReport } from "../report/types.js";
 import type { StoredReceiptEntry } from "./chain.js";
 import type { PanelStore } from "./store.js";
@@ -34,6 +35,12 @@ export interface PanelService {
   }): Promise<StoredScan>;
   ingestReceipt(siteId: string, receipt: ConsentReceipt): Promise<StoredReceiptEntry>;
   verifySite(siteId: string): Promise<boolean>;
+  getSiteDsars(siteId: string): Promise<DsarRequest[]>;
+  updateDsarStatus(
+    siteId: string,
+    dsarId: string,
+    patch: { status?: DsarStatus | undefined; responseNote?: string | undefined; extend?: boolean | undefined },
+  ): Promise<DsarRequest>;
 }
 
 export function createPanelService(store: PanelStore, context: PanelContext): PanelService {
@@ -89,6 +96,16 @@ export function createPanelService(store: PanelStore, context: PanelContext): Pa
     async verifySite(siteId) {
       await assertSiteOwnership(siteId);
       return store.verifySiteChain(siteId);
+    },
+
+    async getSiteDsars(siteId) {
+      await assertSiteOwnership(siteId);
+      return store.listDsars(siteId);
+    },
+
+    async updateDsarStatus(siteId, dsarId, patch) {
+      await assertSiteOwnership(siteId);
+      return store.updateDsar(dsarId, patch);
     },
   };
 }

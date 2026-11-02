@@ -1,6 +1,8 @@
 import pg from "pg";
 import type { RequestTarget } from "../collector/targets.js";
 import type { ConsentReceipt } from "../consent/receipt.js";
+import { computeDeadline, extendDeadline } from "../dsar/deadline.js";
+import type { DsarRequest, DsarStatus, DsarType } from "../dsar/types.js";
 import type { FormInventoryReport } from "../report/types.js";
 import {
   makeChainEntry,
@@ -68,6 +70,23 @@ function mapUser(row: pg.QueryResultRow): PanelUser {
     email: String(row.email),
     passwordHash: String(row.password_hash),
     createdAt: iso(row.created_at as Date),
+  };
+}
+
+function mapDsar(row: pg.QueryResultRow): DsarRequest {
+  return {
+    id: String(row.id),
+    siteId: String(row.site_id),
+    type: row.type as DsarType,
+    subjectName: String(row.subject_name),
+    subjectEmail: String(row.subject_email),
+    ...(row.message ? { message: String(row.message) } : {}),
+    receivedAt: iso(row.received_at as Date),
+    deadlineAt: iso(row.deadline_at as Date),
+    status: row.status as DsarStatus,
+    extended: Boolean(row.extended),
+    ...(row.responded_at ? { respondedAt: iso(row.responded_at as Date) } : {}),
+    ...(row.response_note ? { responseNote: String(row.response_note) } : {}),
   };
 }
 
@@ -232,6 +251,63 @@ export function createPostgresPanelStore(connectionString: string): PostgresPane
     async findUserByEmail(email) {
       const result = await pool.query("select * from users where email = $1", [email]);
       return result.rows[0] ? clone(mapUser(result.rows[0])) : null;
+    },
+
+    async saveDsar(input) {
+      const site = await pool.query("select 1 from sites where id = $1", [input.siteId]);
+      if (site.rowCount === 0) throw new Error(`site bulunamadı: ${input.siteId}`);
+      const receivedAt = input.receivedAt ?? new Date().toISOString();
+      const result = await pool.query(
+        "insert into dsar_requests (site_id, type, subject_name, subject_email, message, received_at, deadline_at) values ($1, $2, $3, $4, $5, $6, $7) returning *",
+        [
+          input.siteId,
+          input.type,
+          input.subjectName,
+          input.subjectEmail,
+          input.message ?? null,
+          receivedAt,
+          computeDeadline(receivedAt),
+        ],
+      );
+      return clone(mapDsar(result.rows[0]!));
+    },
+
+    async listDsars(siteId) {
+      const result = await pool.query(
+        "select * from dsar_requests where site_id = $1 order by received_at, id",
+        [siteId],
+      );
+      return clone(result.rows.map(mapDsar));
+    },
+
+    async updateDsar(dsarId, patch) {
+      const current = await pool.query("select * from dsar_requests where id = $1", [dsarId]);
+      if (current.rowCount === 0) throw new Error(`başvuru bulunamadı: ${dsarId}`);
+      const row = current.rows[0]!;
+
+      let deadlineAt = iso(row.deadline_at as Date);
+      let extended = Boolean(row.extended);
+      if (patch.extend) {
+        if (extended) throw new Error("süre zaten uzatılmış — KVKK m.13 tek uzatma hakkı verir");
+        deadlineAt = extendDeadline(deadlineAt);
+        extended = true;
+      }
+      let status = row.status as DsarStatus;
+      if (patch.status) status = patch.status;
+      const respondedAt =
+        status === "completed" || status === "rejected"
+          ? new Date().toISOString()
+          : row.responded_at
+            ? iso(row.responded_at as Date)
+            : null;
+      const responseNote =
+        patch.responseNote !== undefined ? patch.responseNote : (row.response_note as string | null);
+
+      const updated = await pool.query(
+        "update dsar_requests set deadline_at = $2, extended = $3, status = $4, responded_at = $5, response_note = $6 where id = $1 returning *",
+        [dsarId, deadlineAt, extended, status, respondedAt, responseNote],
+      );
+      return clone(mapDsar(updated.rows[0]!));
     },
 
     async close() {
