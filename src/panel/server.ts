@@ -248,6 +248,14 @@ const server = createServer(async (req, res) => {
     }
     const service = createPanelService(store, { tenantId });
 
+    if (req.method === "POST" && url.pathname.startsWith("/clients/") && url.pathname.endsWith("/delete")) {
+      const clientId = url.pathname.slice("/clients/".length, -"/delete".length);
+      await service.deleteClient(clientId);
+      res.writeHead(302, { location: "/clients" });
+      res.end();
+      return;
+    }
+
     if (req.method === "GET" && url.pathname === "/clients") {
       const tenant = await store.getTenant(tenantId);
       const clients = await service.getClientList();

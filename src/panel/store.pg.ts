@@ -136,6 +136,12 @@ export function createPostgresPanelStore(connectionString: string): PostgresPane
       return clone(result.rows.map(mapClient));
     },
 
+    async deleteClient(clientId) {
+      // FK cascade: sites/scans/receipts/dsars on delete cascade
+      const result = await pool.query("delete from clients where id = $1", [clientId]);
+      if (result.rowCount === 0) throw new Error(`client bulunamadı: ${clientId}`);
+    },
+
     async createSite(input) {
       await requireClient(input.clientId);
       // token'ı DB de üretebilir; sözleşme birlği için uygulamada üretiyoruz

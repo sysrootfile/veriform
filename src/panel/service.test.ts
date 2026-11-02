@@ -94,6 +94,14 @@ describe("createPanelService", () => {
     await expect(serviceA.getClientSites("yok")).rejects.toThrow(/erişim reddedildi/);
   });
 
+  it("deleteClient: sahiplik guard'lı, kiracıdan kalıcı siler", async () => {
+    const { store, serviceA, serviceB, clientA } = await setup();
+    await expect(serviceB.deleteClient(clientA.id)).rejects.toThrow(/erişim reddedildi/);
+    await serviceA.deleteClient(clientA.id);
+    expect(await serviceA.getClientList()).toHaveLength(0);
+    await expect(serviceA.getClientSites(clientA.id)).rejects.toThrow(/erişim reddedildi/);
+  });
+
   it("DSAR: site token'ıyla kabul, kiracı guard'lı okuma ve güncelleme", async () => {
     const store = createInMemoryPanelStore();
     const tenantA = await store.createTenant({ name: "A", kind: "agency" });

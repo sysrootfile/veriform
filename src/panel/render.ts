@@ -28,6 +28,7 @@ const STYLE = `
   form { margin: 1rem 0; display: flex; gap: .5rem; }
   input, button { padding: .45rem .7rem; border: 1px solid #ccc; border-radius: 6px; font-size: .92rem; }
   button { background: var(--accent); color: #fff; border: none; cursor: pointer; }
+  button.danger { background: #8b1d1d; }
   footer { color: #888; font-size: .8rem; border-top: 1px solid #eee; margin-top: 2rem; padding-top: .8rem; }
 `;
 
@@ -163,6 +164,11 @@ ${rows}
 <form method="post" action="${e(input.clientHref)}/sites">
   <input name="url" type="url" placeholder="https://musteri-sitesi.com" required>
   <button type="submit">Site ekle</button>
+</form>
+<h2>Tehlikeli Bölge</h2>
+<p class="empty">Silmek kalıcıdır: müşterinin tüm siteleri, taramaları ve <strong>rıza kanıt zinciri</strong> birlikte silinir.</p>
+<form method="post" action="${e(input.clientHref)}/delete">
+  <button type="submit" class="danger">Müşteriyi kalıcı sil</button>
 </form>`,
     input.accent,
   );

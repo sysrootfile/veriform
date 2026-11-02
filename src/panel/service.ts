@@ -26,6 +26,7 @@ export interface PanelService {
   addClient(name: string): Promise<Client>;
   addSite(clientId: string, url: string): Promise<Site>;
   getClientSites(clientId: string): Promise<Site[]>;
+  deleteClient(clientId: string): Promise<void>;
   getSiteScans(siteId: string): Promise<StoredScan[]>;
   ingestScan(input: {
     siteId: string;
@@ -76,6 +77,11 @@ export function createPanelService(store: PanelStore, context: PanelContext): Pa
     async getClientSites(clientId) {
       await assertClientOwnership(clientId);
       return store.listSites(clientId);
+    },
+
+    async deleteClient(clientId) {
+      await assertClientOwnership(clientId);
+      await store.deleteClient(clientId);
     },
 
     async getSiteScans(siteId) {
