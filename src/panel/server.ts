@@ -12,6 +12,8 @@ import {
   renderRegisterPage,
   renderSitePage,
 } from "./render.js";
+import { DSAR_TYPES } from "../dsar/types.js";
+import { renderDsarFormPage, renderDsarPanelPage } from "../dsar/render.js";
 
 /**
  * Panel sunucusu (thin glue — tüm mantık service/render/auth katmanlarında ve testlidir).
@@ -147,6 +149,54 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+    // Kamu DSAR rotaları — veri sahibi dış kullanıcıdır, oturum gerekmez;
+    // kimliklendirme site token'ı üzerinden (form URL'i) yapılır
+    if (req.method === "GET" && url.pathname.startsWith("/dsar/")) {
+      const token = url.pathname.slice("/dsar/".length);
+      const site = await store.getSiteByToken(token);
+      if (!site) {
+        res.writeHead(404, { "content-type": "text/html; charset=utf-8" });
+        res.end("Başvuru formu bulunamadı");
+        return;
+      }
+      res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      res.end(renderDsarFormPage({ siteUrl: site.url, formAction: `/dsar/${token}` }));
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname.startsWith("/dsar/")) {
+      const token = url.pathname.slice("/dsar/".length);
+      const site = await store.getSiteByToken(token);
+      if (!site) {
+        res.writeHead(404, { "content-type": "text/html; charset=utf-8" });
+        res.end("Başvuru formu bulunamadı");
+        return;
+      }
+      const form = new URLSearchParams(await readBody(req));
+      const type = form.get("type") ?? "";
+      if (!DSAR_TYPES.includes(type as never)) {
+        res.writeHead(400, { "content-type": "text/html; charset=utf-8" });
+        res.end("Geçersiz talep türü");
+        return;
+      }
+      const dsar = await ingest.dsar({
+        token,
+        type: type as never,
+        subjectName: form.get("subjectName") ?? "",
+        subjectEmail: form.get("subjectEmail") ?? "",
+        ...(form.get("message") ? { message: form.get("message") as string } : {}),
+      });
+      res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      res.end(
+        renderDsarFormPage({
+          siteUrl: site.url,
+          formAction: `/dsar/${token}`,
+          success: { deadlineAt: dsar.deadlineAt },
+        }),
+      );
+      return;
+    }
+
     // Korunan rotalar — oturum zorunlu
     const tenantId = sessionTenantId(req);
     if (!tenantId) {
@@ -207,6 +257,46 @@ const server = createServer(async (req, res) => {
       const form = new URLSearchParams(await readBody(req));
       await service.addSite(clientId, form.get("url") ?? "");
       res.writeHead(302, { location: `/clients/${clientId}` });
+      res.end();
+      return;
+    }
+
+    if (req.method === "GET" && /^\/sites\/[^/]+\/dsar$/.test(url.pathname)) {
+      const siteId = url.pathname.split("/")[2]!;
+      const site = await store.getSite(siteId);
+      if (!site) {
+        res.writeHead(404, { "content-type": "text/html; charset=utf-8" });
+        res.end("Site bulunamadı");
+        return;
+      }
+      const requests = await service.getSiteDsars(siteId);
+      res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      res.end(
+        renderDsarPanelPage({
+          siteUrl: site.url,
+          siteId,
+          requests,
+          now: new Date().toISOString(),
+        }),
+      );
+      return;
+    }
+
+    if (req.method === "POST" && /^\/sites\/[^/]+\/dsar\/[^/]+$/.test(url.pathname)) {
+      const [, , siteId, , dsarId] = url.pathname.split("/") as [string, string, string, string, string];
+      const form = new URLSearchParams(await readBody(req));
+      const status = form.get("status") ?? "";
+      if (status && !["new", "in-review", "completed", "rejected"].includes(status)) {
+        res.writeHead(400, { "content-type": "text/html; charset=utf-8" });
+        res.end("Geçersiz durum");
+        return;
+      }
+      await service.updateDsarStatus(siteId, dsarId, {
+        ...(status ? { status: status as never } : {}),
+        ...(form.get("responseNote") ? { responseNote: form.get("responseNote") as string } : {}),
+        extend: form.get("extend") === "1",
+      });
+      res.writeHead(302, { location: `/sites/${siteId}/dsar` });
       res.end();
       return;
     }
