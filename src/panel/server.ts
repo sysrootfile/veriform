@@ -266,6 +266,7 @@ const server = createServer(async (req, res) => {
           clients,
           demoSiteHref: demoSiteId ? `/sites/${demoSiteId}` : undefined,
           accent: tenant?.brandColor,
+          logoUrl: tenant?.brandLogoUrl,
         }),
       );
       return;

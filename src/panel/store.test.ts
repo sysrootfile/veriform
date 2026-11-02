@@ -70,16 +70,18 @@ describe("createInMemoryPanelStore", () => {
     await expect(store.deleteClient("yok")).rejects.toThrow(/client/);
   });
 
-  it("getTenant kiracıyı döndürür, bilinmeyeni null verir; marka rengi saklanır", async () => {
+  it("getTenant kiracıyı döndürür, bilinmeyeni null verir; marka rengi ve logosu saklanır", async () => {
     const store = createInMemoryPanelStore();
     const tenant = await store.createTenant({
       name: "Ajans A",
       kind: "agency",
       brandColor: "#127a3d",
+      brandLogoUrl: "https://ajans.com/logo.png",
     });
     const fetched = await store.getTenant(tenant.id);
     expect(fetched?.name).toBe("Ajans A");
     expect(fetched?.brandColor).toBe("#127a3d");
+    expect(fetched?.brandLogoUrl).toBe("https://ajans.com/logo.png");
     expect(await store.getTenant("yok")).toBeNull();
   });
 

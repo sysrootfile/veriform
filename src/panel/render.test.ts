@@ -148,6 +148,21 @@ describe("white-label accent", () => {
     expect(html).not.toContain("javascript:");
     expect(html).toContain("--accent: #16161f");
   });
+
+  it("http(s) logosu img olarak basılır; javascript: şeması engellenir", () => {
+    const ok = renderClientsPage({
+      tenantName: "X",
+      clients: [],
+      logoUrl: "https://ajans.com/logo.png",
+    });
+    expect(ok).toContain('<img src="https://ajans.com/logo.png"');
+    const evil = renderClientsPage({
+      tenantName: "X",
+      clients: [],
+      logoUrl: "javascript:alert(1)",
+    });
+    expect(evil).not.toContain("javascript:alert(1)");
+  });
 });
 
 describe("renderClientDetailPage", () => {

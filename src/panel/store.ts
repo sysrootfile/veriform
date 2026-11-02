@@ -13,7 +13,12 @@ import type { Client, PanelUser, ScanCookie, Site, StoredScan, Tenant, TenantKin
  */
 
 export interface PanelStore {
-  createTenant(input: { name: string; kind: TenantKind; brandColor?: string | undefined }): Promise<Tenant>;
+  createTenant(input: {
+    name: string;
+    kind: TenantKind;
+    brandColor?: string | undefined;
+    brandLogoUrl?: string | undefined;
+  }): Promise<Tenant>;
   getTenant(tenantId: string): Promise<Tenant | null>;
   createClient(input: { tenantId: string; name: string }): Promise<Client>;
   /** Hard delete: client + siteleri + taramaları + kanıt zinciri (KVKK saklama yükümlülüğü dışında kalıcı silme talebi için). */
@@ -75,6 +80,7 @@ function randomIngestToken(): string {
         name: input.name,
         kind: input.kind,
         ...(input.brandColor ? { brandColor: input.brandColor } : {}),
+        ...(input.brandLogoUrl ? { brandLogoUrl: input.brandLogoUrl } : {}),
         createdAt: new Date().toISOString(),
       };
       tenants.push(tenant);

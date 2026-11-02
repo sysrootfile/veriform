@@ -37,6 +37,11 @@ function safeAccent(color?: string | undefined): string | undefined {
   return color && /^#[0-9a-fA-F]{6}$/.test(color) ? color : undefined;
 }
 
+/** White-label logosu — yalnızca http(s) URL; javascript:/data: engellenir. */
+function safeLogoUrl(url?: string | undefined): string | undefined {
+  return url && /^https?:\/\/\S+$/i.test(url) ? url : undefined;
+}
+
 const page = (title: string, body: string, accent?: string | undefined): string =>
   `<!doctype html>
 <html lang="tr">
@@ -63,8 +68,13 @@ export function renderClientsPage(input: {
   clients: ClientRow[];
   demoSiteHref?: string | undefined;
   accent?: string | undefined;
+  logoUrl?: string | undefined;
 }): string {
   const e = escapeHtml;
+  const logoUrl = safeLogoUrl(input.logoUrl);
+  const logo = logoUrl
+    ? `<img src="${e(logoUrl)}" alt="${e(input.tenantName)}" style="height:30px;vertical-align:middle;margin-right:.5rem">`
+    : "";
   const rows = input.clients.length
     ? input.clients
         .map(
@@ -80,7 +90,7 @@ export function renderClientsPage(input: {
 
   return page(
     input.tenantName,
-    `<h1>Veriform Panel · ${e(input.tenantName)}</h1>
+    `<h1>${logo}Veriform Panel · ${e(input.tenantName)}</h1>
 ${demoLink}
 <h2>Müşteriler</h2>
 <table>${rows}</table>

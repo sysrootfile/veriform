@@ -9,7 +9,8 @@ create table tenants (
   id          uuid primary key default gen_random_uuid(),
   name        text not null,
   kind        text not null check (kind in ('agency', 'direct')),
-  brand_color text,
+  brand_color     text,
+  brand_logo_url  text,
   created_at  timestamptz not null default now()
 );
 

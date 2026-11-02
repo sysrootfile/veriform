@@ -29,6 +29,7 @@ function mapTenant(row: pg.QueryResultRow): Tenant {
     name: String(row.name),
     kind: row.kind as TenantKind,
     ...(row.brand_color ? { brandColor: String(row.brand_color) } : {}),
+    ...(row.brand_logo_url ? { brandLogoUrl: String(row.brand_logo_url) } : {}),
     createdAt: iso(row.created_at as Date),
   };
 }
@@ -107,8 +108,8 @@ export function createPostgresPanelStore(connectionString: string): PostgresPane
   return {
     async createTenant(input) {
       const result = await pool.query(
-        "insert into tenants (name, kind, brand_color) values ($1, $2, $3) returning *",
-        [input.name, input.kind, input.brandColor ?? null],
+        "insert into tenants (name, kind, brand_color, brand_logo_url) values ($1, $2, $3, $4) returning *",
+        [input.name, input.kind, input.brandColor ?? null, input.brandLogoUrl ?? null],
       );
       return clone(mapTenant(result.rows[0]!));
     },
