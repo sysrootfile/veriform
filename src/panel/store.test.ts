@@ -46,6 +46,24 @@ describe("createInMemoryPanelStore", () => {
     );
   });
 
+  it("getTenant kiracıyı döndürür, bilinmeyeni null verir", async () => {
+    const store = createInMemoryPanelStore();
+    const tenant = await store.createTenant({ name: "Ajans A", kind: "agency" });
+    expect((await store.getTenant(tenant.id))?.name).toBe("Ajans A");
+    expect(await store.getTenant("yok")).toBeNull();
+  });
+
+  it("listSites client'ın sitelerini sıralı döndürür ve sahiplikle sınırlıdır", async () => {
+    const store = createInMemoryPanelStore();
+    const tenant = await store.createTenant({ name: "A", kind: "agency" });
+    const client = await store.createClient({ tenantId: tenant.id, name: "M" });
+    await store.createSite({ clientId: client.id, url: "https://b.com" });
+    await store.createSite({ clientId: client.id, url: "https://a.com" });
+    const sites = await store.listSites(client.id);
+    expect(sites.map((s) => s.url)).toEqual(["https://b.com", "https://a.com"]);
+    expect(await store.listSites("yok")).toEqual([]);
+  });
+
   it("kullanıcı oluşturulur ve e-posta ile bulunur; e-posta benzersizdir", async () => {
     const store = createInMemoryPanelStore();
     const tenant = await store.createTenant({ name: "A", kind: "direct" });

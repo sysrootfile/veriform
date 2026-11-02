@@ -93,6 +93,11 @@ export function createPostgresPanelStore(connectionString: string): PostgresPane
       return clone(mapTenant(result.rows[0]!));
     },
 
+    async getTenant(tenantId) {
+      const result = await pool.query("select * from tenants where id = $1", [tenantId]);
+      return result.rows[0] ? clone(mapTenant(result.rows[0])) : null;
+    },
+
     async createClient(input) {
       const tenant = await pool.query("select 1 from tenants where id = $1", [input.tenantId]);
       if (tenant.rowCount === 0) throw new Error(`tenant bulunamadı: ${input.tenantId}`);
@@ -132,6 +137,14 @@ export function createPostgresPanelStore(connectionString: string): PostgresPane
     async getSiteByToken(token) {
       const result = await pool.query("select * from sites where ingest_token = $1", [token]);
       return result.rows[0] ? clone(mapSite(result.rows[0])) : null;
+    },
+
+    async listSites(clientId) {
+      const result = await pool.query(
+        "select * from sites where client_id = $1 order by created_at, id",
+        [clientId],
+      );
+      return clone(result.rows.map(mapSite));
     },
 
     async saveScan(input) {

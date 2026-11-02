@@ -121,6 +121,37 @@ export const REGISTER_ERRORS: Record<"duplicate" | "generic", string> = {
   generic: "Kayıt başarısız — girdileri kontrol edin.",
 };
 
+export function renderClientDetailPage(input: {
+  clientName: string;
+  clientHref: string;
+  sites: Array<{ id: string; url: string; ingestToken: string }>;
+}): string {
+  const e = escapeHtml;
+  const rows = input.sites.length
+    ? input.sites
+        .map(
+          (s) =>
+            `<tr><td><a href="/sites/${e(s.id)}">${e(s.url)}</a></td><td><code>${e(s.ingestToken)}</code></td><td class="num"><a href="/sites/${e(s.id)}">Rapor →</a></td></tr>`,
+        )
+        .join("\n")
+    : '<tr><td colspan="3" class="empty">Henüz site eklenmedi.</td></tr>';
+
+  return page(
+    input.clientName,
+    `<h1>${e(input.clientName)}</h1>
+<h2>Siteler</h2>
+<p class="empty">İnject token'ı embed scriptinize ekleyin: <code>&lt;script src="https://cdn.veriform.io/v1/veriform-embed.js" data-site-token="…"&gt;&lt;/script&gt;</code></p>
+<table>
+<tr><th>Site</th><th>Ingest token</th><th class="num">Rapor</th></tr>
+${rows}
+</table>
+<form method="post" action="${e(input.clientHref)}/sites">
+  <input name="url" type="url" placeholder="https://musteri-sitesi.com" required>
+  <button type="submit">Site ekle</button>
+</form>`,
+  );
+}
+
 export function renderLoginPage(options: { hasError?: boolean } = {}): string {
   return page(
     "Giriş",

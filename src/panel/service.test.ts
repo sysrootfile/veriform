@@ -82,4 +82,14 @@ describe("createPanelService", () => {
     await serviceA.ingestReceipt(siteA.id, receipt);
     expect(await serviceA.verifySite(siteA.id)).toBe(true);
   });
+
+  it("getClientSites yalnızca kendi client'ının sitelerini verir", async () => {
+    const { serviceA, serviceB, clientA } = await setup();
+    await serviceA.addSite(clientA.id, "https://ikinci.com");
+    const sites = await serviceA.getClientSites(clientA.id);
+    expect(sites).toHaveLength(2); // setup seed'i + yeni eklenen
+    expect(sites.map((s) => s.url)).toContain("https://ikinci.com");
+    await expect(serviceB.getClientSites(clientA.id)).rejects.toThrow(/erişim reddedildi/);
+    await expect(serviceA.getClientSites("yok")).rejects.toThrow(/erişim reddedildi/);
+  });
 });
