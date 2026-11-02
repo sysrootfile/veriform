@@ -165,6 +165,7 @@ const server = createServer(async (req, res) => {
           tenantName: tenant?.name ?? "Panel",
           clients,
           demoSiteHref: demoSiteId ? `/sites/${demoSiteId}` : undefined,
+          accent: tenant?.brandColor,
         }),
       );
       return;
@@ -180,6 +181,7 @@ const server = createServer(async (req, res) => {
 
     if (req.method === "GET" && url.pathname.startsWith("/clients/")) {
       const clientId = url.pathname.slice("/clients/".length);
+      const tenant = await store.getTenant(tenantId);
       const client = (await service.getClientList()).find((c) => c.id === clientId);
       const sites = await service.getClientSites(clientId);
       res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
@@ -188,6 +190,7 @@ const server = createServer(async (req, res) => {
           clientName: client?.name ?? "Müşteri",
           clientHref: `/clients/${clientId}`,
           sites: sites.map((s) => ({ id: s.id, url: s.url, ingestToken: s.ingestToken })),
+          accent: tenant?.brandColor,
         }),
       );
       return;

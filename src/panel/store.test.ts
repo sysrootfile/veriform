@@ -46,10 +46,16 @@ describe("createInMemoryPanelStore", () => {
     );
   });
 
-  it("getTenant kiracıyı döndürür, bilinmeyeni null verir", async () => {
+  it("getTenant kiracıyı döndürür, bilinmeyeni null verir; marka rengi saklanır", async () => {
     const store = createInMemoryPanelStore();
-    const tenant = await store.createTenant({ name: "Ajans A", kind: "agency" });
-    expect((await store.getTenant(tenant.id))?.name).toBe("Ajans A");
+    const tenant = await store.createTenant({
+      name: "Ajans A",
+      kind: "agency",
+      brandColor: "#127a3d",
+    });
+    const fetched = await store.getTenant(tenant.id);
+    expect(fetched?.name).toBe("Ajans A");
+    expect(fetched?.brandColor).toBe("#127a3d");
     expect(await store.getTenant("yok")).toBeNull();
   });
 

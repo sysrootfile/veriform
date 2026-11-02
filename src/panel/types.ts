@@ -10,6 +10,8 @@ export interface Tenant {
   id: string;
   name: string;
   kind: TenantKind;
+  /** White-label vurgu rengi — yalnızca #rrggbb biçimi kabul edilir. */
+  brandColor?: string | undefined;
   createdAt: string;
 }
 

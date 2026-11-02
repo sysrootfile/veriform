@@ -11,7 +11,7 @@ import type { Client, PanelUser, ScanCookie, Site, StoredScan, Tenant, TenantKin
  */
 
 export interface PanelStore {
-  createTenant(input: { name: string; kind: TenantKind }): Promise<Tenant>;
+  createTenant(input: { name: string; kind: TenantKind; brandColor?: string | undefined }): Promise<Tenant>;
   getTenant(tenantId: string): Promise<Tenant | null>;
   createClient(input: { tenantId: string; name: string }): Promise<Client>;
   listClients(tenantId: string): Promise<Client[]>;
@@ -56,6 +56,7 @@ function randomIngestToken(): string {
         id: crypto.randomUUID(),
         name: input.name,
         kind: input.kind,
+        ...(input.brandColor ? { brandColor: input.brandColor } : {}),
         createdAt: new Date().toISOString(),
       };
       tenants.push(tenant);

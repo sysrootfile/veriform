@@ -111,6 +111,23 @@ describe("renderSitePage", () => {
   });
 });
 
+describe("white-label accent", () => {
+  it("geçerli marka rengi CSS değişkeni olarak uygulanır", () => {
+    const html = renderClientsPage({ tenantName: "X", clients: [], accent: "#127a3d" });
+    expect(html).toContain("--accent: #127a3d");
+  });
+
+  it("geçersiz marka rengi yoksayılır (CSS enjeksiyonu engeli)", () => {
+    const html = renderClientsPage({
+      tenantName: "X",
+      clients: [],
+      accent: "javascript:alert(1)",
+    });
+    expect(html).not.toContain("javascript:");
+    expect(html).toContain("--accent: #16161f");
+  });
+});
+
 describe("renderClientDetailPage", () => {
   const sites = [
     {
