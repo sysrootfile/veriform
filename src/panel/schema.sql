@@ -6,10 +6,11 @@
 create extension if not exists "pgcrypto";
 
 create table tenants (
-  id         uuid primary key default gen_random_uuid(),
-  name       text not null,
-  kind       text not null check (kind in ('agency', 'direct')),
-  created_at timestamptz not null default now()
+  id          uuid primary key default gen_random_uuid(),
+  name        text not null,
+  kind        text not null check (kind in ('agency', 'direct')),
+  brand_color text,
+  created_at  timestamptz not null default now()
 );
 
 create table clients (

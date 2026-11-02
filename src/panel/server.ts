@@ -5,7 +5,13 @@ import { createIngestApi, IngestError } from "./ingest.js";
 import { createPanelService } from "./service.js";
 import { createInMemoryPanelStore } from "./store.js";
 import { createPostgresPanelStore } from "./store.pg.js";
-import { renderClientsPage, renderLoginPage, renderRegisterPage, renderSitePage } from "./render.js";
+import {
+  renderClientDetailPage,
+  renderClientsPage,
+  renderLoginPage,
+  renderRegisterPage,
+  renderSitePage,
+} from "./render.js";
 
 /**
  * Panel sunucusu (thin glue — tüm mantık service/render/auth katmanlarında ve testlidir).
@@ -151,13 +157,15 @@ const server = createServer(async (req, res) => {
     const service = createPanelService(store, { tenantId });
 
     if (req.method === "GET" && url.pathname === "/clients") {
+      const tenant = await store.getTenant(tenantId);
       const clients = await service.getClientList();
       res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
       res.end(
         renderClientsPage({
-          tenantName: "Panel",
+          tenantName: tenant?.name ?? "Panel",
           clients,
           demoSiteHref: demoSiteId ? `/sites/${demoSiteId}` : undefined,
+          accent: tenant?.brandColor,
         }),
       );
       return;
@@ -167,6 +175,38 @@ const server = createServer(async (req, res) => {
       const form = new URLSearchParams(await readBody(req));
       await service.addClient(form.get("name") ?? "İsimsiz Müşteri");
       res.writeHead(302, { location: "/clients" });
+      res.end();
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname.startsWith("/clients/")) {
+      const clientId = url.pathname.slice("/clients/".length);
+      const tenant = await store.getTenant(tenantId);
+      const client = (await service.getClientList()).find((c) => c.id === clientId);
+      const sites = await service.getClientSites(clientId);
+      res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      res.end(
+        renderClientDetailPage({
+          clientName: client?.name ?? "Müşteri",
+          clientHref: `/clients/${clientId}`,
+          sites: sites.map((s) => ({ id: s.id, url: s.url, ingestToken: s.ingestToken })),
+          accent: tenant?.brandColor,
+        }),
+      );
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname.startsWith("/clients/")) {
+      const rest = url.pathname.slice("/clients/".length);
+      if (!rest.endsWith("/sites")) {
+        res.writeHead(404, { "content-type": "text/html; charset=utf-8" });
+        res.end("404");
+        return;
+      }
+      const clientId = rest.slice(0, -"/sites".length);
+      const form = new URLSearchParams(await readBody(req));
+      await service.addSite(clientId, form.get("url") ?? "");
+      res.writeHead(302, { location: `/clients/${clientId}` });
       res.end();
       return;
     }

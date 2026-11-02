@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { StoredScan } from "./types.js";
-import { renderClientsPage, renderLoginPage, renderRegisterPage, renderSitePage } from "./render.js";
+import {
+  renderClientDetailPage,
+  renderClientsPage,
+  renderLoginPage,
+  renderRegisterPage,
+  renderSitePage,
+} from "./render.js";
 
 function scan(over: Partial<StoredScan> = {}): StoredScan {
   return {
@@ -102,6 +108,74 @@ describe("renderSitePage", () => {
       scans: [],
     });
     expect(html).not.toContain("<script>alert");
+  });
+});
+
+describe("white-label accent", () => {
+  it("geçerli marka rengi CSS değişkeni olarak uygulanır", () => {
+    const html = renderClientsPage({ tenantName: "X", clients: [], accent: "#127a3d" });
+    expect(html).toContain("--accent: #127a3d");
+  });
+
+  it("geçersiz marka rengi yoksayılır (CSS enjeksiyonu engeli)", () => {
+    const html = renderClientsPage({
+      tenantName: "X",
+      clients: [],
+      accent: "javascript:alert(1)",
+    });
+    expect(html).not.toContain("javascript:");
+    expect(html).toContain("--accent: #16161f");
+  });
+});
+
+describe("renderClientDetailPage", () => {
+  const sites = [
+    {
+      id: "s1",
+      clientId: "c1",
+      url: "https://musteri1.com",
+      ingestToken: "a".repeat(64),
+      createdAt: "2026-11-02T10:00:00.000Z",
+    },
+  ];
+
+  it("müşteri adını, site satırlarını ve ingest token'ını gösterir", () => {
+    const html = renderClientDetailPage({
+      clientName: "Müşteri 1",
+      clientHref: "/clients/c1",
+      sites,
+    });
+    expect(html).toContain("Müşteri 1");
+    expect(html).toContain("https://musteri1.com");
+    expect(html).toContain("a".repeat(64));
+    expect(html).toContain("/sites/s1");
+    expect(html).toContain('action="/clients/c1/sites"');
+  });
+
+  it("site yoksa boş durum gösterir ve form sunar", () => {
+    const html = renderClientDetailPage({
+      clientName: "Yeni Müşteri",
+      clientHref: "/clients/c2",
+      sites: [],
+    });
+    expect(html).toContain("Henüz site eklenmedi");
+    expect(html).toContain('action="/clients/c2/sites"');
+  });
+
+  it("site URL ve token HTML'e kaçırılır", () => {
+    const html = renderClientDetailPage({
+      clientName: "M",
+      clientHref: "/clients/c1",
+      sites: [
+        {
+          id: "s1",
+          url: 'https://x.com/?"><script>a()</script>',
+          ingestToken: "b".repeat(64),
+        },
+      ],
+    });
+    expect(html).not.toContain("<script>a()");
+    expect(html).toContain("&lt;script&gt;");
   });
 });
 

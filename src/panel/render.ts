@@ -18,7 +18,7 @@ function escapeHtml(value: string): string {
 
 const STYLE = `
   body { font-family: system-ui, sans-serif; max-width: 860px; margin: 2rem auto; padding: 0 1rem; color: #16161f; }
-  h1 { font-size: 1.3rem; } h2 { font-size: 1.05rem; margin-top: 1.6rem; }
+  h1 { font-size: 1.3rem; color: var(--accent); } h2 { font-size: 1.05rem; margin-top: 1.6rem; }
   table { width: 100%; border-collapse: collapse; margin: .5rem 0 1rem; }
   td, th { border-bottom: 1px solid #eee; padding: .45rem .5rem; text-align: left; font-size: .92rem; }
   .num { text-align: right; }
@@ -27,18 +27,24 @@ const STYLE = `
   .empty { color: #777; }
   form { margin: 1rem 0; display: flex; gap: .5rem; }
   input, button { padding: .45rem .7rem; border: 1px solid #ccc; border-radius: 6px; font-size: .92rem; }
-  button { background: #16161f; color: #fff; border: none; cursor: pointer; }
+  button { background: var(--accent); color: #fff; border: none; cursor: pointer; }
   footer { color: #888; font-size: .8rem; border-top: 1px solid #eee; margin-top: 2rem; padding-top: .8rem; }
 `;
 
-const page = (title: string, body: string): string =>
+/** White-label vurgu rengi — yalnızca #rrggbb; başka her şey (CSS enjeksiyonu dahil) yoksayılır. */
+function safeAccent(color?: string | undefined): string | undefined {
+  return color && /^#[0-9a-fA-F]{6}$/.test(color) ? color : undefined;
+}
+
+const page = (title: string, body: string, accent?: string | undefined): string =>
   `<!doctype html>
 <html lang="tr">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Veriform Panel — ${escapeHtml(title)}</title>
-<style>${STYLE}</style>
+<style>:root { --accent: ${safeAccent(accent) ?? "#16161f"}; }
+${STYLE}</style>
 </head>
 <body>
 ${body}
@@ -55,6 +61,7 @@ export function renderClientsPage(input: {
   tenantName: string;
   clients: ClientRow[];
   demoSiteHref?: string | undefined;
+  accent?: string | undefined;
 }): string {
   const e = escapeHtml;
   const rows = input.clients.length
@@ -80,6 +87,7 @@ ${demoLink}
   <input name="name" placeholder="Müşteri adı" required>
   <button type="submit">Müşteri ekle</button>
 </form>`,
+    input.accent,
   );
 }
 
@@ -120,6 +128,39 @@ export const REGISTER_ERRORS: Record<"duplicate" | "generic", string> = {
   duplicate: "Bu e-posta zaten kayıtlı — başka bir e-posta deneyin.",
   generic: "Kayıt başarısız — girdileri kontrol edin.",
 };
+
+export function renderClientDetailPage(input: {
+  clientName: string;
+  clientHref: string;
+  sites: Array<{ id: string; url: string; ingestToken: string }>;
+  accent?: string | undefined;
+}): string {
+  const e = escapeHtml;
+  const rows = input.sites.length
+    ? input.sites
+        .map(
+          (s) =>
+            `<tr><td><a href="/sites/${e(s.id)}">${e(s.url)}</a></td><td><code>${e(s.ingestToken)}</code></td><td class="num"><a href="/sites/${e(s.id)}">Rapor →</a></td></tr>`,
+        )
+        .join("\n")
+    : '<tr><td colspan="3" class="empty">Henüz site eklenmedi.</td></tr>';
+
+  return page(
+    input.clientName,
+    `<h1>${e(input.clientName)}</h1>
+<h2>Siteler</h2>
+<p class="empty">İnject token'ı embed scriptinize ekleyin: <code>&lt;script src="https://cdn.veriform.io/v1/veriform-embed.js" data-site-token="…"&gt;&lt;/script&gt;</code></p>
+<table>
+<tr><th>Site</th><th>Ingest token</th><th class="num">Rapor</th></tr>
+${rows}
+</table>
+<form method="post" action="${e(input.clientHref)}/sites">
+  <input name="url" type="url" placeholder="https://musteri-sitesi.com" required>
+  <button type="submit">Site ekle</button>
+</form>`,
+    input.accent,
+  );
+}
 
 export function renderLoginPage(options: { hasError?: boolean } = {}): string {
   return page(

@@ -26,6 +26,7 @@ function mapTenant(row: pg.QueryResultRow): Tenant {
     id: String(row.id),
     name: String(row.name),
     kind: row.kind as TenantKind,
+    ...(row.brand_color ? { brandColor: String(row.brand_color) } : {}),
     createdAt: iso(row.created_at as Date),
   };
 }
@@ -87,10 +88,15 @@ export function createPostgresPanelStore(connectionString: string): PostgresPane
   return {
     async createTenant(input) {
       const result = await pool.query(
-        "insert into tenants (name, kind) values ($1, $2) returning *",
-        [input.name, input.kind],
+        "insert into tenants (name, kind, brand_color) values ($1, $2, $3) returning *",
+        [input.name, input.kind, input.brandColor ?? null],
       );
       return clone(mapTenant(result.rows[0]!));
+    },
+
+    async getTenant(tenantId) {
+      const result = await pool.query("select * from tenants where id = $1", [tenantId]);
+      return result.rows[0] ? clone(mapTenant(result.rows[0])) : null;
     },
 
     async createClient(input) {
@@ -132,6 +138,14 @@ export function createPostgresPanelStore(connectionString: string): PostgresPane
     async getSiteByToken(token) {
       const result = await pool.query("select * from sites where ingest_token = $1", [token]);
       return result.rows[0] ? clone(mapSite(result.rows[0])) : null;
+    },
+
+    async listSites(clientId) {
+      const result = await pool.query(
+        "select * from sites where client_id = $1 order by created_at, id",
+        [clientId],
+      );
+      return clone(result.rows.map(mapSite));
     },
 
     async saveScan(input) {

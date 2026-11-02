@@ -11,10 +11,12 @@ import type { Client, PanelUser, ScanCookie, Site, StoredScan, Tenant, TenantKin
  */
 
 export interface PanelStore {
-  createTenant(input: { name: string; kind: TenantKind }): Promise<Tenant>;
+  createTenant(input: { name: string; kind: TenantKind; brandColor?: string | undefined }): Promise<Tenant>;
+  getTenant(tenantId: string): Promise<Tenant | null>;
   createClient(input: { tenantId: string; name: string }): Promise<Client>;
   listClients(tenantId: string): Promise<Client[]>;
   createSite(input: { clientId: string; url: string }): Promise<Site>;
+  listSites(clientId: string): Promise<Site[]>;
   getSite(siteId: string): Promise<Site | null>;
   /** Ingest kimliklendirme: token → site (bilinmeyen token → null). */
   getSiteByToken(token: string): Promise<Site | null>;
@@ -54,10 +56,16 @@ function randomIngestToken(): string {
         id: crypto.randomUUID(),
         name: input.name,
         kind: input.kind,
+        ...(input.brandColor ? { brandColor: input.brandColor } : {}),
         createdAt: new Date().toISOString(),
       };
       tenants.push(tenant);
       return clone(tenant);
+    },
+
+    async getTenant(tenantId) {
+      const tenant = tenants.find((t) => t.id === tenantId);
+      return tenant ? clone(tenant) : null;
     },
 
     async createClient(input) {
@@ -96,6 +104,10 @@ function randomIngestToken(): string {
     async getSiteByToken(token) {
       const site = sites.find((s) => s.ingestToken === token);
       return site ? clone(site) : null;
+    },
+
+    async listSites(clientId) {
+      return clone(sites.filter((s) => s.clientId === clientId));
     },
 
     async getSite(siteId) {
