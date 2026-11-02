@@ -1,5 +1,6 @@
 import type { RequestTarget } from "../collector/targets.js";
 import type { ConsentReceipt } from "../consent/receipt.js";
+import type { DsarRequest, DsarType } from "../dsar/types.js";
 import type { FormInventoryReport } from "../report/types.js";
 import type { StoredReceiptEntry } from "./chain.js";
 import type { PanelStore } from "./store.js";
@@ -26,6 +27,13 @@ export interface IngestApi {
     observedTargets: RequestTarget[];
   }): Promise<StoredScan>;
   receipt(input: { token: string; receipt: ConsentReceipt }): Promise<StoredReceiptEntry>;
+  dsar(input: {
+    token: string;
+    type: DsarType;
+    subjectName: string;
+    subjectEmail: string;
+    message?: string | undefined;
+  }): Promise<DsarRequest>;
 }
 
 export function createIngestApi(store: PanelStore): IngestApi {
@@ -53,6 +61,18 @@ export function createIngestApi(store: PanelStore): IngestApi {
           error instanceof Error ? error.message : "kanıt reddedildi",
         );
       }
+    },
+
+    async dsar(input) {
+      const site = await store.getSiteByToken(input.token);
+      if (!site) throw new IngestError(401, "geçersiz ingest token'ı");
+      return store.saveDsar({
+        siteId: site.id,
+        type: input.type,
+        subjectName: input.subjectName,
+        subjectEmail: input.subjectEmail,
+        ...(input.message ? { message: input.message } : {}),
+      });
     },
   };
 }

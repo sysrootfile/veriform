@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildConsentReceipt } from "../consent/receipt.js";
+import { createIngestApi, IngestError } from "./ingest.js";
 import type { FormInventoryReport } from "../report/types.js";
 import { createInMemoryPanelStore } from "./store.js";
 import { createPanelService } from "./service.js";
@@ -91,5 +92,49 @@ describe("createPanelService", () => {
     expect(sites.map((s) => s.url)).toContain("https://ikinci.com");
     await expect(serviceB.getClientSites(clientA.id)).rejects.toThrow(/erişim reddedildi/);
     await expect(serviceA.getClientSites("yok")).rejects.toThrow(/erişim reddedildi/);
+  });
+
+  it("DSAR: site token'ıyla kabul, kiracı guard'lı okuma ve güncelleme", async () => {
+    const store = createInMemoryPanelStore();
+    const tenantA = await store.createTenant({ name: "A", kind: "agency" });
+    const serviceA = createPanelService(store, { tenantId: tenantA.id });
+    const clientA = await serviceA.addClient("Müşteri");
+    const siteA = await serviceA.addSite(clientA.id, "https://musteri-a.com");
+    const api = createIngestApi(store);
+
+    const dsar = await api.dsar({
+      token: siteA.ingestToken,
+      type: "silme",
+      subjectName: "Ayşe Yılmaz",
+      subjectEmail: "ayse@example.com",
+    });
+    expect(dsar.status).toBe("new");
+
+    const list = await serviceA.getSiteDsars(siteA.id);
+    expect(list).toHaveLength(1);
+
+    const updated = await serviceA.updateDsarStatus(siteA.id, dsar.id, {
+      status: "in-review",
+    });
+    expect(updated.status).toBe("in-review");
+
+    const serviceB = createPanelService(store, {
+      tenantId: (await store.createTenant({ name: "B", kind: "agency" })).id,
+    });
+    await expect(serviceB.getSiteDsars(siteA.id)).rejects.toThrow(/erişim reddedildi/);
+    await expect(
+      serviceB.updateDsarStatus(siteA.id, dsar.id, { status: "completed" }),
+    ).rejects.toThrow(/erişim reddedildi/);
+
+    const err = await api
+      .dsar({
+        token: "yanlış",
+        type: "silme",
+        subjectName: "X",
+        subjectEmail: "x@x.com",
+      })
+      .catch((e) => e);
+    expect(err).toBeInstanceOf(IngestError);
+    expect((err as IngestError).status).toBe(401);
   });
 });
