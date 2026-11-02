@@ -3,7 +3,8 @@ import { observeNetwork, observeSubmissions, type NetworkWindow } from "../colle
 import type { RequestTarget } from "../collector/targets.js";
 import { renderBanner, type BannerTexts } from "../consent/banner.js";
 import type { ConsentReceipt } from "../consent/receipt.js";
-import type { OptionalCategory } from "../consent/state.js";
+import type { ConsentDecisions, OptionalCategory } from "../consent/state.js";
+import { installTcfApi, type TcfApiWindow } from "../consent/tcfapi.js";
 import { buildFormInventory } from "../report/inventory.js";
 import type { FormInventoryReport } from "../report/types.js";
 import { snapshotForms } from "../report/snapshot.js";
@@ -67,9 +68,17 @@ export function initVeriform(doc: Document, win: NetworkWindow, options: EmbedOp
 
   const detachSubmissions = observeSubmissions(doc, (n) => record(n.target));
   const detachNetwork = observeNetwork(win, record);
+  let detachTcf: (() => void) | undefined;
 
   const bannerOptions = options.banner;
   if (bannerOptions) {
+    // Banner kararları TCF 2.2 __tcfapi yüzeyine akar (amaç 1–11 eşlemesi tcf.ts'te)
+    let lastDecisions: ConsentDecisions = {
+      analytics: false,
+      marketing: false,
+      personalization: false,
+    };
+    const tcf = installTcfApi(win as unknown as TcfApiWindow, () => lastDecisions);
     const mount = () => {
       const host = doc.createElement("div");
       host.setAttribute("data-vf", "banner-host");
@@ -87,6 +96,8 @@ export function initVeriform(doc: Document, win: NetworkWindow, options: EmbedOp
         },
         {
           onDecision: (receipt) => {
+            lastDecisions = receipt.decisions;
+            tcf.notifyChange();
             if (consentReceipts.length >= MAX_CONSENT_RECEIPTS) consentReceipts.shift();
             consentReceipts.push(receipt);
           },
@@ -95,6 +106,7 @@ export function initVeriform(doc: Document, win: NetworkWindow, options: EmbedOp
     };
     if (doc.body) mount();
     else doc.addEventListener("DOMContentLoaded", mount, { once: true });
+    detachTcf = tcf.detach;
   }
 
   return {
@@ -104,6 +116,7 @@ export function initVeriform(doc: Document, win: NetworkWindow, options: EmbedOp
     detach: () => {
       detachSubmissions();
       detachNetwork();
+      detachTcf?.();
     },
   };
 }
