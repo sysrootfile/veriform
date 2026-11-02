@@ -4,6 +4,7 @@ import { initVeriform, type EmbedHandle } from "./core.js";
 import type { NetworkWindow } from "../collector/observe.js";
 import type { RequestTarget } from "../collector/targets.js";
 import type { BannerTexts } from "../consent/banner.js";
+import type { TcfApiFunction } from "../consent/tcfapi.js";
 
 const win = () => window as unknown as NetworkWindow;
 
@@ -152,6 +153,24 @@ describe("initVeriform", () => {
       new MouseEvent("click", { bubbles: true }),
     );
     await vi.waitFor(() => expect(handle.getConsentReceipts()).toHaveLength(1));
+    handle.detach();
+  });
+
+  it("banner kararı __tcfapi'ye akar: kabul sonrası 11 amaç da granted", async () => {
+    setupPage();
+    const handle = initVeriform(document, win(), {
+      banner: { bannerVersion: "banner-2026-11", texts: bannerTexts },
+    });
+    document.querySelector('[data-vf="accept"]')!.dispatchEvent(
+      new MouseEvent("click", { bubbles: true }),
+    );
+    await vi.waitFor(() => expect(handle.getConsentReceipts()).toHaveLength(1));
+
+    const cb = vi.fn();
+    (win() as unknown as { __tcfapi: TcfApiFunction }).__tcfapi("getTCData", 2, cb as never);
+    const data = cb.mock.calls[0]![0] as { purpose: { consents: boolean[] } };
+    expect(data.purpose.consents).toHaveLength(11);
+    expect(data.purpose.consents.every((c) => c)).toBe(true);
     handle.detach();
   });
 });
