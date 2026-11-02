@@ -14,6 +14,9 @@ import {
 } from "./render.js";
 import { DSAR_TYPES } from "../dsar/types.js";
 import { renderDsarFormPage, renderDsarPanelPage } from "../dsar/render.js";
+import { generateAydinlatmaMetni } from "../draft/generator.js";
+import { renderDraftPageHtml } from "../draft/render.js";
+import { CATEGORY_LABELS, COOKIE_LABELS } from "../report/render.js";
 
 /**
  * Panel sunucusu (thin glue — tüm mantık service/render/auth katmanlarında ve testlidir).
@@ -197,6 +200,45 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+    // Ingest rotaları — makine kimliklendirmesi site token'ı iledir (oturum değil);
+    // oturum guard'ının ÖNCESİNDE olmalı
+    if (req.method === "POST" && url.pathname.startsWith("/api/ingest/")) {
+      const body = JSON.parse(await readBody(req)) as Record<string, unknown>;
+      try {
+        if (url.pathname === "/api/ingest/scan/receipt") {
+          const entry = await ingest.receipt({
+            token: String(body.token ?? ""),
+            receipt: body.receipt as never,
+          });
+          res.writeHead(200, { "content-type": "application/json" });
+          res.end(JSON.stringify({ id: entry.id, chainHash: entry.chainHash }));
+          return;
+        }
+        if (url.pathname === "/api/ingest/scan") {
+          const scan = await ingest.scan({
+            token: String(body.token ?? ""),
+            report: body.report as never,
+            cookies: (body.cookies ?? []) as never,
+            observedTargets: (body.observedTargets ?? []) as never,
+          });
+          res.writeHead(200, { "content-type": "application/json" });
+          res.end(JSON.stringify({ id: scan.id }));
+          return;
+        }
+        res.writeHead(404, { "content-type": "application/json" });
+        res.end(JSON.stringify({ error: "bilinmeyen ingest ucu" }));
+      } catch (error) {
+        if (error instanceof IngestError) {
+          res.writeHead(error.status, { "content-type": "application/json" });
+          res.end(JSON.stringify({ error: error.message }));
+        } else {
+          res.writeHead(400, { "content-type": "application/json" });
+          res.end(JSON.stringify({ error: "geçersiz istek" }));
+        }
+      }
+      return;
+    }
+
     // Korunan rotalar — oturum zorunlu
     const tenantId = sessionTenantId(req);
     if (!tenantId) {
@@ -301,6 +343,33 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === "GET" && /^\/sites\/[^/]+\/draft\/aydinlatma$/.test(url.pathname)) {
+      const siteId = url.pathname.split("/")[2]!;
+      const site = await store.getSite(siteId);
+      if (!site) {
+        res.writeHead(404, { "content-type": "text/html; charset=utf-8" });
+        res.end("Site bulunamadı");
+        return;
+      }
+      const scans = await service.getSiteScans(siteId);
+      const last = scans.at(-1);
+      const hostname = new URL(site.url).hostname;
+      const draft = generateAydinlatmaMetni({
+        siteUrl: site.url,
+        contactEmail: `kvkk@${hostname}`,
+        collectedCategories: (last?.report.categoryCounts ?? []).map(
+          (c) => CATEGORY_LABELS[c.category] ?? c.category,
+        ),
+        cookieCategories: [
+          ...new Set((last?.cookies ?? []).map((c) => COOKIE_LABELS[c.category] ?? c.category)),
+        ],
+        generatedAt: new Date().toISOString(),
+      });
+      res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      res.end(renderDraftPageHtml(draft));
+      return;
+    }
+
     if (req.method === "GET" && url.pathname.startsWith("/sites/")) {
       const siteId = url.pathname.slice("/sites/".length);
       const site = await store.getSite(siteId);
@@ -312,44 +381,14 @@ const server = createServer(async (req, res) => {
       const scans = await service.getSiteScans(siteId);
       const chainValid = await service.verifySite(siteId);
       res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
-      res.end(renderSitePage({ siteUrl: site.url, chainValid, scans }));
-      return;
-    }
-
-    if (req.method === "POST" && url.pathname.startsWith("/api/ingest/")) {
-      const body = JSON.parse(await readBody(req)) as Record<string, unknown>;
-      try {
-        if (url.pathname === "/api/ingest/scan/receipt") {
-          const entry = await ingest.receipt({
-            token: String(body.token ?? ""),
-            receipt: body.receipt as never,
-          });
-          res.writeHead(200, { "content-type": "application/json" });
-          res.end(JSON.stringify({ id: entry.id, chainHash: entry.chainHash }));
-          return;
-        }
-        if (url.pathname === "/api/ingest/scan") {
-          const scan = await ingest.scan({
-            token: String(body.token ?? ""),
-            report: body.report as never,
-            cookies: (body.cookies ?? []) as never,
-            observedTargets: (body.observedTargets ?? []) as never,
-          });
-          res.writeHead(200, { "content-type": "application/json" });
-          res.end(JSON.stringify({ id: scan.id }));
-          return;
-        }
-        res.writeHead(404, { "content-type": "application/json" });
-        res.end(JSON.stringify({ error: "bilinmeyen ingest ucu" }));
-      } catch (error) {
-        if (error instanceof IngestError) {
-          res.writeHead(error.status, { "content-type": "application/json" });
-          res.end(JSON.stringify({ error: error.message }));
-        } else {
-          res.writeHead(400, { "content-type": "application/json" });
-          res.end(JSON.stringify({ error: "geçersiz istek" }));
-        }
-      }
+      res.end(
+        renderSitePage({
+          siteUrl: site.url,
+          chainValid,
+          scans,
+          draftHref: scans.length ? `/sites/${siteId}/draft/aydinlatma` : undefined,
+        }),
+      );
       return;
     }
 
