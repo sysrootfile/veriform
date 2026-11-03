@@ -130,6 +130,48 @@ describe("renderSitePage", () => {
     expect(html).not.toContain("son 10'u");
   });
 
+  it("iki tarama arasında değişiklik varsa uyarı bölümü basılır", () => {
+    const base = scan();
+    const prev = { ...base, id: "p1", scannedAt: "2026-11-01T10:00:00.000Z" };
+    const curr = {
+      ...base,
+      id: "c1",
+      scannedAt: "2026-11-03T10:00:00.000Z",
+      report: {
+        ...base.report,
+        forms: [
+          { ref: "form-0", fields: [{ name: "email", category: "email" as const }] },
+          {
+            ref: "form-1",
+            fields: [
+              { name: "tcno", category: "tckn" as const },
+              { name: "adsoyad", category: "full_name" as const },
+            ],
+          },
+        ],
+      },
+    };
+    const html = renderSitePage({
+      siteId: "s1",
+      siteUrl: "https://musteri1.com",
+      chainValid: true,
+      scans: [prev, curr],
+    });
+    expect(html).toContain("Değişiklik Uyarısı");
+    expect(html).toContain("form-1");
+    expect(html).toContain("tcno");
+  });
+
+  it("tek taramada uyarı bölümü çıkmaz", () => {
+    const html = renderSitePage({
+      siteId: "s1",
+      siteUrl: "https://musteri1.com",
+      chainValid: true,
+      scans: [scan()],
+    });
+    expect(html).not.toContain("Değişiklik Uyarısı");
+  });
+
   it("site URL'i HTML'e kaçırılır", () => {
     const html = renderSitePage({
       siteId: "s1",
