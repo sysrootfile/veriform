@@ -28,6 +28,7 @@ function scan(over: Partial<StoredScan> = {}): StoredScan {
     id: "s",
     siteId: "site-1",
     scannedAt: "2026-11-03T10:00:00.000Z",
+    scripts: [],
     report: reportWith([]),
     cookies: [{ name: "_ga", domain: ".", category: "analytics" }],
     observedTargets: [],

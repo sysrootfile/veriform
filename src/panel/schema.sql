@@ -46,12 +46,13 @@ create table audit_log (
 create index audit_tenant_idx on audit_log (tenant_id, created_at);
 
 create table sites (
-  id            uuid primary key default gen_random_uuid(),
-  client_id     uuid not null references clients (id) on delete cascade,
-  url           text not null,
-  ingest_token  text not null unique,
-  banner_config jsonb,
-  created_at    timestamptz not null default now()
+  id                  uuid primary key default gen_random_uuid(),
+  client_id           uuid not null references clients (id) on delete cascade,
+  url                 text not null,
+  ingest_token        text not null unique,
+  banner_config       jsonb,
+  scan_interval_hours integer,
+  created_at          timestamptz not null default now()
 );
 create index sites_client_idx on sites (client_id);
 
@@ -62,7 +63,8 @@ create table scans (
   scanned_at       timestamptz not null default now(),
   report           jsonb not null,
   cookies          jsonb not null default '[]',
-  observed_targets jsonb not null default '[]'
+  observed_targets jsonb not null default '[]',
+  scripts          jsonb not null default '[]'
 );
 create index scans_site_idx on scans (site_id, scanned_at);
 

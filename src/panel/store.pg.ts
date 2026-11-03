@@ -13,7 +13,7 @@ import {
   type StoredReceiptEntry,
 } from "./chain.js";
 import type { PanelStore } from "./store.js";
-import type { Client, PanelUser, ScanCookie, Site, SiteBannerConfig, StoredScan, Tenant, TenantKind } from "./types.js";
+import type { Client, PanelUser, ScanCookie, ScannedScript, Site, SiteBannerConfig, StoredScan, Tenant, TenantKind } from "./types.js";
 import { deepClone, randomIngestToken } from "./shared.js";
 
 /**
@@ -55,6 +55,9 @@ function mapSite(row: pg.QueryResultRow): Site {
     url: String(row.url),
     ingestToken: String(row.ingest_token),
     ...(row.banner_config ? { bannerConfig: row.banner_config as SiteBannerConfig } : {}),
+    ...(row.scan_interval_hours !== null && row.scan_interval_hours !== undefined
+      ? { scanIntervalHours: Number(row.scan_interval_hours) }
+      : {}),
     createdAt: iso(row.created_at as Date),
   };
 }
@@ -67,6 +70,7 @@ function mapScan(row: pg.QueryResultRow): StoredScan {
     report: row.report as FormInventoryReport,
     cookies: row.cookies as ScanCookie[],
     observedTargets: row.observed_targets as RequestTarget[],
+    scripts: row.scripts as ScannedScript[],
   };
 }
 
@@ -188,6 +192,16 @@ export function createPostgresPanelStore(connectionString: string): PostgresPane
       const result = await pool.query(
         "update sites set banner_config = $2 where id = $1 returning *",
         [siteId, config ? JSON.stringify(config) : null],
+      );
+      return clone(mapSite(result.rows[0]!));
+    },
+
+    async setScanSchedule(siteId, intervalHours) {
+      const site = await pool.query("select 1 from sites where id = $1", [siteId]);
+      if (site.rowCount === 0) throw new Error(`site bulunamadı: ${siteId}`);
+      const result = await pool.query(
+        "update sites set scan_interval_hours = $2 where id = $1 returning *",
+        [siteId, intervalHours > 0 ? intervalHours : null],
       );
       return clone(mapSite(result.rows[0]!));
     },

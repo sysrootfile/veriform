@@ -113,6 +113,7 @@ export function renderSitePage(input: {
   bannerConfig?:
     | { bannerVersion: string; texts: { title: string; description: string; acceptAll: string; rejectAll: string } }
     | undefined;
+  scanIntervalHours?: number | undefined;
 }): string {
   const e = escapeHtml;
   const badge = input.chainValid
@@ -168,6 +169,10 @@ export function renderSitePage(input: {
     : "";
 
   const bc = input.bannerConfig;
+  const scheduleLabel =
+    input.scanIntervalHours === undefined || input.scanIntervalHours === 0
+      ? "Kapalı"
+      : `Her ${input.scanIntervalHours} saatte bir`;
   const bannerForm = `<h2>Rıza Bannerı Konfigürasyonu</h2>
 <p class="empty">Bu ayarlar embed scripte <code>/api/embed/config</code> üzerinden akar; bannerVersion değişirse müşteri yeniden rıza verir.</p>
 <form method="post" action="/sites/${e(input.siteId)}/banner">
@@ -177,6 +182,17 @@ export function renderSitePage(input: {
   <input name="acceptAll" placeholder="Kabul butonu" value="${e(bc?.texts.acceptAll ?? "Tümünü Kabul Et")}" required>
   <input name="rejectAll" placeholder="Reddet butonu" value="${e(bc?.texts.rejectAll ?? "Sadece Zorunlu")}" required>
   <button type="submit">Konfigürasyonu kaydet</button>
+</form>
+<h2>Sürekli İzleme</h2>
+<p class="empty">Mevcut aralık: <strong>${e(scheduleLabel)}</strong> — site değişiklikleri sonraki taramada raporlanır.</p>
+<form method="post" action="/sites/${e(input.siteId)}/schedule">
+  <select name="intervalHours">
+    <option value="0">Kapalı</option>
+    <option value="24">Günlük (24 saat)</option>
+    <option value="168">Haftalık (168 saat)</option>
+    <option value="720">Aylık (720 saat)</option>
+  </select>
+  <button type="submit">Çizelgeyi kaydet</button>
 </form>`;
 
   const reviewSection =

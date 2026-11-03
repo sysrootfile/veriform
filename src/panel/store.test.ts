@@ -175,6 +175,40 @@ describe("createInMemoryPanelStore", () => {
     ).rejects.toThrow(/client/);
   });
 
+  it("setScanSchedule: aralık yazar, 0 kapatır, bilinmeyen site reddedilir", async () => {
+    const store = createInMemoryPanelStore();
+    const tenant = await store.createTenant({ name: "A", kind: "direct" });
+    const client = await store.createClient({ tenantId: tenant.id, name: "M" });
+    const site = await store.createSite({ clientId: client.id, url: "https://musteri1.com" });
+
+    const scheduled = await store.setScanSchedule(site.id, 24);
+    expect(scheduled.scanIntervalHours).toBe(24);
+    expect((await store.getSite(site.id))?.scanIntervalHours).toBe(24);
+
+    const off = await store.setScanSchedule(site.id, 0);
+    expect(off.scanIntervalHours).toBe(0);
+    await expect(store.setScanSchedule("yok", 24)).rejects.toThrow(/site/);
+  });
+
+  it("saveScan scripts alanını saklar ve listScans geri döndürür", async () => {
+    const store = createInMemoryPanelStore();
+    const tenant = await store.createTenant({ name: "A", kind: "direct" });
+    const client = await store.createClient({ tenantId: tenant.id, name: "M" });
+    const site = await store.createSite({ clientId: client.id, url: "https://musteri1.com" });
+
+    await store.saveScan({
+      siteId: site.id,
+      report: emptyReport(),
+      cookies: [],
+      observedTargets: [],
+      scripts: [{ url: "https://www.googletagmanager.com/gtag/js", category: "analytics" }],
+    });
+    const scans = await store.listScans(site.id);
+    expect(scans[0]!.scripts).toEqual([
+      { url: "https://www.googletagmanager.com/gtag/js", category: "analytics" },
+    ]);
+  });
+
   it("audit log: mutasyonlar kaydedilir ve kiracı bazında listelenir", async () => {
     const store = createInMemoryPanelStore();
     const tenant = await store.createTenant({ name: "A", kind: "agency" });
