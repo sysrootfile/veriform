@@ -42,6 +42,7 @@ const ingest = createIngestApi(store);
 // Postgres modunda ilk kurulum /register üzerinden yapılır.
 let demoSiteId: string | null = null;
 if (!process.env.DATABASE_URL) {
+  // Geliştirme varsayılanı — gerçek kimlik değildir; prod'da DEV_DEMO_PASSWORD kullanılmaz (Postgres modunda demo seed yok)
   const devPassword = process.env.DEV_DEMO_PASSWORD ?? ["de", "mo"].join("");
   const { tenant } = await registerTenant(store, {
     name: "Demo Ajans",
@@ -333,12 +334,7 @@ const server = createServer(async (req, res) => {
 
     if (req.method === "GET" && /^\/sites\/[^/]+\/dsar$/.test(url.pathname)) {
       const siteId = url.pathname.split("/")[2]!;
-      const site = await store.getSite(siteId);
-      if (!site) {
-        res.writeHead(404, { "content-type": "text/html; charset=utf-8" });
-        res.end("Site bulunamadı");
-        return;
-      }
+      const site = await service.resolveSite(siteId);
       const requests = await service.getSiteDsars(siteId);
       res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
       res.end(
@@ -393,12 +389,7 @@ const server = createServer(async (req, res) => {
 
     if (req.method === "GET" && /^\/sites\/[^/]+\/draft\/aydinlatma$/.test(url.pathname)) {
       const siteId = url.pathname.split("/")[2]!;
-      const site = await store.getSite(siteId);
-      if (!site) {
-        res.writeHead(404, { "content-type": "text/html; charset=utf-8" });
-        res.end("Site bulunamadı");
-        return;
-      }
+      const site = await service.resolveSite(siteId);
       const scans = await service.getSiteScans(siteId);
       const last = scans.at(-1);
       const hostname = new URL(site.url).hostname;
@@ -420,12 +411,7 @@ const server = createServer(async (req, res) => {
 
     if (req.method === "GET" && url.pathname.startsWith("/sites/")) {
       const siteId = url.pathname.slice("/sites/".length);
-      const site = await store.getSite(siteId);
-      if (!site) {
-        res.writeHead(404, { "content-type": "text/html; charset=utf-8" });
-        res.end("Site bulunamadı");
-        return;
-      }
+      const site = await service.resolveSite(siteId);
       const scans = await service.getSiteScans(siteId);
       const chainValid = await service.verifySite(siteId);
       res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
@@ -444,9 +430,10 @@ const server = createServer(async (req, res) => {
 
     res.writeHead(404, { "content-type": "text/html; charset=utf-8" });
     res.end("404");
-  } catch {
+  } catch (error) {
     // service katmanındaki "erişim reddedildi" ve benzeri hatalar —
-    // varoluş sızdırmak için tek tip yanıt
+    // varoluş sızdırmak için tek tip yanıt; gerçek sebep yalnızca loga yazılır
+    console.error("[panel] istek hatası:", error);
     res.writeHead(403, { "content-type": "text/html; charset=utf-8" });
     res.end("Erişim reddedildi");
   }
