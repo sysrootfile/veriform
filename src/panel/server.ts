@@ -2,6 +2,7 @@ import { createServer } from "node:http";
 import { login, registerTenant } from "./accounts.js";
 import { createSessionToken, verifySessionToken } from "./auth.js";
 import { createIngestApi, IngestError } from "./ingest.js";
+import { receiptsToCsv } from "./chain.js";
 import { createPanelService } from "./service.js";
 import { createInMemoryPanelStore } from "./store.js";
 import { createPostgresPanelStore } from "./store.pg.js";
@@ -387,6 +388,18 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === "GET" && /^\/sites\/[^/]+\/evidence\.csv$/.test(url.pathname)) {
+      const siteId = url.pathname.split("/")[2]!;
+      const site = await service.resolveSite(siteId);
+      const entries = await service.getSiteReceipts(siteId);
+      res.writeHead(200, {
+        "content-type": "text/csv; charset=utf-8",
+        "content-disposition": `attachment; filename="evidence-${siteId}.csv"`,
+      });
+      res.end(receiptsToCsv(entries));
+      return;
+    }
+
     if (req.method === "GET" && /^\/sites\/[^/]+\/draft\/aydinlatma$/.test(url.pathname)) {
       const siteId = url.pathname.split("/")[2]!;
       const site = await service.resolveSite(siteId);
@@ -422,6 +435,7 @@ const server = createServer(async (req, res) => {
           chainValid,
           scans,
           draftHref: scans.length ? `/sites/${siteId}/draft/aydinlatma` : undefined,
+          evidenceHref: `/sites/${siteId}/evidence.csv`,
           bannerConfig: site.bannerConfig,
         }),
       );

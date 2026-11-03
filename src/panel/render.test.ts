@@ -138,6 +138,18 @@ describe("renderSitePage", () => {
     });
     expect(html).not.toContain("<script>alert");
   });
+
+  it("kanıt ihracı bağlantısı çizilir", () => {
+    const html = renderSitePage({
+      siteId: "s1",
+      siteUrl: "https://musteri1.com",
+      chainValid: true,
+      scans: [],
+      evidenceHref: "/sites/s1/evidence.csv",
+    });
+    expect(html).toContain('/sites/s1/evidence.csv');
+    expect(html).toContain("Kanıt ihracı (CSV)");
+  });
 });
 
 describe("white-label accent", () => {

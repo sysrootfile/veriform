@@ -108,6 +108,7 @@ export function renderSitePage(input: {
   chainValid: boolean;
   scans: StoredScan[];
   draftHref?: string | undefined;
+  evidenceHref?: string | undefined;
   bannerConfig?:
     | { bannerVersion: string; texts: { title: string; description: string; acceptAll: string; rejectAll: string } }
     | undefined;
@@ -135,6 +136,9 @@ export function renderSitePage(input: {
   const draftLink = input.draftHref
     ? `<p><a href="${e(input.draftHref)}">Aydınlatma metni taslağı (yazdırılabilir) →</a></p>`
     : "";
+  const evidenceLink = input.evidenceHref
+    ? `<p><a href="${e(input.evidenceHref)}">Kanıt ihracı (CSV) →</a></p>`
+    : "";
 
   const bc = input.bannerConfig;
   const bannerForm = `<h2>Rıza Bannerı Konfigürasyonu</h2>
@@ -153,6 +157,7 @@ export function renderSitePage(input: {
     `<h1>${e(input.siteUrl)}</h1>
 <p>${badge}</p>
 ${draftLink}
+${evidenceLink}
 <h2>Taramalar</h2>
 ${paginationNote}
 <table>

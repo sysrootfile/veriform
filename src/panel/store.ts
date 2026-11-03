@@ -56,6 +56,8 @@ export interface PanelStore {
     dsarId: string,
     patch: { status?: DsarStatus | undefined; responseNote?: string | undefined; extend?: boolean | undefined },
   ): Promise<DsarRequest>;
+  /** Kanıt ihracı: siteye ait zincir girişleri (varış sırasına göre). */
+  listReceipts(siteId: string): Promise<StoredReceiptEntry[]>;
 }
 
 export function createInMemoryPanelStore(): PanelStore {
@@ -261,6 +263,10 @@ export function createInMemoryPanelStore(): PanelStore {
       }
       if (patch.responseNote !== undefined) dsar.responseNote = patch.responseNote;
       return clone(dsar);
+    },
+
+    async listReceipts(siteId) {
+      return clone(receiptEntries.filter((e) => e.siteId === siteId));
     },
   };
 }

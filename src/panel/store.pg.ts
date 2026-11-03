@@ -344,6 +344,23 @@ export function createPostgresPanelStore(connectionString: string): PostgresPane
       return clone(mapDsar(updated.rows[0]!));
     },
 
+    async listReceipts(siteId) {
+      const result = await pool.query(
+        "select * from consent_receipts where site_id = $1 order by received_at, id",
+        [siteId],
+      );
+      return clone(
+        result.rows.map((row) => ({
+          id: String(row.id),
+          siteId: String(row.site_id),
+          receivedAt: iso(row.received_at as Date),
+          receipt: row.receipt as ConsentReceipt,
+          prevChainHash: String(row.prev_chain_hash),
+          chainHash: String(row.chain_hash),
+        })),
+      );
+    },
+
     async close() {
       await pool.end();
     },
