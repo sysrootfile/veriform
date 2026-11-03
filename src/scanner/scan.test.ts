@@ -19,6 +19,7 @@ document.cookie = "_ga=GA1.1.123456789; path=/";
 document.cookie = "_fbp=fb.1.1234567890; path=/";
 fetch('/api/track', { method: 'POST' });
 </script>
+<script src="/vendor/widget.js"></script>
 </body></html>`;
 
 let server: Server;
@@ -70,6 +71,11 @@ describe("scanSite (gerçek headless tarayıcı + yerel fixture)", () => {
       expect(result.cookies).toContainEqual(
         expect.objectContaining({ name: "_fbp", category: "marketing" }),
       );
+      // SCRIPT ENVANTERİ: aynı kaynak + üçüncü taraf ayrımı
+      expect(result.scripts).toContainEqual(
+        expect.objectContaining({ url: expect.stringContaining("/vendor/widget.js"), category: "first-party" }),
+      );
+      expect(result.scripts.filter((s) => s.category === "first-party").length).toBeGreaterThanOrEqual(1);
       // RAPOR SÖZLEŞMESİ: tarayıcıdan gelen her şey JSON-güvenli
       expect(JSON.parse(JSON.stringify(result)).report).toEqual(result.report);
     },

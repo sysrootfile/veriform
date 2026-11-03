@@ -1,5 +1,6 @@
 import { build } from "esbuild";
 import { classifyCookie, type CookieCategory } from "../cookies/classify.js";
+import { classifyScript, type ScriptCategory } from "./scripts.js";
 import type { RequestTarget } from "../collector/targets.js";
 import type { FormInventoryReport } from "../report/types.js";
 import { getSharedBrowser } from "./browser.js";
@@ -24,6 +25,11 @@ export interface ScannedCookie {
   category: CookieCategory;
 }
 
+export interface ScannedScript {
+  url: string;
+  category: ScriptCategory;
+}
+
 export interface ScanResult {
   url: string;
   finalUrl: string;
@@ -31,6 +37,8 @@ export interface ScanResult {
   observedTargets: RequestTarget[];
   /** Tarama sırasında (rıza ÖNCESİ) atılmış çerezler — sınıflandırılmış. */
   cookies: ScannedCookie[];
+  /** Sayfada yüklenen scriptler — first-party/üçüncü taraf envanteri. */
+  scripts: ScannedScript[];
 }
 
 let sourcePromise: Promise<string> | undefined;
@@ -75,12 +83,20 @@ export async function scanSite(url: string, options: ScanOptions): Promise<ScanR
       category: classifyCookie(c.name),
     }));
 
+    // Script envanteri: sayfada yüklenen tüm harici scriptler (rıza ÖNCESİ gözlem)
+    const scripts = (await page.evaluate(() =>
+      [...document.querySelectorAll("script[src]")]
+        .map((s) => (s as HTMLScriptElement).src)
+        .filter((src) => src && !src.startsWith("data:")),
+    )).map((src) => ({ url: src, category: classifyScript(src, url) }));
+
     return {
       url,
       finalUrl: page.url(),
       report: data.report as FormInventoryReport,
       observedTargets: data.observedTargets as RequestTarget[],
       cookies,
+      scripts,
     };
   } finally {
     await context.close();
