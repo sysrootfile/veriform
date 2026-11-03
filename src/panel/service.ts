@@ -16,10 +16,16 @@ import type { Client, ScanCookie, Site, SiteBannerConfig, StoredScan } from "./t
 
 export interface PanelContext {
   tenantId: string;
+  /** "auditor" yalnızca okur; mutasyonlar reddedilir. Varsayılan: owner. */
+  role?: "owner" | "auditor" | undefined;
 }
 
 function deny(): never {
   throw new Error("erişim reddedildi");
+}
+
+function denyAuditor(role: PanelContext["role"]): void {
+  if (role === "auditor") deny();
 }
 
 export interface PanelService {
@@ -51,6 +57,7 @@ export interface PanelService {
 }
 
 export function createPanelService(store: PanelStore, context: PanelContext): PanelService {
+  const role = context.role ?? "owner";
   const assertClientOwnership = async (clientId: string): Promise<Client> => {
     const clients = await store.listClients(context.tenantId);
     const client = clients.find((c) => c.id === clientId);
@@ -72,12 +79,14 @@ export function createPanelService(store: PanelStore, context: PanelContext): Pa
     },
 
     async addClient(name) {
+      denyAuditor(role);
       const client = await store.createClient({ tenantId: context.tenantId, name });
       await store.recordAudit(context.tenantId, "client.created", { clientId: client.id, name });
       return client;
     },
 
     async addSite(clientId, url) {
+      denyAuditor(role);
       await assertClientOwnership(clientId);
       const site = await store.createSite({ clientId, url });
       await store.recordAudit(context.tenantId, "site.created", {
@@ -97,12 +106,14 @@ export function createPanelService(store: PanelStore, context: PanelContext): Pa
     },
 
     async deleteClient(clientId) {
+      denyAuditor(role);
       await assertClientOwnership(clientId);
       await store.deleteClient(clientId);
       await store.recordAudit(context.tenantId, "client.deleted", { clientId });
     },
 
     async setBannerConfig(siteId, config) {
+      denyAuditor(role);
       await assertSiteOwnership(siteId);
       const site = await store.setBannerConfig(siteId, config);
       await store.recordAudit(context.tenantId, "banner.configured", {
@@ -118,11 +129,13 @@ export function createPanelService(store: PanelStore, context: PanelContext): Pa
     },
 
     async ingestScan(input) {
+      denyAuditor(role);
       await assertSiteOwnership(input.siteId);
       return store.saveScan(input);
     },
 
     async ingestReceipt(siteId, receipt) {
+      denyAuditor(role);
       await assertSiteOwnership(siteId);
       return store.appendReceipt({ siteId, receipt });
     },
@@ -143,6 +156,7 @@ export function createPanelService(store: PanelStore, context: PanelContext): Pa
     },
 
     async saveCorrection(siteId, input) {
+      denyAuditor(role);
       await assertSiteOwnership(siteId);
       const correction = await store.saveCorrection(siteId, input);
       await store.recordAudit(context.tenantId, "correction.saved", {
