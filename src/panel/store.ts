@@ -24,6 +24,11 @@ export interface PanelStore {
   }): Promise<Tenant>;
   getTenant(tenantId: string): Promise<Tenant | null>;
   createClient(input: { tenantId: string; name: string }): Promise<Client>;
+  /** Per-client white-label — boş input marka alanlarını temizler. */
+  setClientBranding(
+    clientId: string,
+    input: { brandColor?: string | undefined; brandLogoUrl?: string | undefined },
+  ): Promise<Client>;
   /** Hard delete: client + siteleri + taramaları + kanıt zinciri (KVKK saklama yükümlülüğü dışında kalıcı silme talebi için). */
   deleteClient(clientId: string): Promise<void>;
   listClients(tenantId: string): Promise<Client[]>;
@@ -116,6 +121,14 @@ export function createInMemoryPanelStore(): PanelStore {
 
     async listClients(tenantId) {
       return clone(clients.filter((c) => c.tenantId === tenantId));
+    },
+
+    async setClientBranding(clientId, input) {
+      const client = clients.find((c) => c.id === clientId);
+      if (!client) throw new Error(`client bulunamadı: ${clientId}`);
+      client.brandColor = input.brandColor;
+      client.brandLogoUrl = input.brandLogoUrl;
+      return clone(client);
     },
 
     async deleteClient(clientId) {

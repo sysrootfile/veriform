@@ -229,6 +229,7 @@ export function renderClientDetailPage(input: {
   clientHref: string;
   sites: Array<{ id: string; url: string; ingestToken: string }>;
   accent?: string | undefined;
+  logoUrl?: string | undefined;
 }): string {
   const e = escapeHtml;
   const rows = input.sites.length
@@ -240,9 +241,14 @@ export function renderClientDetailPage(input: {
         .join("\n")
     : '<tr><td colspan="3" class="empty">Henüz site eklenmedi.</td></tr>';
 
+  const logoUrl = safeLogoUrl(input.logoUrl);
+  const logo = logoUrl
+    ? `<img src="${e(logoUrl)}" alt="${e(input.clientName)}" style="height:30px;vertical-align:middle;margin-right:.5rem">`
+    : "";
+
   return page(
     input.clientName,
-    `<h1>${e(input.clientName)}</h1>
+    `<h1>${logo}${e(input.clientName)}</h1>
 <h2>Siteler</h2>
 <p class="empty">İnject token'ı embed scriptinize ekleyin: <code>&lt;script src="https://cdn.veriform.io/v1/veriform-embed.js" data-site-token="…"&gt;&lt;/script&gt;</code></p>
 <table>
@@ -252,6 +258,12 @@ ${rows}
 <form method="post" action="${e(input.clientHref)}/sites">
   <input name="url" type="url" placeholder="https://musteri-sitesi.com" required>
   <button type="submit">Site ekle</button>
+</form>
+<h2>Marka (beyaz etiket)</h2>
+<form method="post" action="${e(input.clientHref)}/branding">
+  <input name="brandColor" placeholder="#rrggbb" pattern="#[0-9a-fA-F]{6}" value="">
+  <input name="brandLogoUrl" type="url" placeholder="https://musteri.com/logo.png">
+  <button type="submit">Markayı kaydet</button>
 </form>
 <h2>Tehlikeli Bölge</h2>
 <p class="empty">Silmek kalıcıdır: müşterinin tüm siteleri, taramaları ve <strong>rıza kanıt zinciri</strong> birlikte silinir.</p>

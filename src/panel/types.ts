@@ -21,6 +21,9 @@ export interface Client {
   id: string;
   tenantId: string;
   name: string;
+  /** Per-client white-label: yalnızca #rrggbb ve http(s) kabul edilir. */
+  brandColor?: string | undefined;
+  brandLogoUrl?: string | undefined;
   createdAt: string;
 }
 

@@ -42,6 +42,8 @@ function mapClient(row: pg.QueryResultRow): Client {
     id: String(row.id),
     tenantId: String(row.tenant_id),
     name: String(row.name),
+    ...(row.brand_color ? { brandColor: String(row.brand_color) } : {}),
+    ...(row.brand_logo_url ? { brandLogoUrl: String(row.brand_logo_url) } : {}),
     createdAt: iso(row.created_at as Date),
   };
 }
@@ -146,6 +148,15 @@ export function createPostgresPanelStore(connectionString: string): PostgresPane
       // FK cascade: sites/scans/receipts/dsars on delete cascade
       const result = await pool.query("delete from clients where id = $1", [clientId]);
       if (result.rowCount === 0) throw new Error(`client bulunamadı: ${clientId}`);
+    },
+
+    async setClientBranding(clientId, input) {
+      const result = await pool.query(
+        "update clients set brand_color = $2, brand_logo_url = $3 where id = $1 returning *",
+        [clientId, input.brandColor ?? null, input.brandLogoUrl ?? null],
+      );
+      if (result.rowCount === 0) throw new Error(`client bulunamadı: ${clientId}`);
+      return clone(mapClient(result.rows[0]!));
     },
 
     async createSite(input) {
