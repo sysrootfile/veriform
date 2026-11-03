@@ -45,12 +45,19 @@ export interface Site {
   /** Embed/scanner'ın tarama ve kanıt POST'laması için gizli anahtar (64 hex). */
   ingestToken: string;
   bannerConfig?: SiteBannerConfig | undefined;
+  /** Sürekli izleme aralığı (saat) — null/undefined = kapalı. */
+  scanIntervalHours?: number | undefined;
   createdAt: string;
 }
 
 export interface ScanCookie {
   name: string;
   domain: string;
+  category: string;
+}
+
+export interface ScannedScript {
+  url: string;
   category: string;
 }
 
@@ -61,6 +68,7 @@ export interface StoredScan {
   report: FormInventoryReport;
   cookies: ScanCookie[];
   observedTargets: RequestTarget[];
+  scripts: ScannedScript[];
 }
 
 export interface PanelUser {

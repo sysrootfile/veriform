@@ -4,7 +4,7 @@ import { computeDeadline, extendDeadline } from "../dsar/deadline.js";
 import type { DsarRequest, DsarStatus, DsarType } from "../dsar/types.js";
 import type { FormInventoryReport } from "../report/types.js";
 import { makeChainEntry, verifyStoredChain, verifyReceiptSelfHash, type StoredReceiptEntry } from "./chain.js";
-import type { Client, PanelUser, ScanCookie, Site, SiteBannerConfig, StoredScan, Tenant, TenantKind } from "./types.js";
+import type { Client, PanelUser, ScanCookie, ScannedScript, Site, SiteBannerConfig, StoredScan, Tenant, TenantKind } from "./types.js";
 import { deepClone, randomIngestToken } from "./shared.js";
 import type { Correction } from "./corrections.js";
 import type { AuditEntry } from "./types.js";
@@ -42,6 +42,7 @@ export interface PanelStore {
     report: FormInventoryReport;
     cookies: ScanCookie[];
     observedTargets: RequestTarget[];
+    scripts?: ScannedScript[];
   }): Promise<StoredScan>;
   listScans(siteId: string): Promise<StoredScan[]>;
   /** Client kanıtının selfHash'i doğrulanır; zincir bağını sunucu hesaplar. */
@@ -50,6 +51,8 @@ export interface PanelStore {
   createUser(input: { tenantId: string; email: string; passwordHash: string }): Promise<PanelUser>;
   findUserByEmail(email: string): Promise<PanelUser | null>;
   setBannerConfig(siteId: string, config: SiteBannerConfig | null): Promise<Site>;
+  /** Sürekli izleme aralığı (saat); 0 = kapalı. */
+  setScanSchedule(siteId: string, intervalHours: number): Promise<Site>;
   saveDsar(input: {
     siteId: string;
     type: DsarType;
@@ -190,6 +193,7 @@ export function createInMemoryPanelStore(): PanelStore {
         report: clone(input.report),
         cookies: clone(input.cookies),
         observedTargets: clone(input.observedTargets),
+        scripts: clone(input.scripts ?? []),
       };
       scans.push(scan);
       return clone(scan);
@@ -243,6 +247,13 @@ export function createInMemoryPanelStore(): PanelStore {
       const site = sites.find((s) => s.id === siteId);
       if (!site) throw new Error(`site bulunamadı: ${siteId}`);
       site.bannerConfig = config ? clone(config) : undefined;
+      return clone(site);
+    },
+
+    async setScanSchedule(siteId, intervalHours) {
+      const site = sites.find((s) => s.id === siteId);
+      if (!site) throw new Error(`site bulunamadı: ${siteId}`);
+      site.scanIntervalHours = intervalHours;
       return clone(site);
     },
 

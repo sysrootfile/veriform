@@ -13,6 +13,7 @@ function scan(over: Partial<StoredScan> = {}): StoredScan {
     id: "scan-1",
     siteId: "site-1",
     scannedAt: "2026-11-01T10:00:00.000Z",
+    scripts: [],
     report: {
       siteOrigin: "https://musteri1.com",
       formCount: 2,
