@@ -3,6 +3,9 @@ import { login, registerTenant } from "./accounts.js";
 import { createSessionToken, verifySessionToken } from "./auth.js";
 import { createIngestApi, IngestError } from "./ingest.js";
 import { receiptsToCsv } from "./chain.js";
+import { buildEmbedSource, scanSite } from "../scanner/scan.js";
+import { renderScanRequestPage } from "../scanner/public.js";
+import { renderReportHtml } from "../report/render.js";
 import { createPanelService } from "./service.js";
 import { createInMemoryPanelStore } from "./store.js";
 import { createPostgresPanelStore } from "./store.pg.js";
@@ -199,6 +202,50 @@ const server = createServer(async (req, res) => {
           success: { deadlineAt: dsar.deadlineAt },
         }),
       );
+      return;
+    }
+
+    // Kamu self-servis tarama — lead magnet. Prod notu: Playwright taraması
+    // ağır iş; kuyruk + hız sınırı sonraki iş. Tarayıcı yoksa nazik hata.
+    if (req.method === "GET" && url.pathname === "/tarama") {
+      res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      res.end(renderScanRequestPage({ formAction: "/tarama" }));
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/tarama") {
+      const form = new URLSearchParams(await readBody(req));
+      const rawUrl = form.get("url") ?? "";
+      let target: URL;
+      try {
+        target = new URL(rawUrl);
+        if (target.protocol !== "http:" && target.protocol !== "https:") throw new Error("protokol");
+      } catch {
+        res.writeHead(400, { "content-type": "text/html; charset=utf-8" });
+        res.end(renderScanRequestPage({ formAction: "/tarama", error: "Geçerli bir http(s) adresi girin" }));
+        return;
+      }
+      try {
+        const result = await scanSite(target.toString(), {
+          embedSource: await buildEmbedSource(),
+          timeoutMs: 30_000,
+        });
+        const report = renderReportHtml(result.report, {
+          scannedAt: new Date().toISOString(),
+          cookies: result.cookies,
+        });
+        res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+        res.end(renderScanRequestPage({ formAction: "/tarama", resultHtml: report }));
+      } catch (error) {
+        console.error("[tarama] başarısız:", error);
+        res.writeHead(500, { "content-type": "text/html; charset=utf-8" });
+        res.end(
+          renderScanRequestPage({
+            formAction: "/tarama",
+            error: "Tarama şu anda gerçekleştirilemedi — lütfen daha sonra tekrar deneyin",
+          }),
+        );
+      }
       return;
     }
 
