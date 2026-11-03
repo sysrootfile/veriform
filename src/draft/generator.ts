@@ -89,3 +89,80 @@ export function generateAydinlatmaMetni(
   });
   return { title: `Aydınlatma Metni — ${ctx.siteUrl}`, markdown, version };
 }
+
+export const DEFAULT_ACIK_RIZA_TEMPLATE = `# {{siteUrl}} — Açık Rıza Beyanı ve Onam Metni
+
+> ⚠️ HUKUKİ ONAY GEREKTİRİR: Bu metin şablon ve tarama gerçeklerinden otomatik
+> üretilmiştir; yayına almadan önce hukuk danışmanınız tarafından onaylanmalıdır.
+> Şablon sürümü: {{templateVersion}} · Üretim: {{generatedAt}}
+
+**Veri sorumlusu:** {{siteUrl}} · **İletişim:** {{contactEmail}}
+
+## AÇIK RIZA
+
+Aşağıda sayılan kişisel verilerimin, belirtilen amaçlarla işlenmesine ve
+üçüncü taraflarla paylaşılmasına **açık rıza** veriyorum:
+
+{{collectedCategories}}
+
+Bu rızayı dilediğim zaman geri alabileceğimi; geri almanın geçmişe dönük
+işlemleri etkilemeyeceğini biliyorum (KVKK m.5/2, m.11/6).
+`;
+
+export const DEFAULT_CEREZ_POLITIKASI_TEMPLATE = `# {{siteUrl}} — Çerez Politikası
+
+> ⚠️ HUKUKİ ONAY GEREKTİRİR: Bu metin şablon ve tarama gerçeklerinden otomatik
+> üretilmiştir; yayına almadan önce hukuk danışmanınız tarafından onaylanmalıdır.
+> Şablon sürümü: {{templateVersion}} · Üretim: {{generatedAt}}
+
+**Veri sorumlusu:** {{siteUrl}} · **İletişim:** {{contactEmail}}
+
+## Çerezler Nedir?
+
+Çerezler, web sitesini ziyaret ettiğinizde cihazınıza kaydedilen küçük metin
+dosyalarıdır. Zorunlu çerezler hizmetin çalışması için gereklidir; diğer
+çerezler yalnızca rızanız ile kullanılır.
+
+## Sitemizde Kullanılan Çerez Kategorileri
+
+{{cookieCategories}}
+
+## Tercihlerinizi Yönetme
+
+Çerez tercihlerinizi sayfamızın altındaki rıza aracından her zaman görüntüleyebilir,
+değiştirebilir veya geri alabilirsiniz. Tercihleriniz cihazınızda saklanır ve
+değişiklik yaptığınızda yeniden rıza istenir.
+`;
+
+export function generateAcikRizaMetni(
+  ctx: DraftContext,
+  options: { template?: string; templateVersion?: string } = {},
+): DraftOutput {
+  const version = options.templateVersion ?? DEFAULT_TEMPLATE_VERSION;
+  const markdown = renderTemplate(options.template ?? DEFAULT_ACIK_RIZA_TEMPLATE, {
+    siteUrl: ctx.siteUrl,
+    contactEmail: ctx.contactEmail,
+    collectedCategories: listToMarkdown(
+      ctx.collectedCategories,
+      "Açık rıza gerektiren kategori belirlenmedi.",
+    ),
+    templateVersion: version,
+    generatedAt: ctx.generatedAt,
+  });
+  return { title: `Açık Rıza Metni — ${ctx.siteUrl}`, markdown, version };
+}
+
+export function generateCerezPolitikasi(
+  ctx: DraftContext,
+  options: { template?: string; templateVersion?: string } = {},
+): DraftOutput {
+  const version = options.templateVersion ?? DEFAULT_TEMPLATE_VERSION;
+  const markdown = renderTemplate(options.template ?? DEFAULT_CEREZ_POLITIKASI_TEMPLATE, {
+    siteUrl: ctx.siteUrl,
+    contactEmail: ctx.contactEmail,
+    cookieCategories: listToMarkdown(ctx.cookieCategories, "Çerez kategorisi belirlenmedi."),
+    templateVersion: version,
+    generatedAt: ctx.generatedAt,
+  });
+  return { title: `Çerez Politikası — ${ctx.siteUrl}`, markdown, version };
+}

@@ -139,16 +139,18 @@ describe("renderSitePage", () => {
     expect(html).not.toContain("<script>alert");
   });
 
-  it("kanıt ihracı bağlantısı çizilir", () => {
+  it("kanıt ihracı ve metin taslağı bağlantıları çizilir", () => {
     const html = renderSitePage({
       siteId: "s1",
       siteUrl: "https://musteri1.com",
       chainValid: true,
       scans: [],
       evidenceHref: "/sites/s1/evidence.csv",
+      draftLinks: [{ href: "/sites/s1/draft/aydinlatma", label: "Aydınlatma metni" }],
     });
     expect(html).toContain('/sites/s1/evidence.csv');
     expect(html).toContain("Kanıt ihracı (CSV)");
+    expect(html).toContain("Aydınlatma metni");
   });
 });
 

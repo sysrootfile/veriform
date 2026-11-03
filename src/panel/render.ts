@@ -107,7 +107,7 @@ export function renderSitePage(input: {
   siteId: string;
   chainValid: boolean;
   scans: StoredScan[];
-  draftHref?: string | undefined;
+  draftLinks?: Array<{ href: string; label: string }> | undefined;
   evidenceHref?: string | undefined;
   bannerConfig?:
     | { bannerVersion: string; texts: { title: string; description: string; acceptAll: string; rejectAll: string } }
@@ -133,8 +133,11 @@ export function renderSitePage(input: {
         .join("\n")
     : '<tr><td colspan="4" class="empty">Henüz tarama yok — `pnpm demo -- <site-url>` ile ilk taramayı çalıştırın.</td></tr>';
 
-  const draftLink = input.draftHref
-    ? `<p><a href="${e(input.draftHref)}">Aydınlatma metni taslağı (yazdırılabilir) →</a></p>`
+  const draftLinks = (input.draftLinks ?? [])
+    .map((d) => `<a href="${e(d.href)}">${e(d.label)}</a>`)
+    .join(" · ");
+  const draftSection = input.draftLinks?.length
+    ? `<p>Metin taslakları (yazdırılabilir): ${draftLinks}</p>`
     : "";
   const evidenceLink = input.evidenceHref
     ? `<p><a href="${e(input.evidenceHref)}">Kanıt ihracı (CSV) →</a></p>`
@@ -156,7 +159,7 @@ export function renderSitePage(input: {
     input.siteUrl,
     `<h1>${e(input.siteUrl)}</h1>
 <p>${badge}</p>
-${draftLink}
+${draftSection}
 ${evidenceLink}
 <h2>Taramalar</h2>
 ${paginationNote}
