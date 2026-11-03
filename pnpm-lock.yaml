@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      esbuild:
+        specifier: ^0.28.2
+        version: 0.28.2
       pg:
         specifier: ^8.23.1
         version: 8.23.1
@@ -18,9 +21,6 @@ importers:
       '@types/pg':
         specifier: ^8.23.1
         version: 8.23.1
-      esbuild:
-        specifier: ^0.28.2
-        version: 0.28.2
       happy-dom:
         specifier: ^21.0.4
         version: 21.0.4

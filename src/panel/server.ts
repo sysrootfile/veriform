@@ -226,6 +226,8 @@ const server = createServer(async (req, res) => {
         return;
       }
       try {
+        // Lazy import: playwright yoksa (prod panel konteyneri) rotası nazik 500 döner
+        const { buildEmbedSource, scanSite } = await import("../scanner/scan.js");
         const result = await scanSite(target.toString(), {
           embedSource: await buildEmbedSource(),
           timeoutMs: 30_000,
@@ -393,6 +395,22 @@ const server = createServer(async (req, res) => {
           now: new Date().toISOString(),
         }),
       );
+      return;
+    }
+
+    if (req.method === "POST" && /^\/sites\/[^/]+\/review$/.test(url.pathname)) {
+      const siteId = url.pathname.split("/")[2]!;
+      const form = new URLSearchParams(await readBody(req));
+      const fieldName = form.get("fieldName") ?? "";
+      const category = form.get("category") ?? "";
+      if (!fieldName || !category) {
+        res.writeHead(400, { "content-type": "text/html; charset=utf-8" });
+        res.end("Zorunlu alanlar eksik");
+        return;
+      }
+      await service.saveCorrection(siteId, { fieldName, category });
+      res.writeHead(302, { location: `/sites/${siteId}` });
+      res.end();
       return;
     }
 
