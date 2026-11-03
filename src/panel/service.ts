@@ -33,6 +33,10 @@ export interface PanelService {
   addClient(name: string): Promise<Client>;
   addSite(clientId: string, url: string): Promise<Site>;
   getClientSites(clientId: string): Promise<Site[]>;
+  setClientBranding(
+    clientId: string,
+    input: { brandColor?: string | undefined; brandLogoUrl?: string | undefined },
+  ): Promise<Client>;
   /** Rotalar için tek nokta çözümleme: yok/başkasının kaydı ayrımı sızdırılmaz. */
   resolveSite(siteId: string): Promise<Site>;
   deleteClient(clientId: string): Promise<void>;
@@ -99,6 +103,18 @@ export function createPanelService(store: PanelStore, context: PanelContext): Pa
     async getClientSites(clientId) {
       await assertClientOwnership(clientId);
       return store.listSites(clientId);
+    },
+
+    async setClientBranding(clientId, input) {
+      denyAuditor(role);
+      await assertClientOwnership(clientId);
+      const client = await store.setClientBranding(clientId, input);
+      await store.recordAudit(context.tenantId, "client.branding", {
+        clientId,
+        brandColor: input.brandColor ?? null,
+        brandLogoUrl: input.brandLogoUrl ?? null,
+      });
+      return client;
     },
 
     async resolveSite(siteId) {

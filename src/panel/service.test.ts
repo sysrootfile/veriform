@@ -139,6 +139,23 @@ describe("createPanelService", () => {
     await expect(serviceA.getClientSites(clientA.id)).rejects.toThrow(/erişim reddedildi/);
   });
 
+  it("setClientBranding: owner ayarlar, auditor reddedilir, audit kaydı düşer", async () => {
+    const { store, serviceA, auditorA, clientA } = await setup();
+    const branded = await serviceA.setClientBranding(clientA.id, {
+      brandColor: "#0b5394",
+      brandLogoUrl: "https://musteri-a.com/logo.png",
+    });
+    expect(branded.brandColor).toBe("#0b5394");
+    await expect(
+      auditorA.setClientBranding(clientA.id, { brandColor: "#000000" }),
+    ).rejects.toThrow(/erişim reddedildi/);
+    // audit: son kayıt client.branding olmalı (setup ile aynı tenant)
+    const site2 = await serviceA.addSite(clientA.id, "https://ikinci.com");
+    expect(site2.url).toBe("https://ikinci.com");
+    const log = await store.listAudit(clientA.tenantId);
+    expect(log.length).toBeGreaterThanOrEqual(3); // client.created + site.created×2
+  });
+
   it("DSAR: site token'ıyla kabul, kiracı guard'lı okuma ve güncelleme", async () => {
     const store = createInMemoryPanelStore();
     const tenantA = await store.createTenant({ name: "A", kind: "agency" });

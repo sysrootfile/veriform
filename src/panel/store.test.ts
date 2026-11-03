@@ -154,6 +154,27 @@ describe("createInMemoryPanelStore", () => {
     await expect(store.updateDsar("yok", { status: "completed" })).rejects.toThrow(/başvuru/);
   });
 
+  it("setClientBranding: per-client marka alanları yazar ve temizler", async () => {
+    const store = createInMemoryPanelStore();
+    const tenant = await store.createTenant({ name: "A", kind: "agency" });
+    const client = await store.createClient({ tenantId: tenant.id, name: "M" });
+
+    const branded = await store.setClientBranding(client.id, {
+      brandColor: "#0b5394",
+      brandLogoUrl: "https://musteri.com/logo.png",
+    });
+    expect(branded.brandColor).toBe("#0b5394");
+    expect(branded.brandLogoUrl).toBe("https://musteri.com/logo.png");
+    expect((await store.getTenant(tenant.id))?.brandColor).toBeUndefined(); // kiracı kirletilmedi
+
+    const cleared = await store.setClientBranding(client.id, {});
+    expect(cleared.brandColor).toBeUndefined();
+    expect(cleared.brandLogoUrl).toBeUndefined();
+    await expect(
+      store.setClientBranding("yok", { brandColor: "#000000" }),
+    ).rejects.toThrow(/client/);
+  });
+
   it("audit log: mutasyonlar kaydedilir ve kiracı bazında listelenir", async () => {
     const store = createInMemoryPanelStore();
     const tenant = await store.createTenant({ name: "A", kind: "agency" });

@@ -360,7 +360,6 @@ const server = createServer(async (req, res) => {
 
     if (req.method === "GET" && url.pathname.startsWith("/clients/")) {
       const clientId = url.pathname.slice("/clients/".length);
-      const tenant = await store.getTenant(tenantId);
       const client = (await service.getClientList()).find((c) => c.id === clientId);
       const sites = await service.getClientSites(clientId);
       res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
@@ -369,7 +368,8 @@ const server = createServer(async (req, res) => {
           clientName: client?.name ?? "Müşteri",
           clientHref: `/clients/${clientId}`,
           sites: sites.map((s) => ({ id: s.id, url: s.url, ingestToken: s.ingestToken })),
-          accent: tenant?.brandColor,
+          accent: client?.brandColor,
+          logoUrl: client?.brandLogoUrl,
         }),
       );
       return;
@@ -377,6 +377,19 @@ const server = createServer(async (req, res) => {
 
     if (req.method === "POST" && url.pathname.startsWith("/clients/")) {
       const rest = url.pathname.slice("/clients/".length);
+      if (rest.endsWith("/branding")) {
+        const clientId = rest.slice(0, -"/branding".length);
+        const form = new URLSearchParams(await readBody(req));
+        const color = form.get("brandColor");
+        const logoUrl = form.get("brandLogoUrl");
+        await service.setClientBranding(clientId, {
+          ...(color ? { brandColor: color } : {}),
+          ...(logoUrl ? { brandLogoUrl: logoUrl } : {}),
+        });
+        res.writeHead(302, { location: `/clients/${clientId}` });
+        res.end();
+        return;
+      }
       if (!rest.endsWith("/sites")) {
         res.writeHead(404, { "content-type": "text/html; charset=utf-8" });
         res.end("404");

@@ -15,10 +15,12 @@ create table tenants (
 );
 
 create table clients (
-  id         uuid primary key default gen_random_uuid(),
-  tenant_id  uuid not null references tenants (id) on delete cascade,
-  name       text not null,
-  created_at timestamptz not null default now()
+  id              uuid primary key default gen_random_uuid(),
+  tenant_id       uuid not null references tenants (id) on delete cascade,
+  name            text not null,
+  brand_color     text,
+  brand_logo_url  text,
+  created_at      timestamptz not null default now()
 );
 create index clients_tenant_idx on clients (tenant_id);
 
