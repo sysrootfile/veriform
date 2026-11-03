@@ -60,6 +60,12 @@ describe("scanSite (gerçek headless tarayıcı + yerel fixture)", () => {
       expect(result.observedTargets).toContainEqual(
         expect.objectContaining({ path: "/api/track", via: "fetch", method: "POST" }),
       );
+      // FORMS ÖZETİ: değişiklik uyarısı zemini
+      expect(result.report.forms).toEqual([
+        expect.objectContaining({ ref: "form-0" }),
+        expect.objectContaining({ ref: "form-1" }),
+      ]);
+      expect(result.report.forms[0]!.fields.map((f) => f.category)).toContain("tckn");
       // RIZA ÖNCESİ ÇEREZLER: tarayıcı rıza vermeden gezindi — bulunan her
       // zorunlu-olmayan çerez ihlal kanıtıdır
       expect(result.cookies).toContainEqual(

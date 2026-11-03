@@ -11,9 +11,12 @@ let browserPromise: Promise<Browser> | undefined;
 
 async function launchOnce(): Promise<Browser> {
   const { chromium } = await import("playwright");
+  // Konteyner: alpine chromium paketi (CHROMIUM_EXECUTABLE_PATH ile bağlanır)
+  const executablePath = process.env.CHROMIUM_EXECUTABLE_PATH;
   try {
-    return await chromium.launch({ headless: true });
+    return await chromium.launch({ headless: true, ...(executablePath ? { executablePath } : {}) });
   } catch {
+    // Lokal geliştirme: kurulu chromium yoksa Windows Edge kanalına düş
     return chromium.launch({ headless: true, channel: "msedge" });
   }
 }
