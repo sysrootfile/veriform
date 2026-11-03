@@ -82,6 +82,16 @@ create table dsar_requests (
 );
 create index dsar_site_idx on dsar_requests (site_id, received_at);
 
+-- İnsan onaylı düzeltme haritası: gelecek taramalara otomatik uygulanır
+create table corrections (
+  id         uuid primary key default gen_random_uuid(),
+  site_id    uuid not null references sites (id) on delete cascade,
+  field_name text not null,
+  category   text not null,
+  created_at timestamptz not null default now(),
+  unique (site_id, field_name)
+);
+
 -- ---- RLS: kiracı izolasyonu -------------------------------------------------
 
 alter table tenants enable row level security;
@@ -91,6 +101,7 @@ alter table scans  enable row level security;
 alter table consent_receipts enable row level security;
 alter table users   enable row level security;
 alter table dsar_requests enable row level security;
+alter table corrections enable row level security;
 
 create policy tenant_self on tenants
   using (id = current_setting('app.current_tenant', true)::uuid);
@@ -145,6 +156,16 @@ create policy tenant_dsars on dsar_requests
       select 1
       from sites s join clients c on c.id = s.client_id
       where s.id = dsar_requests.site_id
+        and c.tenant_id = current_setting('app.current_tenant', true)::uuid
+    )
+  );
+
+create policy tenant_corrections on corrections
+  using (
+    exists (
+      select 1
+      from sites s join clients c on c.id = s.client_id
+      where s.id = corrections.site_id
         and c.tenant_id = current_setting('app.current_tenant', true)::uuid
     )
   );

@@ -6,6 +6,7 @@ import type { FormInventoryReport } from "../report/types.js";
 import { makeChainEntry, verifyStoredChain, verifyReceiptSelfHash, type StoredReceiptEntry } from "./chain.js";
 import type { Client, PanelUser, ScanCookie, Site, SiteBannerConfig, StoredScan, Tenant, TenantKind } from "./types.js";
 import { deepClone, randomIngestToken } from "./shared.js";
+import type { Correction } from "./corrections.js";
 
 /**
  * Ajans paneli depolama portu — Postgres adapter'ı (RLS'li, bkz. schema.sql)
@@ -58,6 +59,9 @@ export interface PanelStore {
   ): Promise<DsarRequest>;
   /** Kanıt ihracı: siteye ait zincir girişleri (varış sırasına göre). */
   listReceipts(siteId: string): Promise<StoredReceiptEntry[]>;
+  /** İnsan onaylı düzeltme — aynı alan için yenisi eskisinin üzerine yazar. */
+  saveCorrection(siteId: string, input: { fieldName: string; category: string }): Promise<Correction>;
+  listCorrections(siteId: string): Promise<Correction[]>;
 }
 
 export function createInMemoryPanelStore(): PanelStore {
@@ -68,6 +72,7 @@ export function createInMemoryPanelStore(): PanelStore {
   const receiptEntries: StoredReceiptEntry[] = [];
   const users: PanelUser[] = [];
   const dsars: DsarRequest[] = [];
+  const corrections: Array<Correction & { siteId: string }> = [];
 
   const clone = deepClone;
 
@@ -267,6 +272,27 @@ export function createInMemoryPanelStore(): PanelStore {
 
     async listReceipts(siteId) {
       return clone(receiptEntries.filter((e) => e.siteId === siteId));
+    },
+
+    async saveCorrection(siteId, input) {
+      if (!sites.some((s) => s.id === siteId)) {
+        throw new Error(`site bulunamadı: ${siteId}`);
+      }
+      const correction: Correction = {
+        fieldName: input.fieldName,
+        category: input.category as Correction["category"],
+      };
+      const idx = corrections.findIndex(
+        (c) => c.siteId === siteId && c.fieldName === input.fieldName,
+      );
+      const stored: Correction & { siteId: string } = { siteId, ...correction };
+      if (idx >= 0) corrections[idx] = stored;
+      else corrections.push(stored);
+      return clone(correction);
+    },
+
+    async listCorrections(siteId) {
+      return clone(corrections.filter((c) => c.siteId === siteId));
     },
   };
 }
