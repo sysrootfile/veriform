@@ -24,12 +24,27 @@ async function setup() {
   const store = createInMemoryPanelStore();
   const tenantA = await store.createTenant({ name: "Ajans A", kind: "agency" });
   const tenantB = await store.createTenant({ name: "Ajans B", kind: "agency" });
-  const serviceA = createPanelService(store, { tenantId: tenantA.id });
-  const serviceB = createPanelService(store, { tenantId: tenantB.id });
+  const serviceA = createPanelService(store, { tenantId: tenantA.id, role: "owner" });
+  const serviceB = createPanelService(store, { tenantId: tenantB.id, role: "owner" });
+  const auditorA = createPanelService(store, { tenantId: tenantA.id, role: "auditor" });
   const clientA = await serviceA.addClient("A'nın Müşterisi");
   const siteA = await serviceA.addSite(clientA.id, "https://musteri-a.com");
-  return { store, serviceA, serviceB, clientA, siteA };
+  return { store, serviceA, serviceB, auditorA, clientA, siteA };
 }
+
+describe("createPanelService roller", () => {
+  it("auditor okur ama mutasyon yapamaz", async () => {
+    const { auditorA, clientA, siteA } = await setup();
+    expect((await auditorA.getClientList()).map((c) => c.name)).toEqual(["A'nın Müşterisi"]);
+    await expect(auditorA.addClient("X")).rejects.toThrow(/erişim reddedildi/);
+    await expect(auditorA.addSite(clientA.id, "https://x.com")).rejects.toThrow(/erişim reddedildi/);
+    await expect(auditorA.deleteClient(clientA.id)).rejects.toThrow(/erişim reddedildi/);
+    await expect(auditorA.setBannerConfig(siteA.id, null)).rejects.toThrow(/erişim reddedildi/);
+    await expect(
+      auditorA.saveCorrection(siteA.id, { fieldName: "a", category: "email" }),
+    ).rejects.toThrow(/erişim reddedildi/);
+  });
+});
 
 describe("createPanelService", () => {
   it("tenant yalnızca kendi client'larını görür", async () => {

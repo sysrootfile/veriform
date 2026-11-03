@@ -1,4 +1,5 @@
 import { build } from "esbuild";
+import { readFile } from "node:fs/promises";
 import { classifyCookie, type CookieCategory } from "../cookies/classify.js";
 import { classifyScript, type ScriptCategory } from "./scripts.js";
 import type { RequestTarget } from "../collector/targets.js";
@@ -43,7 +44,10 @@ export interface ScanResult {
 
 let sourcePromise: Promise<string> | undefined;
 
-/** Embed paket kaynağını esbuild API'siyle üretir (sonuç önbelleklenir). */
+/**
+ * Embed paket kaynağı: geliştirmede esbuild ile taze üret (src/ mevcut);
+ * konteynerde src yoksa hazır bundle'a (dist/veriform-embed.js) düş.
+ */
 export function buildEmbedSource(): Promise<string> {
   sourcePromise ??= build({
     entryPoints: ["src/embed/main.ts"],
@@ -52,7 +56,9 @@ export function buildEmbedSource(): Promise<string> {
     target: "es2020",
     write: false,
     logLevel: "silent",
-  }).then((result) => result.outputFiles![0]!.text);
+  })
+    .then((result) => result.outputFiles![0]!.text)
+    .catch(() => readFile("dist/veriform-embed.js", "utf8"));
   return sourcePromise;
 }
 
