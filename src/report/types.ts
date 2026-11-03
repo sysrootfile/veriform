@@ -46,6 +46,12 @@ export interface ReviewItem {
   reason: string;
 }
 
+/** Form düzeyi özet — değişiklik uyarısı ve insan onay döngüsünün zemini. */
+export interface ReportForm {
+  ref: string;
+  fields: Array<{ name: string; category: FieldCategory }>;
+}
+
 export interface FormInventoryReport {
   siteOrigin: string;
   formCount: number;
@@ -54,4 +60,5 @@ export interface FormInventoryReport {
   destinations: Destination[];
   riskFlags: RiskFlag[];
   review: ReviewItem[];
+  forms: ReportForm[];
 }

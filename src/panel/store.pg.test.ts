@@ -15,6 +15,7 @@ function emptyReport(): FormInventoryReport {
     destinations: [{ origin: "https://pg-musteri.com", forms: 1, sameOrigin: true }],
     riskFlags: [],
     review: [],
+      forms: [],
   };
 }
 

@@ -21,6 +21,7 @@ function scan(over: Partial<StoredScan> = {}): StoredScan {
       destinations: [],
       riskFlags: [{ formRef: "f", kind: "get-with-sensitive", detail: "x" }],
       review: [],
+      forms: [],
     },
     cookies: [
       { name: "_fbp", domain: ".", category: "marketing" },

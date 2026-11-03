@@ -25,7 +25,7 @@ async function listen(server: Server): Promise<string> {
 }
 
 const sampleResult = {
-  report: { siteOrigin: "https://x.com", formCount: 1, fieldCount: 2, categoryCounts: [], destinations: [], riskFlags: [], review: [] },
+  report: { siteOrigin: "https://x.com", formCount: 1, fieldCount: 2, categoryCounts: [], destinations: [], riskFlags: [], review: [], forms: [] },
   cookies: [],
   observedTargets: [],
 };
