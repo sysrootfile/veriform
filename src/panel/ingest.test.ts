@@ -107,6 +107,38 @@ describe("createIngestApi", () => {
     expect(scan.observedTargets).toEqual([]);
   });
 
+  it("insan düzeltmesi: correction map ingest'te rapora uygulanır", async () => {
+    const { store, site } = await setup();
+    await store.saveCorrection(site.id, { fieldName: "aciklama", category: "address" });
+    const api = createIngestApi(store);
+    const scan = await api.scan({
+      token: site.ingestToken,
+      report: {
+        siteOrigin: "https://musteri1.com",
+        formCount: 1,
+        fieldCount: 1,
+        categoryCounts: [{ category: "free_text", forms: 1 }],
+        destinations: [],
+        riskFlags: [],
+        review: [
+          {
+            formRef: "form-0",
+            fieldName: "aciklama",
+            category: "free_text",
+            confidence: 0.3,
+            reason: "Sınıflandırma güveni düşük",
+          },
+        ],
+        forms: [{ ref: "form-0", fields: [{ name: "aciklama", category: "free_text" }] }],
+      },
+    });
+    const field = (scan.report as unknown as {
+      forms: Array<{ fields: Array<{ name: string; category: string }> }>;
+    }).forms[0]!.fields[0]!;
+    expect(field.category).toBe("address");
+    expect(scan.report.review).toHaveLength(0);
+  });
+
   it("embedConfig: token ile banner konfigürasyonu döner; temizlenen null; yanlış token 401", async () => {
     const { store, site } = await setup();
     await store.setBannerConfig(site.id, {

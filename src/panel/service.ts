@@ -3,6 +3,7 @@ import type { ConsentReceipt } from "../consent/receipt.js";
 import type { DsarRequest, DsarStatus } from "../dsar/types.js";
 import type { FormInventoryReport } from "../report/types.js";
 import type { StoredReceiptEntry } from "./chain.js";
+import type { Correction } from "./corrections.js";
 import type { PanelStore } from "./store.js";
 import type { Client, ScanCookie, Site, SiteBannerConfig, StoredScan } from "./types.js";
 
@@ -41,6 +42,7 @@ export interface PanelService {
   verifySite(siteId: string): Promise<boolean>;
   getSiteDsars(siteId: string): Promise<DsarRequest[]>;
   getSiteReceipts(siteId: string): Promise<StoredReceiptEntry[]>;
+  saveCorrection(siteId: string, input: { fieldName: string; category: string }): Promise<Correction>;
   updateDsarStatus(
     siteId: string,
     dsarId: string,
@@ -125,6 +127,11 @@ export function createPanelService(store: PanelStore, context: PanelContext): Pa
     async getSiteReceipts(siteId) {
       await assertSiteOwnership(siteId);
       return store.listReceipts(siteId);
+    },
+
+    async saveCorrection(siteId, input) {
+      await assertSiteOwnership(siteId);
+      return store.saveCorrection(siteId, input);
     },
 
     async updateDsarStatus(siteId, dsarId, patch) {

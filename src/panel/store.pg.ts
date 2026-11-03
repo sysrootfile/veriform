@@ -4,6 +4,7 @@ import type { ConsentReceipt } from "../consent/receipt.js";
 import { computeDeadline, extendDeadline } from "../dsar/deadline.js";
 import type { DsarRequest, DsarStatus, DsarType } from "../dsar/types.js";
 import type { FormInventoryReport } from "../report/types.js";
+import type { Correction } from "./corrections.js";
 import {
   makeChainEntry,
   verifyReceiptSelfHash,
@@ -357,6 +358,29 @@ export function createPostgresPanelStore(connectionString: string): PostgresPane
           receipt: row.receipt as ConsentReceipt,
           prevChainHash: String(row.prev_chain_hash),
           chainHash: String(row.chain_hash),
+        })),
+      );
+    },
+
+    async saveCorrection(siteId, input) {
+      const site = await pool.query("select 1 from sites where id = $1", [siteId]);
+      if (site.rowCount === 0) throw new Error(`site bulunamadı: ${siteId}`);
+      await pool.query(
+        "insert into corrections (site_id, field_name, category) values ($1, $2, $3) on conflict (site_id, field_name) do update set category = excluded.category",
+        [siteId, input.fieldName, input.category],
+      );
+      return { fieldName: input.fieldName, category: input.category as Correction["category"] };
+    },
+
+    async listCorrections(siteId) {
+      const result = await pool.query(
+        "select field_name, category from corrections where site_id = $1 order by created_at, id",
+        [siteId],
+      );
+      return clone(
+        result.rows.map((row) => ({
+          fieldName: String(row.field_name),
+          category: String(row.category) as Correction["category"],
         })),
       );
     },

@@ -179,6 +179,26 @@ export function renderSitePage(input: {
   <button type="submit">Konfigürasyonu kaydet</button>
 </form>`;
 
+  const reviewSection =
+    currScan && currScan.report.review.length
+      ? `<h2>İnsan Onayı Bekleyen Sınıflandırmalar</h2>
+<table>
+<tr><th>Form</th><th>Alan</th><th>Mevcut kategori</th><th>Güven</th><th>Düzelt</th></tr>
+${currScan.report.review
+  .map((r) => {
+    const options = ["tckn", "iban", "card", "phone", "email", "full_name", "birthdate", "address", "passport", "free_text"];
+    return `<tr><td>${e(r.formRef)}</td><td>${e(r.fieldName ?? "—")}</td><td>${e(r.category)}</td><td class="num">${r.confidence}</td>
+<td><form method="post" action="/sites/${e(input.siteId)}/review">
+  <input type="hidden" name="scanId" value="${e(currScan.id)}">
+  <input type="hidden" name="fieldName" value="${e(r.fieldName ?? "")}">
+  <select name="category">${options.map((o) => `<option value="${o}">${o}</option>`).join("")}</select>
+  <button type="submit">Düzelt</button>
+</form></td></tr>`;
+  })
+  .join("\n")}
+</table>`
+      : "";
+
   return page(
     input.siteUrl,
     `<h1>${e(input.siteUrl)}</h1>
@@ -186,6 +206,7 @@ export function renderSitePage(input: {
 ${draftSection}
 ${evidenceLink}
 ${alertSection}
+${reviewSection}
 <h2>Taramalar</h2>
 ${paginationNote}
 <table>
