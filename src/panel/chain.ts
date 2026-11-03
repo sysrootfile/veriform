@@ -55,3 +55,28 @@ export async function verifyStoredChain(entries: readonly StoredReceiptEntry[]):
   }
   return true;
 }
+
+/** CSV hücresi: tırnak içine al, içteki tırnakları çiftle. */
+function csvCell(value: string): string {
+  return `"${value.replaceAll('"', '""')}"`;
+}
+
+/** Kanıt zincirini denetim için CSV'ye ihraç eder (RFC 4180 uyumlu kaçırma). */
+export function receiptsToCsv(entries: readonly StoredReceiptEntry[]): string {
+  const header = "id,received_at,site_id,site,self_hash,prev_chain_hash,chain_hash\n";
+  const rows = entries
+    .map(
+      (e) =>
+        [
+          csvCell(e.id),
+          csvCell(e.receivedAt),
+          csvCell(e.siteId),
+          csvCell(e.receipt.site),
+          csvCell(e.receipt.selfHash),
+          csvCell(e.prevChainHash),
+          csvCell(e.chainHash),
+        ].join(","),
+    )
+    .join("\n");
+  return header + (rows ? rows + "\n" : "");
+}

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildConsentReceipt, GENESIS_HASH } from "../consent/receipt.js";
 import {
   makeChainEntry,
+  receiptsToCsv,
   verifyReceiptSelfHash,
   verifyStoredChain,
   type StoredReceiptEntry,
@@ -79,5 +80,31 @@ describe("verifyStoredChain (sunucu tarafı zincir)", () => {
 
   it("boş zincir geçerlidir", async () => {
     expect(await verifyStoredChain([])).toBe(true);
+  });
+});
+
+describe("receiptsToCsv (kanıt ihracı)", () => {
+  it("başlık + zincir girişlerini CSV olarak üretir", async () => {
+    const receipt = await buildConsentReceipt(receiptInput("2026-11-02T10:00:00.000Z"));
+    const entry = await makeChainEntry("site-1", receipt);
+    const csv = receiptsToCsv([entry]);
+    expect(csv.startsWith("id,received_at,site_id,site,self_hash,prev_chain_hash,chain_hash\n")).toBe(true);
+    expect(csv).toContain(entry.id);
+    expect(csv).toContain(entry.chainHash);
+  });
+
+  it("CSV özel karakterleri kaçırır (tırnak/virgül)", async () => {
+    const receipt = await buildConsentReceipt({
+      ...receiptInput("2026-11-02T10:00:00.000Z"),
+      site: 'https://x.com,"a,b"',
+    });
+    const entry = await makeChainEntry("site-1", receipt);
+    const csv = receiptsToCsv([entry]);
+    // tırnak içi tırnak çiftlenir — sütun sayısı bozulmaz
+    expect(csv).toContain('"https://x.com,""a,b"""');
+  });
+
+  it("boş liste yalnızca başlığı döndürür", () => {
+    expect(receiptsToCsv([])).toBe("id,received_at,site_id,site,self_hash,prev_chain_hash,chain_hash\n");
   });
 });
