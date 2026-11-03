@@ -3,6 +3,7 @@ import { login, registerTenant } from "./accounts.js";
 import { createSessionToken, verifySessionToken } from "./auth.js";
 import { createIngestApi, IngestError } from "./ingest.js";
 import { receiptsToCsv } from "./chain.js";
+import { createRateLimiter } from "./rate-limit.js";
 import { buildEmbedSource, scanSite } from "../scanner/scan.js";
 import { renderScanRequestPage } from "../scanner/public.js";
 import { renderReportHtml } from "../report/render.js";
@@ -42,6 +43,8 @@ const store = process.env.DATABASE_URL
   ? createPostgresPanelStore(process.env.DATABASE_URL)
   : createInMemoryPanelStore();
 const ingest = createIngestApi(store);
+// Kamu /tarama POST için IP başına hız sınırı (5 istek / dakika)
+const scanLimiter = createRateLimiter({ max: 5, windowMs: 60_000 });
 
 // Demo kiracı yalnızca geliştirme (in-memory) modunda seed edilir;
 // Postgres modunda ilk kurulum /register üzerinden yapılır.
@@ -227,6 +230,17 @@ const server = createServer(async (req, res) => {
         return;
       }
       try {
+        const ip = req.socket.remoteAddress ?? "bilinmeyen";
+        if (!scanLimiter.allow(ip)) {
+          res.writeHead(429, { "content-type": "text/html; charset=utf-8" });
+          res.end(
+            renderScanRequestPage({
+              formAction: "/tarama",
+              error: "Çok fazla tarama isteği — bir dakika bekleyip tekrar deneyin",
+            }),
+          );
+          return;
+        }
         // Lazy import: playwright yoksa (prod panel konteyneri) rotası nazik 500 döner
         const { buildEmbedSource, scanSite } = await import("../scanner/scan.js");
         const result = await scanSite(target.toString(), {
