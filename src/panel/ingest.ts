@@ -7,6 +7,62 @@ import type { PanelStore } from "./store.js";
 import type { ScanCookie, SiteBannerConfig, StoredScan } from "./types.js";
 
 /**
+ * Gövde doğrulama — `as never` yerine sınırdaki minimal şekil kontrolü.
+ * Geçersiz gövde → IngestError(400).
+ */
+
+function requireScanReport(value: unknown): FormInventoryReport {
+  if (typeof value !== "object" || value === null) {
+    throw new IngestError(400, "geçersiz tarama verisi");
+  }
+  const r = value as Record<string, unknown>;
+  if (
+    typeof r.siteOrigin !== "string" ||
+    typeof r.formCount !== "number" ||
+    !Array.isArray(r.categoryCounts)
+  ) {
+    throw new IngestError(400, "geçersiz tarama verisi");
+  }
+  return value as FormInventoryReport;
+}
+
+function requireScanArrays(
+  cookies: unknown,
+  observedTargets: unknown,
+): { cookies: ScanCookie[]; observedTargets: RequestTarget[] } {
+  const okCookies =
+    cookies === undefined || cookies === null
+      ? []
+      : Array.isArray(cookies) &&
+        cookies.every(
+          (c) =>
+            typeof c === "object" &&
+            c !== null &&
+            typeof (c as ScanCookie).name === "string" &&
+            typeof (c as ScanCookie).domain === "string" &&
+            typeof (c as ScanCookie).category === "string",
+        );
+  const okTargets =
+    observedTargets === undefined || observedTargets === null
+      ? []
+      : Array.isArray(observedTargets) &&
+        observedTargets.every(
+          (t) =>
+            typeof t === "object" &&
+            t !== null &&
+            typeof (t as RequestTarget).origin === "string" &&
+            typeof (t as RequestTarget).path === "string",
+        );
+  if (!okCookies || !okTargets) {
+    throw new IngestError(400, "geçersiz tarama verisi");
+  }
+  return {
+    cookies: (cookies ?? []) as ScanCookie[],
+    observedTargets: (observedTargets ?? []) as RequestTarget[],
+  };
+}
+
+/**
  * Ingest API — embed/scanner'ın veri ittiği yüzey.
  * Kimliklendirme tenant oturumuyla değil **site ingest token'ı** ile yapılır:
  * token'ı bilen, o site adına tarama ve kanıt yükleyebilir. Kiracı işlemleri
@@ -22,9 +78,10 @@ export class IngestError extends Error {
 export interface IngestApi {
   scan(input: {
     token: string;
-    report: FormInventoryReport;
-    cookies: ScanCookie[];
-    observedTargets: RequestTarget[];
+    /** Doğrulanır — geçersiz şekil 400. */
+    report: unknown;
+    cookies?: unknown;
+    observedTargets?: unknown;
   }): Promise<StoredScan>;
   receipt(input: { token: string; receipt: ConsentReceipt }): Promise<StoredReceiptEntry>;
   dsar(input: {
@@ -43,11 +100,12 @@ export function createIngestApi(store: PanelStore): IngestApi {
     async scan(input) {
       const site = await store.getSiteByToken(input.token);
       if (!site) throw new IngestError(401, "geçersiz ingest token'ı");
+      const { cookies, observedTargets } = requireScanArrays(input.cookies, input.observedTargets);
       return store.saveScan({
         siteId: site.id,
-        report: input.report,
-        cookies: input.cookies,
-        observedTargets: input.observedTargets,
+        report: requireScanReport(input.report),
+        cookies,
+        observedTargets,
       });
     },
 

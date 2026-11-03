@@ -49,7 +49,30 @@ interface StoredDecision {
 function readStored(storageKey: string): StoredDecision | undefined {
   try {
     const raw = localStorage.getItem(storageKey);
-    return raw ? (JSON.parse(raw) as StoredDecision) : undefined;
+    if (!raw) return undefined;
+    const parsed: unknown = JSON.parse(raw);
+    if (typeof parsed !== "object" || parsed === null) return undefined;
+    const candidate = parsed as { bannerVersion?: unknown; ts?: unknown; decisions?: unknown };
+    const d = candidate.decisions as Record<string, unknown> | undefined;
+    if (
+      typeof candidate.bannerVersion !== "string" ||
+      typeof d !== "object" ||
+      d === null ||
+      typeof d.analytics !== "boolean" ||
+      typeof d.marketing !== "boolean" ||
+      typeof d.personalization !== "boolean"
+    ) {
+      return undefined; // bozuk/uyumsuz kayıt: karar yokmuş gibi davran → banner yeniden sorar
+    }
+    return {
+      bannerVersion: candidate.bannerVersion,
+      ts: typeof candidate.ts === "string" ? candidate.ts : "",
+      decisions: {
+        analytics: d.analytics,
+        marketing: d.marketing,
+        personalization: d.personalization,
+      },
+    };
   } catch {
     return undefined;
   }

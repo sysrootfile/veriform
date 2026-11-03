@@ -218,9 +218,9 @@ const server = createServer(async (req, res) => {
         if (url.pathname === "/api/ingest/scan") {
           const scan = await ingest.scan({
             token: String(body.token ?? ""),
-            report: body.report as never,
-            cookies: (body.cookies ?? []) as never,
-            observedTargets: (body.observedTargets ?? []) as never,
+            report: body.report,
+            cookies: body.cookies,
+            observedTargets: body.observedTargets,
           });
           res.writeHead(200, { "content-type": "application/json" });
           res.end(JSON.stringify({ id: scan.id }));

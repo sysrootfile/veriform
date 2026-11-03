@@ -12,6 +12,7 @@ import {
 } from "./chain.js";
 import type { PanelStore } from "./store.js";
 import type { Client, PanelUser, ScanCookie, Site, SiteBannerConfig, StoredScan, Tenant, TenantKind } from "./types.js";
+import { deepClone, randomIngestToken } from "./shared.js";
 
 /**
  * PanelStore portunun gerçek Postgres adapter'ı — src/panel/schema.sql üstünde.
@@ -99,7 +100,7 @@ export interface PostgresPanelStore extends PanelStore {
 export function createPostgresPanelStore(connectionString: string): PostgresPanelStore {
   const pool = new pg.Pool({ connectionString });
 
-  const clone = <T>(value: T): T => structuredClone(value);
+  const clone = deepClone;
 
   async function requireClient(clientId: string): Promise<void> {
     const result = await pool.query("select 1 from clients where id = $1", [clientId]);
@@ -275,7 +276,7 @@ export function createPostgresPanelStore(connectionString: string): PostgresPane
       } catch (error) {
         // Postgres benzersizlik ihlali (23505) → port sözleşmesindeki mesaj
         if (typeof error === "object" && error !== null && "code" in error && (error as { code?: string }).code === "23505") {
-          throw new Error(`e-posta zaten kayıtlı: ${input.email}`);
+          throw new Error("e-posta zaten kayıtlı");
         }
         throw error;
       }
