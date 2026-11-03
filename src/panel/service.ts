@@ -41,6 +41,7 @@ export interface PanelService {
   resolveSite(siteId: string): Promise<Site>;
   deleteClient(clientId: string): Promise<void>;
   setBannerConfig(siteId: string, config: SiteBannerConfig | null): Promise<Site>;
+  setScanSchedule(siteId: string, intervalHours: number): Promise<Site>;
   getSiteScans(siteId: string): Promise<StoredScan[]>;
   ingestScan(input: {
     siteId: string;
@@ -135,6 +136,17 @@ export function createPanelService(store: PanelStore, context: PanelContext): Pa
       await store.recordAudit(context.tenantId, "banner.configured", {
         siteId,
         bannerVersion: config?.bannerVersion ?? null,
+      });
+      return site;
+    },
+
+    async setScanSchedule(siteId, intervalHours) {
+      denyAuditor(role);
+      await assertSiteOwnership(siteId);
+      const site = await store.setScanSchedule(siteId, intervalHours);
+      await store.recordAudit(context.tenantId, "scan.schedule.changed", {
+        siteId,
+        intervalHours,
       });
       return site;
     },

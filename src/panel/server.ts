@@ -449,6 +449,21 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === "POST" && /^\/sites\/[^/]+\/schedule$/.test(url.pathname)) {
+      const siteId = url.pathname.split("/")[2]!;
+      const form = new URLSearchParams(await readBody(req));
+      const hours = Number(form.get("intervalHours") ?? "0");
+      if (!Number.isInteger(hours) || hours < 0 || hours > 720) {
+        res.writeHead(400, { "content-type": "text/html; charset=utf-8" });
+        res.end("Geçersiz aralık (0–720 saat)");
+        return;
+      }
+      await service.setScanSchedule(siteId, hours);
+      res.writeHead(302, { location: `/sites/${siteId}` });
+      res.end();
+      return;
+    }
+
     if (req.method === "POST" && /^\/sites\/[^/]+\/banner$/.test(url.pathname)) {
       const siteId = url.pathname.split("/")[2]!;
       const form = new URLSearchParams(await readBody(req));
@@ -550,6 +565,7 @@ const server = createServer(async (req, res) => {
             : undefined,
           evidenceHref: `/sites/${siteId}/evidence.csv`,
           bannerConfig: site.bannerConfig,
+          scanIntervalHours: site.scanIntervalHours,
         }),
       );
       return;
