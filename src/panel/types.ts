@@ -65,6 +65,15 @@ export interface PanelUser {
   tenantId: string;
   email: string;
   passwordHash: string;
+  role: "owner" | "auditor";
+  createdAt: string;
+}
+
+export interface AuditEntry {
+  id: string;
+  tenantId: string;
+  action: string;
+  detail: Record<string, unknown>;
   createdAt: string;
 }
 

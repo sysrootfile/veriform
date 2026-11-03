@@ -5,6 +5,7 @@ import { computeDeadline, extendDeadline } from "../dsar/deadline.js";
 import type { DsarRequest, DsarStatus, DsarType } from "../dsar/types.js";
 import type { FormInventoryReport } from "../report/types.js";
 import type { Correction } from "./corrections.js";
+import type { AuditEntry } from "./types.js";
 import {
   makeChainEntry,
   verifyReceiptSelfHash,
@@ -73,6 +74,7 @@ function mapUser(row: pg.QueryResultRow): PanelUser {
     tenantId: String(row.tenant_id),
     email: String(row.email),
     passwordHash: String(row.password_hash),
+    role: row.role as PanelUser["role"],
     createdAt: iso(row.created_at as Date),
   };
 }
@@ -381,6 +383,29 @@ export function createPostgresPanelStore(connectionString: string): PostgresPane
         result.rows.map((row) => ({
           fieldName: String(row.field_name),
           category: String(row.category) as Correction["category"],
+        })),
+      );
+    },
+
+    async recordAudit(tenantId, action, detail) {
+      await pool.query(
+        "insert into audit_log (tenant_id, action, detail) values ($1, $2, $3)",
+        [tenantId, action, JSON.stringify(detail ?? {})],
+      );
+    },
+
+    async listAudit(tenantId) {
+      const result = await pool.query(
+        "select * from audit_log where tenant_id = $1 order by created_at, id",
+        [tenantId],
+      );
+      return clone(
+        result.rows.map((row) => ({
+          id: String(row.id),
+          tenantId: String(row.tenant_id),
+          action: String(row.action),
+          detail: row.detail as Record<string, unknown>,
+          createdAt: iso(row.created_at as Date),
         })),
       );
     },

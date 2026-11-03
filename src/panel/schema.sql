@@ -28,9 +28,20 @@ create table users (
   tenant_id     uuid not null references tenants (id) on delete cascade,
   email         text not null unique,
   password_hash text not null,
+  role          text not null default 'owner' check (role in ('owner', 'auditor')),
   created_at    timestamptz not null default now()
 );
 create index users_tenant_idx on users (tenant_id);
+
+-- Panel eylemlerinin denetim izi (uyum ürünü için audit trail)
+create table audit_log (
+  id         uuid primary key default gen_random_uuid(),
+  tenant_id  uuid not null references tenants (id) on delete cascade,
+  action     text not null,
+  detail     jsonb not null default '{}',
+  created_at timestamptz not null default now()
+);
+create index audit_tenant_idx on audit_log (tenant_id, created_at);
 
 create table sites (
   id            uuid primary key default gen_random_uuid(),
@@ -169,6 +180,9 @@ create policy tenant_corrections on corrections
         and c.tenant_id = current_setting('app.current_tenant', true)::uuid
     )
   );
+
+create policy tenant_audit on audit_log
+  using (tenant_id = current_setting('app.current_tenant', true)::uuid);
 
 -- Not: app.current_tenant ayarlanmamışsa (null) hiçbir satır dönmez —
 -- varsayılan reddet, ürünün rıza ilkesiyle aynı.

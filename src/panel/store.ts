@@ -7,6 +7,7 @@ import { makeChainEntry, verifyStoredChain, verifyReceiptSelfHash, type StoredRe
 import type { Client, PanelUser, ScanCookie, Site, SiteBannerConfig, StoredScan, Tenant, TenantKind } from "./types.js";
 import { deepClone, randomIngestToken } from "./shared.js";
 import type { Correction } from "./corrections.js";
+import type { AuditEntry } from "./types.js";
 
 /**
  * Ajans paneli depolama portu — Postgres adapter'ı (RLS'li, bkz. schema.sql)
@@ -62,6 +63,9 @@ export interface PanelStore {
   /** İnsan onaylı düzeltme — aynı alan için yenisi eskisinin üzerine yazar. */
   saveCorrection(siteId: string, input: { fieldName: string; category: string }): Promise<Correction>;
   listCorrections(siteId: string): Promise<Correction[]>;
+  /** Denetim izi — panel mutasyonları service katmanından kaydedilir. */
+  recordAudit(tenantId: string, action: string, detail?: Record<string, unknown>): Promise<void>;
+  listAudit(tenantId: string): Promise<AuditEntry[]>;
 }
 
 export function createInMemoryPanelStore(): PanelStore {
@@ -73,6 +77,7 @@ export function createInMemoryPanelStore(): PanelStore {
   const users: PanelUser[] = [];
   const dsars: DsarRequest[] = [];
   const corrections: Array<Correction & { siteId: string }> = [];
+  const auditLog: Array<AuditEntry & { tenantId: string }> = [];
 
   const clone = deepClone;
 
@@ -205,6 +210,7 @@ export function createInMemoryPanelStore(): PanelStore {
         throw new Error("e-posta zaten kayıtlı");
       }
       const user: PanelUser = {
+        role: "owner" as const,
         id: crypto.randomUUID(),
         tenantId: input.tenantId,
         email: input.email,
@@ -293,6 +299,20 @@ export function createInMemoryPanelStore(): PanelStore {
 
     async listCorrections(siteId) {
       return clone(corrections.filter((c) => c.siteId === siteId));
+    },
+
+    async recordAudit(tenantId, action, detail) {
+      auditLog.push({
+        id: crypto.randomUUID(),
+        tenantId,
+        action,
+        detail: clone(detail ?? {}),
+        createdAt: new Date().toISOString(),
+      });
+    },
+
+    async listAudit(tenantId) {
+      return clone(auditLog.filter((a) => a.tenantId === tenantId));
     },
   };
 }

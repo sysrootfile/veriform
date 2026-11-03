@@ -154,6 +154,19 @@ describe("createInMemoryPanelStore", () => {
     await expect(store.updateDsar("yok", { status: "completed" })).rejects.toThrow(/başvuru/);
   });
 
+  it("audit log: mutasyonlar kaydedilir ve kiracı bazında listelenir", async () => {
+    const store = createInMemoryPanelStore();
+    const tenant = await store.createTenant({ name: "A", kind: "agency" });
+    await store.recordAudit(tenant.id, "client.created", { name: "M" });
+    await store.recordAudit(tenant.id, "site.created", { url: "https://x.com" });
+    const log = await store.listAudit(tenant.id);
+    expect(log).toHaveLength(2);
+    expect(log[0]!.action).toBe("client.created");
+    expect(log[1]!.detail).toEqual({ url: "https://x.com" });
+    const other = await store.createTenant({ name: "B", kind: "direct" });
+    expect(await store.listAudit(other.id)).toHaveLength(0);
+  });
+
   it("kullanıcı oluşturulur ve e-posta ile bulunur; e-posta benzersizdir", async () => {
     const store = createInMemoryPanelStore();
     const tenant = await store.createTenant({ name: "A", kind: "direct" });
