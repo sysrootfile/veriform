@@ -4,7 +4,7 @@ import { computeDeadline, extendDeadline } from "../dsar/deadline.js";
 import type { DsarRequest, DsarStatus, DsarType } from "../dsar/types.js";
 import type { FormInventoryReport } from "../report/types.js";
 import { makeChainEntry, verifyStoredChain, verifyReceiptSelfHash, type StoredReceiptEntry } from "./chain.js";
-import type { Client, PanelUser, ScanCookie, Site, StoredScan, Tenant, TenantKind } from "./types.js";
+import type { Client, PanelUser, ScanCookie, Site, SiteBannerConfig, StoredScan, Tenant, TenantKind } from "./types.js";
 
 /**
  * Ajans paneli depolama portu — Postgres adapter'ı (RLS'li, bkz. schema.sql)
@@ -41,6 +41,7 @@ export interface PanelStore {
   verifySiteChain(siteId: string): Promise<boolean>;
   createUser(input: { tenantId: string; email: string; passwordHash: string }): Promise<PanelUser>;
   findUserByEmail(email: string): Promise<PanelUser | null>;
+  setBannerConfig(siteId: string, config: SiteBannerConfig | null): Promise<Site>;
   saveDsar(input: {
     siteId: string;
     type: DsarType;
@@ -215,6 +216,13 @@ function randomIngestToken(): string {
     async findUserByEmail(email) {
       const user = users.find((u) => u.email === email);
       return user ? clone(user) : null;
+    },
+
+    async setBannerConfig(siteId, config) {
+      const site = sites.find((s) => s.id === siteId);
+      if (!site) throw new Error(`site bulunamadı: ${siteId}`);
+      site.bannerConfig = config ? clone(config) : undefined;
+      return clone(site);
     },
 
     async saveDsar(input) {

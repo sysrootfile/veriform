@@ -4,7 +4,7 @@ import type { DsarRequest, DsarType } from "../dsar/types.js";
 import type { FormInventoryReport } from "../report/types.js";
 import type { StoredReceiptEntry } from "./chain.js";
 import type { PanelStore } from "./store.js";
-import type { ScanCookie, StoredScan } from "./types.js";
+import type { ScanCookie, SiteBannerConfig, StoredScan } from "./types.js";
 
 /**
  * Ingest API — embed/scanner'ın veri ittiği yüzey.
@@ -34,6 +34,8 @@ export interface IngestApi {
     subjectEmail: string;
     message?: string | undefined;
   }): Promise<DsarRequest>;
+  /** Embed'in banner konfigürasyonunu çekmesi (yoksa null). */
+  embedConfig(input: { token: string }): Promise<SiteBannerConfig | null>;
 }
 
 export function createIngestApi(store: PanelStore): IngestApi {
@@ -73,6 +75,12 @@ export function createIngestApi(store: PanelStore): IngestApi {
         subjectEmail: input.subjectEmail,
         ...(input.message ? { message: input.message } : {}),
       });
+    },
+
+    async embedConfig(input) {
+      const site = await store.getSiteByToken(input.token);
+      if (!site) throw new IngestError(401, "geçersiz ingest token'ı");
+      return site.bannerConfig ?? null;
     },
   };
 }

@@ -98,6 +98,29 @@ d("createPostgresPanelStore (GERÇEK Postgres — docker veriform-pg)", () => {
     expect(await store.verifySiteChain(site.id)).toBe(true);
   });
 
+  it("eşzamanlı kanıt kabulleri zinciri çatallamaz (advisory lock)", async () => {
+    const tenant = await store.createTenant({ name: "D", kind: "direct" });
+    const client = await store.createClient({ tenantId: tenant.id, name: "M4" });
+    const site = await store.createSite({ clientId: client.id, url: "https://pg4.com" });
+
+    const receipts = await Promise.all(
+      [0, 1, 2].map((i) =>
+        buildConsentReceipt({
+          site: "https://pg4.com",
+          bannerVersion: "banner-2026-11",
+          textsHash: "aaa111",
+          decisions,
+          timestamp: `2026-11-02T10:00:0${i}.000Z`,
+        }),
+      ),
+    );
+    await Promise.all(
+      receipts.map((receipt) => store.appendReceipt({ siteId: site.id, receipt })),
+    );
+
+    expect(await store.verifySiteChain(site.id)).toBe(true);
+  });
+
   it("DSAR gerçek veritabanında saklanır: süre hesabı, uzatma, durum geçişi", async () => {
     const tenant = await store.createTenant({ name: "C", kind: "direct" });
     const client = await store.createClient({ tenantId: tenant.id, name: "M3" });

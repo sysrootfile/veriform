@@ -104,9 +104,13 @@ ${demoLink}
 
 export function renderSitePage(input: {
   siteUrl: string;
+  siteId: string;
   chainValid: boolean;
   scans: StoredScan[];
   draftHref?: string | undefined;
+  bannerConfig?:
+    | { bannerVersion: string; texts: { title: string; description: string; acceptAll: string; rejectAll: string } }
+    | undefined;
 }): string {
   const e = escapeHtml;
   const badge = input.chainValid
@@ -132,6 +136,18 @@ export function renderSitePage(input: {
     ? `<p><a href="${e(input.draftHref)}">Aydınlatma metni taslağı (yazdırılabilir) →</a></p>`
     : "";
 
+  const bc = input.bannerConfig;
+  const bannerForm = `<h2>Rıza Bannerı Konfigürasyonu</h2>
+<p class="empty">Bu ayarlar embed scripte <code>/api/embed/config</code> üzerinden akar; bannerVersion değişirse müşteri yeniden rıza verir.</p>
+<form method="post" action="/sites/${e(input.siteId)}/banner">
+  <input name="bannerVersion" placeholder="banner-2026-11" value="${e(bc?.bannerVersion ?? "")}" required>
+  <input name="title" placeholder="Başlık" value="${e(bc?.texts.title ?? "Çerez Tercihleriniz")}" required>
+  <input name="description" placeholder="Açıklama" value="${e(bc?.texts.description ?? "")}">
+  <input name="acceptAll" placeholder="Kabul butonu" value="${e(bc?.texts.acceptAll ?? "Tümünü Kabul Et")}" required>
+  <input name="rejectAll" placeholder="Reddet butonu" value="${e(bc?.texts.rejectAll ?? "Sadece Zorunlu")}" required>
+  <button type="submit">Konfigürasyonu kaydet</button>
+</form>`;
+
   return page(
     input.siteUrl,
     `<h1>${e(input.siteUrl)}</h1>
@@ -142,7 +158,8 @@ ${paginationNote}
 <table>
 <tr><th>Tarih</th><th class="num">Form</th><th class="num">Risk</th><th class="num">Çerez ihlali</th></tr>
 ${rows}
-</table>`,
+</table>
+${bannerForm}`,
   );
 }
 
