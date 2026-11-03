@@ -40,6 +40,7 @@ export interface PanelService {
   ingestReceipt(siteId: string, receipt: ConsentReceipt): Promise<StoredReceiptEntry>;
   verifySite(siteId: string): Promise<boolean>;
   getSiteDsars(siteId: string): Promise<DsarRequest[]>;
+  getSiteReceipts(siteId: string): Promise<StoredReceiptEntry[]>;
   updateDsarStatus(
     siteId: string,
     dsarId: string,
@@ -119,6 +120,11 @@ export function createPanelService(store: PanelStore, context: PanelContext): Pa
     async getSiteDsars(siteId) {
       await assertSiteOwnership(siteId);
       return store.listDsars(siteId);
+    },
+
+    async getSiteReceipts(siteId) {
+      await assertSiteOwnership(siteId);
+      return store.listReceipts(siteId);
     },
 
     async updateDsarStatus(siteId, dsarId, patch) {

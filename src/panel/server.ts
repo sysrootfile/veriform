@@ -2,6 +2,7 @@ import { createServer } from "node:http";
 import { login, registerTenant } from "./accounts.js";
 import { createSessionToken, verifySessionToken } from "./auth.js";
 import { createIngestApi, IngestError } from "./ingest.js";
+import { receiptsToCsv } from "./chain.js";
 import { createPanelService } from "./service.js";
 import { createInMemoryPanelStore } from "./store.js";
 import { createPostgresPanelStore } from "./store.pg.js";
@@ -14,7 +15,7 @@ import {
 } from "./render.js";
 import { DSAR_TYPES } from "../dsar/types.js";
 import { renderDsarFormPage, renderDsarPanelPage } from "../dsar/render.js";
-import { generateAydinlatmaMetni } from "../draft/generator.js";
+import { generateAcikRizaMetni, generateAydinlatmaMetni, generateCerezPolitikasi } from "../draft/generator.js";
 import { renderDraftPageHtml } from "../draft/render.js";
 import { CATEGORY_LABELS, COOKIE_LABELS } from "../report/render.js";
 
@@ -218,9 +219,9 @@ const server = createServer(async (req, res) => {
         if (url.pathname === "/api/ingest/scan") {
           const scan = await ingest.scan({
             token: String(body.token ?? ""),
-            report: body.report as never,
-            cookies: (body.cookies ?? []) as never,
-            observedTargets: (body.observedTargets ?? []) as never,
+            report: body.report,
+            cookies: body.cookies,
+            observedTargets: body.observedTargets,
           });
           res.writeHead(200, { "content-type": "application/json" });
           res.end(JSON.stringify({ id: scan.id }));
@@ -387,13 +388,26 @@ const server = createServer(async (req, res) => {
       return;
     }
 
-    if (req.method === "GET" && /^\/sites\/[^/]+\/draft\/aydinlatma$/.test(url.pathname)) {
+    if (req.method === "GET" && /^\/sites\/[^/]+\/evidence\.csv$/.test(url.pathname)) {
       const siteId = url.pathname.split("/")[2]!;
+      const site = await service.resolveSite(siteId);
+      const entries = await service.getSiteReceipts(siteId);
+      res.writeHead(200, {
+        "content-type": "text/csv; charset=utf-8",
+        "content-disposition": `attachment; filename="evidence-${siteId}.csv"`,
+      });
+      res.end(receiptsToCsv(entries));
+      return;
+    }
+
+    if (req.method === "GET" && /^\/sites\/[^/]+\/draft\/(aydinlatma|acik-riza|cerez-politikasi)$/.test(url.pathname)) {
+      const siteId = url.pathname.split("/")[2]!;
+      const kind = url.pathname.split("/")[4] as "aydinlatma" | "acik-riza" | "cerez-politikasi";
       const site = await service.resolveSite(siteId);
       const scans = await service.getSiteScans(siteId);
       const last = scans.at(-1);
       const hostname = new URL(site.url).hostname;
-      const draft = generateAydinlatmaMetni({
+      const ctx = {
         siteUrl: site.url,
         contactEmail: `kvkk@${hostname}`,
         collectedCategories: (last?.report.categoryCounts ?? []).map(
@@ -403,7 +417,13 @@ const server = createServer(async (req, res) => {
           ...new Set((last?.cookies ?? []).map((c) => COOKIE_LABELS[c.category] ?? c.category)),
         ],
         generatedAt: new Date().toISOString(),
-      });
+      };
+      const draft =
+        kind === "aydinlatma"
+          ? generateAydinlatmaMetni(ctx)
+          : kind === "acik-riza"
+            ? generateAcikRizaMetni(ctx)
+            : generateCerezPolitikasi(ctx);
       res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
       res.end(renderDraftPageHtml(draft));
       return;
@@ -421,7 +441,14 @@ const server = createServer(async (req, res) => {
           siteId,
           chainValid,
           scans,
-          draftHref: scans.length ? `/sites/${siteId}/draft/aydinlatma` : undefined,
+          draftLinks: scans.length
+            ? [
+                { href: `/sites/${siteId}/draft/aydinlatma`, label: "Aydınlatma metni" },
+                { href: `/sites/${siteId}/draft/acik-riza`, label: "Açık rıza metni" },
+                { href: `/sites/${siteId}/draft/cerez-politikasi`, label: "Çerez politikası" },
+              ]
+            : undefined,
+          evidenceHref: `/sites/${siteId}/evidence.csv`,
           bannerConfig: site.bannerConfig,
         }),
       );

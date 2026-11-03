@@ -91,6 +91,20 @@ describe("createPanelService", () => {
     await expect(serviceB.resolveSite(siteA.id)).rejects.toThrow(/erişim reddedildi/);
   });
 
+  it("getSiteReceipts: guard'lı kanıt listesi (ihracat için)", async () => {
+    const { store, serviceA, serviceB, siteA } = await setup();
+    const receipt = await buildConsentReceipt({
+      site: "https://musteri-a.com",
+      bannerVersion: "banner-2026-11",
+      textsHash: "aaa111",
+      decisions: { analytics: true, marketing: false, personalization: false },
+      timestamp: "2026-11-02T10:00:00.000Z",
+    });
+    await store.appendReceipt({ siteId: siteA.id, receipt });
+    expect(await serviceA.getSiteReceipts(siteA.id)).toHaveLength(1);
+    await expect(serviceB.getSiteReceipts(siteA.id)).rejects.toThrow(/erişim reddedildi/);
+  });
+
   it("getClientSites yalnızca kendi client'ının sitelerini verir", async () => {
     const { serviceA, serviceB, clientA } = await setup();
     await serviceA.addSite(clientA.id, "https://ikinci.com");

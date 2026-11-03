@@ -5,6 +5,7 @@ import type { DsarRequest, DsarStatus, DsarType } from "../dsar/types.js";
 import type { FormInventoryReport } from "../report/types.js";
 import { makeChainEntry, verifyStoredChain, verifyReceiptSelfHash, type StoredReceiptEntry } from "./chain.js";
 import type { Client, PanelUser, ScanCookie, Site, SiteBannerConfig, StoredScan, Tenant, TenantKind } from "./types.js";
+import { deepClone, randomIngestToken } from "./shared.js";
 
 /**
  * Ajans paneli depolama portu — Postgres adapter'ı (RLS'li, bkz. schema.sql)
@@ -55,6 +56,8 @@ export interface PanelStore {
     dsarId: string,
     patch: { status?: DsarStatus | undefined; responseNote?: string | undefined; extend?: boolean | undefined },
   ): Promise<DsarRequest>;
+  /** Kanıt ihracı: siteye ait zincir girişleri (varış sırasına göre). */
+  listReceipts(siteId: string): Promise<StoredReceiptEntry[]>;
 }
 
 export function createInMemoryPanelStore(): PanelStore {
@@ -66,13 +69,7 @@ export function createInMemoryPanelStore(): PanelStore {
   const users: PanelUser[] = [];
   const dsars: DsarRequest[] = [];
 
-  const clone = <T>(value: T): T => structuredClone(value);
-
-/** 64 hex karakter — WebCrypto ile (tarayıcı/Node uyumlu). */
-function randomIngestToken(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(32));
-  return [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
-}
+  const clone = deepClone;
 
   return {
     async createTenant(input) {
@@ -266,6 +263,10 @@ function randomIngestToken(): string {
       }
       if (patch.responseNote !== undefined) dsar.responseNote = patch.responseNote;
       return clone(dsar);
+    },
+
+    async listReceipts(siteId) {
+      return clone(receiptEntries.filter((e) => e.siteId === siteId));
     },
   };
 }

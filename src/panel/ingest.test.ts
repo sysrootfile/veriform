@@ -76,6 +76,35 @@ describe("createIngestApi", () => {
     expect((err401 as IngestError).status).toBe(401);
   });
 
+  it("geçersiz tarama gövdesi 400 döner (şekil doğrulaması — as never yok)", async () => {
+    const { site, store } = await setup();
+    const api = createIngestApi(store);
+    const bad = await api
+      .scan({ token: site.ingestToken, report: { siteOrigin: 42 }, cookies: [], observedTargets: [] })
+      .catch((e) => e);
+    expect(bad).toBeInstanceOf(IngestError);
+    expect((bad as IngestError).status).toBe(400);
+  });
+
+  it("cookies/observedTargets verilmemişse boş kabul edilir", async () => {
+    const { store, site } = await setup();
+    const api = createIngestApi(store);
+    const scan = await api.scan({
+      token: site.ingestToken,
+      report: {
+        siteOrigin: "https://musteri1.com",
+        formCount: 1,
+        fieldCount: 1,
+        categoryCounts: [],
+        destinations: [],
+        riskFlags: [],
+        review: [],
+      },
+    });
+    expect(scan.cookies).toEqual([]);
+    expect(scan.observedTargets).toEqual([]);
+  });
+
   it("embedConfig: token ile banner konfigürasyonu döner; temizlenen null; yanlış token 401", async () => {
     const { store, site } = await setup();
     await store.setBannerConfig(site.id, {
