@@ -3,6 +3,7 @@ import type { ConsentReceipt } from "../consent/receipt.js";
 import type { DsarRequest, DsarType } from "../dsar/types.js";
 import type { FormInventoryReport } from "../report/types.js";
 import type { StoredReceiptEntry } from "./chain.js";
+import { applyCorrections } from "./corrections.js";
 import type { PanelStore } from "./store.js";
 import type { ScanCookie, SiteBannerConfig, StoredScan } from "./types.js";
 
@@ -101,9 +102,13 @@ export function createIngestApi(store: PanelStore): IngestApi {
       const site = await store.getSiteByToken(input.token);
       if (!site) throw new IngestError(401, "geçersiz ingest token'ı");
       const { cookies, observedTargets } = requireScanArrays(input.cookies, input.observedTargets);
+      const report = requireScanReport(input.report);
+      // İnsan onaylı düzeltme haritası: kabul anında rapora uygulanır
+      const corrections = await store.listCorrections(site.id);
+      const corrected = applyCorrections(report, corrections);
       return store.saveScan({
         siteId: site.id,
-        report: requireScanReport(input.report),
+        report: corrected,
         cookies,
         observedTargets,
       });
