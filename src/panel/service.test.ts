@@ -84,6 +84,13 @@ describe("createPanelService", () => {
     expect(await serviceA.verifySite(siteA.id)).toBe(true);
   });
 
+  it("resolveSite: sahibine siteyi döndürür; yoksa/başkasıysa varlık sızdırmadan reddeder", async () => {
+    const { serviceA, serviceB, siteA } = await setup();
+    expect((await serviceA.resolveSite(siteA.id)).url).toBe("https://musteri-a.com");
+    await expect(serviceA.resolveSite("yok")).rejects.toThrow(/erişim reddedildi/);
+    await expect(serviceB.resolveSite(siteA.id)).rejects.toThrow(/erişim reddedildi/);
+  });
+
   it("getClientSites yalnızca kendi client'ının sitelerini verir", async () => {
     const { serviceA, serviceB, clientA } = await setup();
     await serviceA.addSite(clientA.id, "https://ikinci.com");
