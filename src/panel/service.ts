@@ -72,12 +72,19 @@ export function createPanelService(store: PanelStore, context: PanelContext): Pa
     },
 
     async addClient(name) {
-      return store.createClient({ tenantId: context.tenantId, name });
+      const client = await store.createClient({ tenantId: context.tenantId, name });
+      await store.recordAudit(context.tenantId, "client.created", { clientId: client.id, name });
+      return client;
     },
 
     async addSite(clientId, url) {
       await assertClientOwnership(clientId);
-      return store.createSite({ clientId, url });
+      const site = await store.createSite({ clientId, url });
+      await store.recordAudit(context.tenantId, "site.created", {
+        siteId: site.id,
+        url,
+      });
+      return site;
     },
 
     async getClientSites(clientId) {
@@ -92,11 +99,17 @@ export function createPanelService(store: PanelStore, context: PanelContext): Pa
     async deleteClient(clientId) {
       await assertClientOwnership(clientId);
       await store.deleteClient(clientId);
+      await store.recordAudit(context.tenantId, "client.deleted", { clientId });
     },
 
     async setBannerConfig(siteId, config) {
       await assertSiteOwnership(siteId);
-      return store.setBannerConfig(siteId, config);
+      const site = await store.setBannerConfig(siteId, config);
+      await store.recordAudit(context.tenantId, "banner.configured", {
+        siteId,
+        bannerVersion: config?.bannerVersion ?? null,
+      });
+      return site;
     },
 
     async getSiteScans(siteId) {
@@ -131,7 +144,13 @@ export function createPanelService(store: PanelStore, context: PanelContext): Pa
 
     async saveCorrection(siteId, input) {
       await assertSiteOwnership(siteId);
-      return store.saveCorrection(siteId, input);
+      const correction = await store.saveCorrection(siteId, input);
+      await store.recordAudit(context.tenantId, "correction.saved", {
+        siteId,
+        fieldName: input.fieldName,
+        category: input.category,
+      });
+      return correction;
     },
 
     async updateDsarStatus(siteId, dsarId, patch) {

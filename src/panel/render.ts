@@ -262,6 +262,30 @@ ${rows}
   );
 }
 
+export function renderAuditPage(input: {
+  entries: Array<{ id: string; action: string; detail: Record<string, unknown>; createdAt: string }>;
+}): string {
+  const e = escapeHtml;
+  const rows = input.entries.length
+    ? input.entries
+        .map(
+          (a) =>
+            `<tr><td>${e(a.createdAt)}</td><td><code>${e(a.action)}</code></td><td>${e(JSON.stringify(a.detail))}</td></tr>`,
+        )
+        .join("\n")
+    : '<tr><td colspan="3" class="empty">Denetim kaydı yok.</td></tr>';
+
+  return page(
+    "Denetim İzi",
+    `<h1>Denetim İzi (Audit Log)</h1>
+<p class="empty">Panelde yapılan her mutasyon burada iz bırakır — KVKK m.12 kayıt yükümlülüğü zemin.</p>
+<table>
+<tr><th>Zaman</th><th>Eylem</th><th>Detay</th></tr>
+${rows}
+</table>`,
+  );
+}
+
 export function renderLoginPage(options: { hasError?: boolean } = {}): string {
   return page(
     "Giriş",

@@ -10,6 +10,7 @@ import { createPanelService } from "./service.js";
 import { createInMemoryPanelStore } from "./store.js";
 import { createPostgresPanelStore } from "./store.pg.js";
 import {
+  renderAuditPage,
   renderClientDetailPage,
   renderClientsPage,
   renderLoginPage,
@@ -323,6 +324,13 @@ const server = createServer(async (req, res) => {
       await service.deleteClient(clientId);
       res.writeHead(302, { location: "/clients" });
       res.end();
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/audit") {
+      const entries = await store.listAudit(tenantId);
+      res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      res.end(renderAuditPage({ entries }));
       return;
     }
 
