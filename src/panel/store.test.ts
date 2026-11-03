@@ -70,6 +70,30 @@ describe("createInMemoryPanelStore", () => {
     await expect(store.deleteClient("yok")).rejects.toThrow(/client/);
   });
 
+  it("setBannerConfig: site bazlı banner konfigürasyonu yazar ve temizler", async () => {
+    const store = createInMemoryPanelStore();
+    const tenant = await store.createTenant({ name: "A", kind: "direct" });
+    const client = await store.createClient({ tenantId: tenant.id, name: "M" });
+    const site = await store.createSite({ clientId: client.id, url: "https://musteri1.com" });
+
+    const config = {
+      bannerVersion: "banner-2026-11",
+      texts: {
+        title: "Çerez Tercihleriniz",
+        description: "Açıklama",
+        acceptAll: "Tümünü Kabul Et",
+        rejectAll: "Sadece Zorunlu",
+      },
+    };
+    const updated = await store.setBannerConfig(site.id, config);
+    expect(updated.bannerConfig?.bannerVersion).toBe("banner-2026-11");
+    expect((await store.getSite(site.id))?.bannerConfig?.texts.title).toBe("Çerez Tercihleriniz");
+
+    const cleared = await store.setBannerConfig(site.id, null);
+    expect(cleared.bannerConfig).toBeUndefined();
+    await expect(store.setBannerConfig("yok", config)).rejects.toThrow(/site/);
+  });
+
   it("getTenant kiracıyı döndürür, bilinmeyeni null verir; marka rengi ve logosu saklanır", async () => {
     const store = createInMemoryPanelStore();
     const tenant = await store.createTenant({

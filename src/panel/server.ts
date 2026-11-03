@@ -239,6 +239,25 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === "GET" && url.pathname === "/api/embed/config") {
+      try {
+        const config = await ingest.embedConfig({
+          token: url.searchParams.get("token") ?? "",
+        });
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify({ bannerConfig: config }));
+      } catch (error) {
+        if (error instanceof IngestError) {
+          res.writeHead(error.status, { "content-type": "application/json" });
+          res.end(JSON.stringify({ error: error.message }));
+        } else {
+          res.writeHead(400, { "content-type": "application/json" });
+          res.end(JSON.stringify({ error: "geçersiz istek" }));
+        }
+      }
+      return;
+    }
+
     // Korunan rotalar — oturum zorunlu
     const tenantId = sessionTenantId(req);
     if (!tenantId) {
@@ -333,6 +352,26 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === "POST" && /^\/sites\/[^/]+\/banner$/.test(url.pathname)) {
+      const siteId = url.pathname.split("/")[2]!;
+      const form = new URLSearchParams(await readBody(req));
+      const texts = {
+        title: form.get("title") ?? "",
+        description: form.get("description") ?? "",
+        acceptAll: form.get("acceptAll") ?? "",
+        rejectAll: form.get("rejectAll") ?? "",
+      };
+      if (!form.get("bannerVersion") || !texts.title || !texts.acceptAll || !texts.rejectAll) {
+        res.writeHead(400, { "content-type": "text/html; charset=utf-8" });
+        res.end("Zorunlu alanlar eksik");
+        return;
+      }
+      await service.setBannerConfig(siteId, { bannerVersion: form.get("bannerVersion")!, texts });
+      res.writeHead(302, { location: `/sites/${siteId}` });
+      res.end();
+      return;
+    }
+
     if (req.method === "POST" && /^\/sites\/[^/]+\/dsar\/[^/]+$/.test(url.pathname)) {
       const [, , siteId, , dsarId] = url.pathname.split("/") as [string, string, string, string, string];
       const form = new URLSearchParams(await readBody(req));
@@ -393,9 +432,11 @@ const server = createServer(async (req, res) => {
       res.end(
         renderSitePage({
           siteUrl: site.url,
+          siteId,
           chainValid,
           scans,
           draftHref: scans.length ? `/sites/${siteId}/draft/aydinlatma` : undefined,
+          bannerConfig: site.bannerConfig,
         }),
       );
       return;

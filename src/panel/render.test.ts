@@ -64,6 +64,7 @@ describe("renderClientsPage", () => {
 describe("renderSitePage", () => {
   it("zincir geçerliyken yeşil rozet basar", () => {
     const html = renderSitePage({
+      siteId: "s1",
       siteUrl: "https://musteri1.com",
       chainValid: true,
       scans: [scan()],
@@ -75,6 +76,7 @@ describe("renderSitePage", () => {
 
   it("zincir bozulmuşsa uyarı basar", () => {
     const html = renderSitePage({
+      siteId: "s1",
       siteUrl: "https://musteri1.com",
       chainValid: false,
       scans: [],
@@ -84,6 +86,7 @@ describe("renderSitePage", () => {
 
   it("tarama satırlarında risk ve çerez ihlali sayıları görünür", () => {
     const html = renderSitePage({
+      siteId: "s1",
       siteUrl: "https://musteri1.com",
       chainValid: true,
       scans: [scan()],
@@ -94,6 +97,7 @@ describe("renderSitePage", () => {
 
   it("hiç tarama yoksa boş durum görünür", () => {
     const html = renderSitePage({
+      siteId: "s1",
       siteUrl: "https://musteri1.com",
       chainValid: true,
       scans: [],
@@ -106,6 +110,7 @@ describe("renderSitePage", () => {
       scan({ id: `s${i}`, scannedAt: `2026-11-0${(i % 9) + 1}T10:00:00.000Z` }),
     );
     const html = renderSitePage({
+      siteId: "s1",
       siteUrl: "https://musteri1.com",
       chainValid: true,
       scans: many,
@@ -116,6 +121,7 @@ describe("renderSitePage", () => {
 
   it("10 veya daha az taramada sayfalama notu çıkmaz", () => {
     const html = renderSitePage({
+      siteId: "s1",
       siteUrl: "https://musteri1.com",
       chainValid: true,
       scans: [scan()],
@@ -125,6 +131,7 @@ describe("renderSitePage", () => {
 
   it("site URL'i HTML'e kaçırılır", () => {
     const html = renderSitePage({
+      siteId: "s1",
       siteUrl: 'https://x.com/?"><script>alert(1)</script>',
       chainValid: true,
       scans: [],

@@ -75,4 +75,23 @@ describe("createIngestApi", () => {
       .catch((e) => e);
     expect((err401 as IngestError).status).toBe(401);
   });
+
+  it("embedConfig: token ile banner konfigürasyonu döner; temizlenen null; yanlış token 401", async () => {
+    const { store, site } = await setup();
+    await store.setBannerConfig(site.id, {
+      bannerVersion: "banner-2026-11",
+      texts: { title: "T", description: "D", acceptAll: "A", rejectAll: "R" },
+    });
+    const api = createIngestApi(store);
+
+    expect(await api.embedConfig({ token: site.ingestToken })).toMatchObject({
+      bannerVersion: "banner-2026-11",
+    });
+
+    await store.setBannerConfig(site.id, null);
+    expect(await api.embedConfig({ token: site.ingestToken })).toBeNull();
+
+    const err = await api.embedConfig({ token: "yok" }).catch((e) => e);
+    expect((err as IngestError).status).toBe(401);
+  });
 });

@@ -11,7 +11,7 @@ import {
   type StoredReceiptEntry,
 } from "./chain.js";
 import type { PanelStore } from "./store.js";
-import type { Client, PanelUser, ScanCookie, Site, StoredScan, Tenant, TenantKind } from "./types.js";
+import type { Client, PanelUser, ScanCookie, Site, SiteBannerConfig, StoredScan, Tenant, TenantKind } from "./types.js";
 
 /**
  * PanelStore portunun gerçek Postgres adapter'ı — src/panel/schema.sql üstünde.
@@ -49,6 +49,7 @@ function mapSite(row: pg.QueryResultRow): Site {
     clientId: String(row.client_id),
     url: String(row.url),
     ingestToken: String(row.ingest_token),
+    ...(row.banner_config ? { bannerConfig: row.banner_config as SiteBannerConfig } : {}),
     createdAt: iso(row.created_at as Date),
   };
 }
@@ -166,6 +167,16 @@ export function createPostgresPanelStore(connectionString: string): PostgresPane
       return result.rows[0] ? clone(mapSite(result.rows[0])) : null;
     },
 
+    async setBannerConfig(siteId, config) {
+      const site = await pool.query("select 1 from sites where id = $1", [siteId]);
+      if (site.rowCount === 0) throw new Error(`site bulunamadı: ${siteId}`);
+      const result = await pool.query(
+        "update sites set banner_config = $2 where id = $1 returning *",
+        [siteId, config ? JSON.stringify(config) : null],
+      );
+      return clone(mapSite(result.rows[0]!));
+    },
+
     async listSites(clientId) {
       const result = await pool.query(
         "select * from sites where client_id = $1 order by created_at, id",
@@ -203,24 +214,39 @@ export function createPostgresPanelStore(connectionString: string): PostgresPane
       if (!(await verifyReceiptSelfHash(input.receipt))) {
         throw new Error("selfHash doğrulaması başarısız — kanıt kurcalanmış olabilir");
       }
-      const last = await pool.query(
-        "select chain_hash from consent_receipts where site_id = $1 order by received_at desc, id desc limit 1",
-        [input.siteId],
-      );
-      const prevChainHash = last.rows[0] ? String(last.rows[0].chain_hash) : undefined;
-      const entry = await makeChainEntry(input.siteId, input.receipt, prevChainHash);
-      await pool.query(
-        "insert into consent_receipts (id, site_id, received_at, receipt, prev_chain_hash, chain_hash) values ($1, $2, $3, $4, $5, $6)",
-        [
-          entry.id,
-          entry.siteId,
-          entry.receivedAt,
-          JSON.stringify(entry.receipt),
-          entry.prevChainHash,
-          entry.chainHash,
-        ],
-      );
-      return clone(entry);
+      // Zincir bütünlüğü: site başına advisory lock ile "son bağ oku → ekle"
+      // işlemini serileştiririz — eşzamanlı kabuller zinciri çatallayamaz.
+      const client = await pool.connect();
+      try {
+        await client.query("begin");
+        await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [
+          input.siteId,
+        ]);
+        const last = await client.query(
+          "select chain_hash from consent_receipts where site_id = $1 order by received_at desc, id desc limit 1",
+          [input.siteId],
+        );
+        const prevChainHash = last.rows[0] ? String(last.rows[0].chain_hash) : undefined;
+        const entry = await makeChainEntry(input.siteId, input.receipt, prevChainHash);
+        await client.query(
+          "insert into consent_receipts (id, site_id, received_at, receipt, prev_chain_hash, chain_hash) values ($1, $2, $3, $4, $5, $6)",
+          [
+            entry.id,
+            entry.siteId,
+            entry.receivedAt,
+            JSON.stringify(entry.receipt),
+            entry.prevChainHash,
+            entry.chainHash,
+          ],
+        );
+        await client.query("commit");
+        return clone(entry);
+      } catch (error) {
+        await client.query("rollback");
+        throw error;
+      } finally {
+        client.release();
+      }
     },
 
     async verifySiteChain(siteId) {

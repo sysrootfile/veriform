@@ -4,7 +4,7 @@ import type { DsarRequest, DsarStatus } from "../dsar/types.js";
 import type { FormInventoryReport } from "../report/types.js";
 import type { StoredReceiptEntry } from "./chain.js";
 import type { PanelStore } from "./store.js";
-import type { Client, ScanCookie, Site, StoredScan } from "./types.js";
+import type { Client, ScanCookie, Site, SiteBannerConfig, StoredScan } from "./types.js";
 
 /**
  * Panel servis katmanı — HTTP handler'ların çağıracağı uygulama sözleşmesi.
@@ -27,6 +27,7 @@ export interface PanelService {
   addSite(clientId: string, url: string): Promise<Site>;
   getClientSites(clientId: string): Promise<Site[]>;
   deleteClient(clientId: string): Promise<void>;
+  setBannerConfig(siteId: string, config: SiteBannerConfig | null): Promise<Site>;
   getSiteScans(siteId: string): Promise<StoredScan[]>;
   ingestScan(input: {
     siteId: string;
@@ -82,6 +83,11 @@ export function createPanelService(store: PanelStore, context: PanelContext): Pa
     async deleteClient(clientId) {
       await assertClientOwnership(clientId);
       await store.deleteClient(clientId);
+    },
+
+    async setBannerConfig(siteId, config) {
+      await assertSiteOwnership(siteId);
+      return store.setBannerConfig(siteId, config);
     },
 
     async getSiteScans(siteId) {
