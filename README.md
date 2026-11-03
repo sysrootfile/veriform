@@ -28,7 +28,7 @@ PG_URL=postgresql://postgres:veriform@127.0.0.1:54329/veriform pnpm test -- src/
 
 1. **İzleyici ham veri saklamaz** — script yalnızca alan adı/meta veri kaydeder; değer içeriği sunucuya hiç gitmez.
 2. Multi-tenant: ajans → alt müşteri → site hiyerarşisi.
-3. Kanıt kayıtları append-only ve hash zincirli; Türkiye'de saklanır.
+3. Kanıt kayıtları append-only ve hash zincirli; Türkiye'de saklanır. *(Tek istisna: ajans bir müşteriyi kalıcı sildiğinde o müşterinin siteleri, taramaları ve kanıt zinciri birlikte silinir — silme öncesi dönem için append-only geçerlidir.)*
 
 ## Embed kurulumu (v0 demo)
 
