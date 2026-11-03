@@ -1,4 +1,5 @@
 import type { StoredScan } from "./types.js";
+import { diffScans } from "../scanner/diff.js";
 
 /**
  * Panel sayfa renderer'ları — servis katmanının verisini HTML'e çevirir.
@@ -124,6 +125,29 @@ export function renderSitePage(input: {
       ? `<p class="empty">${input.scans.length} taramanın son 10'u gösteriliyor.</p>`
       : "";
 
+  // Değişiklik uyarısı: son iki tarama arasında form/alan farkı varsa göster.
+  const prevScan = input.scans.length >= 2 ? input.scans[input.scans.length - 2] : null;
+  const currScan = input.scans.at(-1);
+  let alertSection = "";
+  if (prevScan && currScan) {
+    const diff = diffScans(prevScan, currScan);
+    const lines: string[] = [];
+    for (const nf of diff.newForms) {
+      lines.push(
+        `<li>Yeni form/alan <code>${e(nf.formRef)}</code>: ${e(nf.newFieldNames.join(", "))}</li>`,
+      );
+    }
+    for (const ref of diff.removedFormRefs) {
+      lines.push(`<li>Kaldırılan form <code>${e(ref)}</code></li>`);
+    }
+    for (const category of diff.newCookieCategories) {
+      lines.push(`<li>Yeni çerez kategorisi: ${e(category)}</li>`);
+    }
+    if (lines.length) {
+      alertSection = `<h2>Değişiklik Uyarısı</h2><ul>${lines.join("\n")}</ul>`;
+    }
+  }
+
   const rows = visible.length
     ? visible
         .map((s) => {
@@ -161,6 +185,7 @@ export function renderSitePage(input: {
 <p>${badge}</p>
 ${draftSection}
 ${evidenceLink}
+${alertSection}
 <h2>Taramalar</h2>
 ${paginationNote}
 <table>

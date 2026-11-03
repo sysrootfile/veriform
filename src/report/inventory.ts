@@ -76,6 +76,14 @@ export function buildFormInventory(input: ScanInput): FormInventoryReport {
     .map(([origin, forms]) => ({ origin, forms, sameOrigin: origin === siteOrigin }))
     .sort((a, b) => Number(b.sameOrigin) - Number(a.sameOrigin) || b.forms - a.forms);
 
+  const forms = input.forms.map((f) => ({
+    ref: f.ref,
+    fields: f.fields.map((field) => ({
+      name: field.meta.name ?? "",
+      category: field.classification.category,
+    })),
+  }));
+
   return {
     siteOrigin,
     formCount: input.forms.length,
@@ -84,5 +92,6 @@ export function buildFormInventory(input: ScanInput): FormInventoryReport {
     destinations,
     riskFlags,
     review,
+    forms,
   };
 }

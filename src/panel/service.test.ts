@@ -14,6 +14,7 @@ function emptyReport(): FormInventoryReport {
     destinations: [],
     riskFlags: [],
     review: [],
+      forms: [],
   };
 }
 

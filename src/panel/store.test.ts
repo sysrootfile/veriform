@@ -13,6 +13,7 @@ function emptyReport(siteOrigin = "https://musteri1.com"): FormInventoryReport {
     destinations: [],
     riskFlags: [],
     review: [],
+      forms: [],
   };
 }
 

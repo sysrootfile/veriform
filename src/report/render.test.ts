@@ -24,6 +24,7 @@ const sample: FormInventoryReport = {
   review: [
     { formRef: "f2", fieldName: "belirsiz", category: "address", confidence: 0.3, reason: "Düşük güven." },
   ],
+  forms: [],
 };
 
 describe("renderReportHtml", () => {
@@ -59,6 +60,7 @@ describe("renderReportHtml", () => {
       destinations: [],
       riskFlags: [],
       review: [],
+      forms: [],
     };
     const html = renderReportHtml(empty);
     expect(html).toContain("https://bos.com");

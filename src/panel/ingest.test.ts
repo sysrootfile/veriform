@@ -13,6 +13,7 @@ function emptyReport(): FormInventoryReport {
     destinations: [],
     riskFlags: [],
     review: [],
+      forms: [],
   };
 }
 
@@ -99,6 +100,7 @@ describe("createIngestApi", () => {
         destinations: [],
         riskFlags: [],
         review: [],
+      forms: [],
       },
     });
     expect(scan.cookies).toEqual([]);
