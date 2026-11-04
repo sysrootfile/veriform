@@ -25,6 +25,8 @@ import {
 import { DSAR_TYPES } from "../dsar/types.js";
 import { renderDsarFormPage, renderDsarPanelPage } from "../dsar/render.js";
 import { generateAcikRizaMetni, generateAydinlatmaMetni, generateCerezPolitikasi } from "../draft/generator.js";
+import { createMailSenderFromEnv } from "./mailer.js";
+import { buildDsarNotificationEmail } from "../dsar/notifications.js";
 import { renderDraftPageHtml } from "../draft/render.js";
 import { CATEGORY_LABELS, COOKIE_LABELS } from "../report/render.js";
 
@@ -47,6 +49,7 @@ const store = process.env.DATABASE_URL
   ? createPostgresPanelStore(process.env.DATABASE_URL)
   : createInMemoryPanelStore();
 const ingest = createIngestApi(store);
+const mailSender = createMailSenderFromEnv(process.env as Record<string, string>);
 // Kamu /tarama POST için IP başına hız sınırı (5 istek / dakika)
 const scanLimiter = createRateLimiter({ max: 5, windowMs: 60_000 });
 
@@ -215,6 +218,21 @@ const server = createServer(async (req, res) => {
         subjectEmail: form.get("subjectEmail") ?? "",
         ...(form.get("message") ? { message: form.get("message") as string } : {}),
       });
+      // Veri sorumlusuna bildirim — hata taramayı/başvuruyu engellemez
+      try {
+        const alert = await store.getSiteAlertContext(site.id);
+        if (alert) {
+          const notification = buildDsarNotificationEmail({
+            siteUrl: site.url,
+            subjectName: dsar.subjectName,
+            type: dsar.type,
+            deadlineAt: dsar.deadlineAt,
+          });
+          await mailSender.send({ to: alert.ownerEmail, ...notification });
+        }
+      } catch (error) {
+        console.error("[dsar] bildirim e-postası gönderilemedi:", error);
+      }
       res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
       res.end(
         renderDsarFormPage({
