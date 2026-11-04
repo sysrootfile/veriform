@@ -52,7 +52,12 @@ export interface PanelStore {
   /** Client kanıtının selfHash'i doğrulanır; zincir bağını sunucu hesaplar. */
   appendReceipt(input: { siteId: string; receipt: ConsentReceipt }): Promise<StoredReceiptEntry>;
   verifySiteChain(siteId: string): Promise<boolean>;
-  createUser(input: { tenantId: string; email: string; passwordHash: string }): Promise<PanelUser>;
+  createUser(input: {
+    tenantId: string;
+    email: string;
+    passwordHash: string;
+    role?: "owner" | "auditor" | undefined;
+  }): Promise<PanelUser>;
   findUserByEmail(email: string): Promise<PanelUser | null>;
   setBannerConfig(siteId: string, config: SiteBannerConfig | null): Promise<Site>;
   /** Sürekli izleme aralığı (saat); 0 = kapalı. */

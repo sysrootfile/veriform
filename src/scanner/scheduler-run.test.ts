@@ -87,4 +87,102 @@ describe("runScheduledScans (worker döngüsü)", () => {
       server.close();
     }
   }, 60_000);
+
+  it("değişiklik tespit edilirse notifier çağrılır ve sahip e-postalanır", async () => {
+    const { server, url: urlPromise } = fixtureServer();
+    const url = await urlPromise;
+    const store = createInMemoryPanelStore();
+    const tenant = await store.createTenant({ name: "A", kind: "direct" });
+    await store.createUser({
+      tenantId: tenant.id,
+      email: "owner@ajans.com",
+      passwordHash: "scrypt:aa:bb",
+      role: "owner",
+    });
+    const client = await store.createClient({ tenantId: tenant.id, name: "M" });
+    const site = await store.createSite({ clientId: client.id, url });
+    await store.setScanSchedule(site.id, 24);
+
+    // ilk tur: referans rapor (zaman T)
+    let fakeNow = Date.now();
+    await runScheduledScans(store, { now: () => fakeNow });
+
+    // 25 saat ileri sar + farklı rapor enjekte et → sonraki turda diff oluşsun
+    fakeNow += 25 * 3_600_000;
+    await store.saveScan({
+      siteId: site.id,
+      report: {
+        siteOrigin: url,
+        formCount: 2,
+        fieldCount: 3,
+        categoryCounts: [{ category: "tckn", forms: 1 }],
+        destinations: [],
+        riskFlags: [],
+        review: [],
+        forms: [{ ref: "form-0", fields: [{ name: "tcno", category: "tckn" }] }],
+      },
+      cookies: [],
+      observedTargets: [],
+      scripts: [],
+    });
+
+    const sent: Array<{ to: string; subject: string }> = [];
+    const result = await runScheduledScans(store, {
+      now: () => fakeNow,
+      notifier: async (email) => {
+        sent.push({ to: email.to, subject: email.subject });
+      },
+    });
+
+    expect(result.scanned).toHaveLength(1);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.to).toBe("owner@ajans.com");
+    expect(sent[0]!.subject).toContain(url);
+    server.close();
+  }, 60_000);
+
+  it("notifier hatası tarama turunu engellemez", async () => {
+    const { server, url: urlPromise } = fixtureServer();
+    const url = await urlPromise;
+    const store = createInMemoryPanelStore();
+    const tenant = await store.createTenant({ name: "A", kind: "direct" });
+    await store.createUser({
+      tenantId: tenant.id,
+      email: "owner@ajans.com",
+      passwordHash: "scrypt:aa:bb",
+      role: "owner",
+    });
+    const client = await store.createClient({ tenantId: tenant.id, name: "M" });
+    const site = await store.createSite({ clientId: client.id, url });
+    await store.setScanSchedule(site.id, 24);
+
+    let fakeNow = Date.now();
+    await runScheduledScans(store, { now: () => fakeNow });
+    fakeNow += 25 * 3_600_000;
+    await store.saveScan({
+      siteId: site.id,
+      report: {
+        siteOrigin: url,
+        formCount: 2,
+        fieldCount: 3,
+        categoryCounts: [{ category: "tckn", forms: 1 }],
+        destinations: [],
+        riskFlags: [],
+        review: [],
+        forms: [{ ref: "form-0", fields: [{ name: "tcno", category: "tckn" }] }],
+      },
+      cookies: [],
+      observedTargets: [],
+      scripts: [],
+    });
+
+    const result = await runScheduledScans(store, {
+      now: () => fakeNow,
+      notifier: async () => {
+        throw new Error("SMTP down");
+      },
+    });
+    expect(result.scanned).toHaveLength(1); // tarama yine kaydedildi
+    server.close();
+  }, 60_000);
 });

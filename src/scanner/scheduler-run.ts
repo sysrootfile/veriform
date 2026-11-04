@@ -24,6 +24,10 @@ export interface SchedulerRunOptions {
   timeoutMs?: number | undefined;
   /** Değişiklik tespit edilince çağrılır — glue katmanı mail göndericiye bağlar. */
   notifier?: ((email: OutgoingEmail) => Promise<void>) | undefined;
+  /** Test için zaman enjeksiyonu (varsayılan Date.now). */
+  now?: (() => number) | undefined;
+  /** Notifier hataları yutulmaz — testlerde gözlemlenebilir. */
+  throwOnNotifierError?: boolean | undefined;
 }
 
 export async function runScheduledScans(
@@ -31,7 +35,7 @@ export async function runScheduledScans(
   options: SchedulerRunOptions = {},
 ): Promise<ScheduledScanOutcome> {
   const sites = await store.listAllSites();
-  const now = Date.now();
+  const nowMs = (options.now ?? Date.now)();
   const scanned: ScheduledScanOutcome["scanned"] = [];
   const failed: ScheduledScanOutcome["failed"] = [];
   const notified: ScheduledScanOutcome["notified"] = [];
@@ -42,7 +46,7 @@ export async function runScheduledScans(
     const scans = await store.listScans(site.id);
     const prevScan = scans.at(-1);
     const lastScanAt = prevScan?.scannedAt;
-    if (!isDue(site, lastScanAt, now)) continue;
+    if (!isDue(site, lastScanAt, nowMs)) continue;
 
     try {
       const result = await scanSite(site.url, {
@@ -60,21 +64,27 @@ export async function runScheduledScans(
 
       // Değişiklik uyarısı: önceki taramayla diff, değişiklik varsa sahip e-postalanır
       if (options.notifier && prevScan) {
-        const diff = diffScans(prevScan, saved);
-        if (shouldNotifyChange(diff)) {
-          const context = await store.getSiteAlertContext(site.id);
-          if (context) {
-            const email = buildChangeAlertEmail({
-              siteUrl: context.siteUrl,
-              diff,
-              scannedAt: saved.scannedAt,
-              panelUrl: process.env.PANEL_URL,
-            });
-            if (email) {
-              await options.notifier({ to: context.ownerEmail, ...email });
-              notified.push({ siteId: site.id, to: context.ownerEmail });
+        try {
+          const diff = diffScans(prevScan, saved);
+          if (shouldNotifyChange(diff)) {
+            const context = await store.getSiteAlertContext(site.id);
+            if (context) {
+              const email = buildChangeAlertEmail({
+                siteUrl: context.siteUrl,
+                diff,
+                scannedAt: saved.scannedAt,
+                panelUrl: process.env.PANEL_URL,
+              });
+              if (email) {
+                await options.notifier({ to: context.ownerEmail, ...email });
+                notified.push({ siteId: site.id, to: context.ownerEmail });
+              }
             }
           }
+        } catch (error) {
+          if (options.throwOnNotifierError) throw error;
+          // notifier hatası tarama turunu engellemez — sonraki tur tekrar dener
+          console.error("[sched] uyarı e-postası gönderilemedi:", error);
         }
       }
     } catch (error) {
