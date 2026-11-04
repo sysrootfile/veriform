@@ -24,6 +24,8 @@ services:
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-veriform}@db:5432/veriform
       PORT: "4620"
       SESSION_SECRET: ${SESSION_SECRET:-dev-secret-change-me}
+      ENABLE_SCAN_SCHEDULER: "1"
+      SCAN_CHECK_INTERVAL_MS: "300000"
       CHROMIUM_EXECUTABLE_PATH: /usr/bin/chromium-browser
     ports:
       - "4620:4620"

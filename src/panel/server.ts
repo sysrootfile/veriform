@@ -6,6 +6,7 @@ import { receiptsToCsv } from "./chain.js";
 import { createApiKey } from "./api-keys.js";
 import { createRateLimiter } from "./rate-limit.js";
 import { buildEmbedSource, scanSite } from "../scanner/scan.js";
+import { runScheduledScans } from "../scanner/scheduler-run.js";
 import { renderScanRequestPage } from "../scanner/public.js";
 import { handleApiRequest } from "./api.js";
 import { renderApiDocsPage } from "./api-docs.js";
@@ -50,6 +51,34 @@ const store = process.env.DATABASE_URL
   : createInMemoryPanelStore();
 const ingest = createIngestApi(store);
 const mailSender = createMailSenderFromEnv(process.env as Record<string, string>);
+
+// Sürekli izleme döngüsü — ENABLE_SCAN_SCHEDULER=1 ile açılır (compose scanner imajı).
+// Her turda isDue kontrolü yapılır: yalnızca vakti gelen siteler taranır.
+const SCAN_CHECK_INTERVAL_MS = Number(process.env.SCAN_CHECK_INTERVAL_MS ?? 300_000); // 5 dk
+if (process.env.ENABLE_SCAN_SCHEDULER === "1") {
+  let running = false;
+  setInterval(async () => {
+    if (running) return; // önceki tur bitmediyse atla
+    running = true;
+    try {
+      const result = await runScheduledScans(store, {
+        notifier: async (email) => {
+          await mailSender.send(email);
+        },
+      });
+      if (result.scanned.length || result.notified.length) {
+        console.log(
+          `[sched] ${result.scanned.length} tarama, ${result.notified.length} uyarı e-postası`,
+        );
+      }
+    } catch (error) {
+      console.error("[sched] tur hatası:", error);
+    } finally {
+      running = false;
+    }
+  }, SCAN_CHECK_INTERVAL_MS);
+  console.log(`[sched] sürekli izleme döngüsü: ${SCAN_CHECK_INTERVAL_MS}ms aralıkla`);
+}
 // Kamu /tarama POST için IP başına hız sınırı (5 istek / dakika)
 const scanLimiter = createRateLimiter({ max: 5, windowMs: 60_000 });
 
