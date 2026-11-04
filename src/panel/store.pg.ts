@@ -6,6 +6,8 @@ import type { DsarRequest, DsarStatus, DsarType } from "../dsar/types.js";
 import type { FormInventoryReport } from "../report/types.js";
 import type { Correction } from "./corrections.js";
 import type { AuditEntry } from "./types.js";
+import type { ApiKeyRecord } from "./api-keys.js";
+import { hashApiKey } from "./api-keys.js";
 import {
   makeChainEntry,
   verifyReceiptSelfHash,
@@ -81,6 +83,17 @@ function mapUser(row: pg.QueryResultRow): PanelUser {
     email: String(row.email),
     passwordHash: String(row.password_hash),
     role: row.role as PanelUser["role"],
+    createdAt: iso(row.created_at as Date),
+  };
+}
+
+function mapApiKey(row: pg.QueryResultRow): ApiKeyRecord {
+  return {
+    id: String(row.id),
+    name: String(row.name),
+    prefix: String(row.prefix),
+    ...(row.revoked_at ? { revokedAt: iso(row.revoked_at as Date) } : {}),
+    ...(row.last_used_at ? { lastUsedAt: iso(row.last_used_at as Date) } : {}),
     createdAt: iso(row.created_at as Date),
   };
 }
@@ -437,6 +450,49 @@ export function createPostgresPanelStore(connectionString: string): PostgresPane
           detail: row.detail as Record<string, unknown>,
           createdAt: iso(row.created_at as Date),
         })),
+      );
+    },
+
+    async saveApiKey(tenantId, input) {
+      const result = await pool.query(
+        "insert into api_keys (tenant_id, name, prefix, key_hash) values ($1, $2, $3, $4) returning *",
+        [tenantId, input.name, input.prefix, input.keyHash],
+      );
+      return clone(mapApiKey(result.rows[0]!));
+    },
+
+    async listApiKeys(tenantId) {
+      const result = await pool.query(
+        "select * from api_keys where tenant_id = $1 order by created_at, id",
+        [tenantId],
+      );
+      return clone(result.rows.map(mapApiKey));
+    },
+
+    async revokeApiKey(tenantId, keyId) {
+      const result = await pool.query(
+        "update api_keys set revoked_at = now() where tenant_id = $1 and id = $2 and revoked_at is null",
+        [tenantId, keyId],
+      );
+      if (result.rowCount === 0) throw new Error(`API anahtarı bulunamadı: ${keyId}`);
+    },
+
+    async findTenantByApiKey(key) {
+      const hash = hashApiKey(key);
+      const result = await pool.query(
+        "select * from api_keys where key_hash = $1 and revoked_at is null",
+        [hash],
+      );
+      if (result.rows.length === 0) return null;
+      const row = result.rows[0]!;
+      await pool.query("update api_keys set last_used_at = now() where id = $1", [row.id]);
+      return { tenantId: String(row.tenant_id), keyId: String(row.id) };
+    },
+
+    async touchApiKey(key) {
+      await pool.query(
+        "update api_keys set last_used_at = now() where key_hash = $1",
+        [hashApiKey(key)],
       );
     },
 

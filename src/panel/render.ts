@@ -314,6 +314,48 @@ ${rows}
   );
 }
 
+export function renderApiKeysPage(input: {
+  keys: Array<{ id: string; name: string; prefix: string; revokedAt?: string | undefined; lastUsedAt?: string | undefined }>;
+  /** Yeni oluşturulan anahtarın düz değeri — yalnızca bu render'da gösterilir. */
+  newKey?: string | undefined;
+}): string {
+  const e = escapeHtml;
+  const newKeyBlock = input.newKey
+    ? `<p class="badge-ok">Yeni anahtar oluşturuldu — <strong>bu değeri şimdi kopyalayın, bir daha gösterilmeyecek</strong>:</p>
+<pre>${e(input.newKey)}</pre>`
+    : "";
+
+  const rows = input.keys.length
+    ? input.keys
+        .map(
+          (k) =>
+            `<tr><td>${e(k.name)}</td><td><code>${e(k.prefix)}…</code></td><td>${e(k.lastUsedAt ?? "hiç kullanılmadı")}</td><td>${
+              k.revokedAt
+                ? '<span class="badge-warn">İptal edildi</span>'
+                : `<form method="post" action="/settings/api-keys/${e(k.id)}/revoke"><button type="submit" class="danger">İptal</button></form>`
+            }</td></tr>`,
+        )
+        .join("\n")
+    : '<tr><td colspan="4" class="empty">Henüz API anahtarı yok.</td></tr>';
+
+  return page(
+    "API Anahtarları",
+    `<h1>Headless API Anahtarları</h1>
+${newKeyBlock}
+<h2>Anahtarlar</h2>
+<table>
+<tr><th>Ad</th><th>Ön ek</th><th>Son kullanım</th><th>İşlem</th></tr>
+${rows}
+</table>
+<form method="post" action="/settings/api-keys">
+  <input name="name" placeholder="Anahtar adı (örn. CI, entegrasyon)" required>
+  <button type="submit">Anahtar oluştur</button>
+</form>
+<h2>Dokümantasyon</h2>
+<p><a href="/api/docs">Headless API dokümantasyonu →</a></p>`,
+  );
+}
+
 export function renderLoginPage(options: { hasError?: boolean } = {}): string {
   return page(
     "Giriş",

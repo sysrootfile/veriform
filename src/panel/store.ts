@@ -8,6 +8,8 @@ import type { Client, PanelUser, ScanCookie, ScannedScript, Site, SiteBannerConf
 import { deepClone, randomIngestToken } from "./shared.js";
 import type { Correction } from "./corrections.js";
 import type { AuditEntry } from "./types.js";
+import type { ApiKeyRecord } from "./api-keys.js";
+import { hashApiKey } from "./api-keys.js";
 
 /**
  * Ajans paneli depolama portu — Postgres adapter'ı (RLS'li, bkz. schema.sql)
@@ -76,6 +78,16 @@ export interface PanelStore {
   /** Denetim izi — panel mutasyonları service katmanından kaydedilir. */
   recordAudit(tenantId: string, action: string, detail?: Record<string, unknown>): Promise<void>;
   listAudit(tenantId: string): Promise<AuditEntry[]>;
+  /** Headless API: düz anahtar bu çağrının yanıtında bir kez döner. */
+  saveApiKey(
+    tenantId: string,
+    input: { name: string; prefix: string; keyHash: string },
+  ): Promise<ApiKeyRecord>;
+  listApiKeys(tenantId: string): Promise<ApiKeyRecord[]>;
+  revokeApiKey(tenantId: string, keyId: string): Promise<void>;
+  /** Anahtar → kiracı kimliklendirme; bulunamayan/iptalli anahtar → null. */
+  findTenantByApiKey(key: string): Promise<{ tenantId: string; keyId: string } | null>;
+  touchApiKey(key: string): Promise<void>;
 }
 
 export function createInMemoryPanelStore(): PanelStore {
@@ -88,6 +100,7 @@ export function createInMemoryPanelStore(): PanelStore {
   const dsars: DsarRequest[] = [];
   const corrections: Array<Correction & { siteId: string }> = [];
   const auditLog: Array<AuditEntry & { tenantId: string }> = [];
+  const apiKeys: Array<ApiKeyRecord & { tenantId: string; keyHash: string }> = [];
 
   const clone = deepClone;
 
@@ -343,6 +356,49 @@ export function createInMemoryPanelStore(): PanelStore {
 
     async listAudit(tenantId) {
       return clone(auditLog.filter((a) => a.tenantId === tenantId));
+    },
+
+    async saveApiKey(tenantId, input) {
+      const record: ApiKeyRecord & { tenantId: string; keyHash: string } = {
+        id: crypto.randomUUID(),
+        tenantId,
+        name: input.name,
+        prefix: input.prefix,
+        keyHash: input.keyHash,
+        createdAt: new Date().toISOString(),
+      };
+      apiKeys.push(record);
+      return clone(record);
+    },
+
+    async listApiKeys(tenantId) {
+      return clone(
+        apiKeys
+          .filter((k) => k.tenantId === tenantId)
+          .map(({ keyHash: _hash, ...rest }) => rest),
+      );
+    },
+
+    async revokeApiKey(tenantId, keyId) {
+      const key = apiKeys.find((k) => k.tenantId === tenantId && k.id === keyId);
+      if (!key) throw new Error(`API anahtarı bulunamadı: ${keyId}`);
+      key.revokedAt = new Date().toISOString();
+    },
+
+    async findTenantByApiKey(key) {
+      const hash = hashApiKey(key);
+      const found = apiKeys.find(
+        (k) => k.keyHash === hash && !k.revokedAt,
+      );
+      if (!found) return null;
+      found.lastUsedAt = new Date().toISOString();
+      return { tenantId: found.tenantId, keyId: found.id };
+    },
+
+    async touchApiKey(key) {
+      const hash = hashApiKey(key);
+      const found = apiKeys.find((k) => k.keyHash === hash);
+      if (found) found.lastUsedAt = new Date().toISOString();
     },
   };
 }
