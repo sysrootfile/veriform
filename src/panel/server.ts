@@ -3,14 +3,18 @@ import { login, registerTenant } from "./accounts.js";
 import { createSessionToken, verifySessionToken } from "./auth.js";
 import { createIngestApi, IngestError } from "./ingest.js";
 import { receiptsToCsv } from "./chain.js";
+import { createApiKey } from "./api-keys.js";
 import { createRateLimiter } from "./rate-limit.js";
 import { buildEmbedSource, scanSite } from "../scanner/scan.js";
 import { renderScanRequestPage } from "../scanner/public.js";
+import { handleApiRequest } from "./api.js";
+import { renderApiDocsPage } from "./api-docs.js";
 import { renderReportHtml } from "../report/render.js";
 import { createPanelService } from "./service.js";
 import { createInMemoryPanelStore } from "./store.js";
 import { createPostgresPanelStore } from "./store.pg.js";
 import {
+  renderApiKeysPage,
   renderAuditPage,
   renderClientDetailPage,
   renderClientsPage,
@@ -90,6 +94,19 @@ function setSessionHeader(res: import("node:http").ServerResponse, token: string
     "set-cookie",
     `vf_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${7 * 24 * 60 * 60}`,
   );
+}
+
+/** JSON yanıtları için standart başlıklar — nosniff MIME-sniffing ile HTML render'ı engeller. */
+function jsonRes(
+  res: import("node:http").ServerResponse,
+  status: number,
+  data: unknown,
+): void {
+  res.writeHead(status, {
+    "content-type": "application/json; charset=utf-8",
+    "x-content-type-options": "nosniff",
+  });
+  res.end(JSON.stringify(data));
 }
 
 const server = createServer(async (req, res) => {
@@ -206,6 +223,36 @@ const server = createServer(async (req, res) => {
           success: { deadlineAt: dsar.deadlineAt },
         }),
       );
+      return;
+    }
+
+    // Headless API — X-API-Key kimlikli, JSON istek/yanıt; oturumdan bağımsız
+    if (url.pathname === "/api/v1" || url.pathname.startsWith("/api/v1/")) {
+      const chunks: Buffer[] = [];
+      if (req.method === "POST") {
+        for await (const chunk of req) chunks.push(chunk as Buffer);
+      }
+      const raw = Buffer.concat(chunks).toString("utf8");
+      let body: unknown;
+      try {
+        body = raw ? JSON.parse(raw) : undefined;
+      } catch {
+        jsonRes(res, 400, { error: "geçersiz JSON" });
+        return;
+      }
+      const apiRes = await handleApiRequest(store, {
+        method: req.method === "POST" ? "POST" : "GET",
+        path: url.pathname,
+        headers: { "x-api-key": req.headers["x-api-key"] as string | undefined },
+        body,
+      });
+      jsonRes(res, apiRes.status, apiRes.json);
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/docs") {
+      res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      res.end(renderApiDocsPage());
       return;
     }
 
@@ -365,6 +412,35 @@ const server = createServer(async (req, res) => {
       const entries = await store.listAudit(tenantId);
       res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
       res.end(renderAuditPage({ entries }));
+      return;
+    }
+
+    // API anahtar yönetimi (panel)
+    if (req.method === "GET" && url.pathname === "/settings/api-keys") {
+      const keys = await store.listApiKeys(tenantId);
+      res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      res.end(renderApiKeysPage({ keys, newKey: url.searchParams.get("created") ?? undefined }));
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/settings/api-keys") {
+      const form = new URLSearchParams(await readBody(req));
+      const secret = await createApiKey(store, tenantId, { name: form.get("name") ?? "anahtar" });
+      await store.recordAudit(tenantId, "apikey.created", { keyId: secret.id, name: form.get("name") });
+      const sep = secret.key.includes("?") ? "&" : "?";
+      res.writeHead(302, {
+        location: `/settings/api-keys${sep}created=${encodeURIComponent(secret.key)}`,
+      });
+      res.end();
+      return;
+    }
+
+    if (req.method === "POST" && /^\/settings\/api-keys\/[^/]+\/revoke$/.test(url.pathname)) {
+      const keyId = url.pathname.split("/")[3]!;
+      await store.revokeApiKey(tenantId, keyId);
+      await store.recordAudit(tenantId, "apikey.revoked", { keyId });
+      res.writeHead(302, { location: "/settings/api-keys" });
+      res.end();
       return;
     }
 

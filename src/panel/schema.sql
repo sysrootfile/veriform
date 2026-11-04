@@ -47,13 +47,14 @@ create index audit_tenant_idx on audit_log (tenant_id, created_at);
 
 -- Headless API anahtarları: düz anahtar saklanmaz, yalnızca SHA-256 hash'i
 create table api_keys (
-  id          uuid primary key default gen_random_uuid(),
-  tenant_id   uuid not null references tenants (id) on delete cascade,
-  name        text not null,
-  prefix      text not null unique,
-  key_hash    text not null unique,
-  created_at  timestamptz not null default now(),
-  last_used_at timestamptz
+  id           uuid primary key default gen_random_uuid(),
+  tenant_id    uuid not null references tenants (id) on delete cascade,
+  name         text not null,
+  prefix       text not null unique,
+  key_hash     text not null unique,
+  created_at   timestamptz not null default now(),
+  last_used_at timestamptz,
+  revoked_at   timestamptz
 );
 create index api_keys_tenant_idx on api_keys (tenant_id);
 
