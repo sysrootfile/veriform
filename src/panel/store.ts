@@ -88,6 +88,10 @@ export interface PanelStore {
   /** Anahtar → kiracı kimliklendirme; bulunamayan/iptalli anahtar → null. */
   findTenantByApiKey(key: string): Promise<{ tenantId: string; keyId: string } | null>;
   touchApiKey(key: string): Promise<void>;
+  /** Değişiklik uyarısı bağlamı: site → kiracı + sahip e-postası (yoksa null). */
+  getSiteAlertContext(
+    siteId: string,
+  ): Promise<{ tenantId: string; ownerEmail: string; siteUrl: string } | null>;
 }
 
 export function createInMemoryPanelStore(): PanelStore {
@@ -399,6 +403,22 @@ export function createInMemoryPanelStore(): PanelStore {
       const hash = hashApiKey(key);
       const found = apiKeys.find((k) => k.keyHash === hash);
       if (found) found.lastUsedAt = new Date().toISOString();
+    },
+
+    async getSiteAlertContext(siteId) {
+      const site = sites.find((s) => s.id === siteId);
+      if (!site) return null;
+      const client = clients.find((c) => c.id === site.clientId);
+      if (!client) return null;
+      const owner = users.find(
+        (u) => u.tenantId === client.tenantId && u.role === "owner",
+      );
+      if (!owner) return null;
+      return {
+        tenantId: client.tenantId,
+        ownerEmail: owner.email,
+        siteUrl: site.url,
+      };
     },
   };
 }

@@ -496,6 +496,24 @@ export function createPostgresPanelStore(connectionString: string): PostgresPane
       );
     },
 
+    async getSiteAlertContext(siteId) {
+      const result = await pool.query(
+        `select s.url as site_url, c.tenant_id as tenant_id, u.email as owner_email
+         from sites s
+         join clients c on c.id = s.client_id
+         join users u on u.tenant_id = c.tenant_id and u.role = 'owner'
+         where s.id = $1`,
+        [siteId],
+      );
+      if (result.rows.length === 0) return null;
+      const row = result.rows[0]!;
+      return {
+        tenantId: String(row.tenant_id),
+        ownerEmail: String(row.owner_email),
+        siteUrl: String(row.site_url),
+      };
+    },
+
     async close() {
       await pool.end();
     },
