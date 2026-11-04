@@ -35,6 +35,8 @@ export interface PanelStore {
   createSite(input: { clientId: string; url: string }): Promise<Site>;
   listSites(clientId: string): Promise<Site[]>;
   getSite(siteId: string): Promise<Site | null>;
+  /** Sürekli izleme worker'ı için tüm siteler (sistem düzeyi, kiracı filtresi yok). */
+  listAllSites(): Promise<Site[]>;
   /** Ingest kimliklendirme: token → site (bilinmeyen token → null). */
   getSiteByToken(token: string): Promise<Site | null>;
   saveScan(input: {
@@ -180,6 +182,10 @@ export function createInMemoryPanelStore(): PanelStore {
     async getSite(siteId) {
       const site = sites.find((s) => s.id === siteId);
       return site ? clone(site) : null;
+    },
+
+    async listAllSites() {
+      return clone(sites);
     },
 
     async saveScan(input) {

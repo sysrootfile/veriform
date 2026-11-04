@@ -209,6 +209,18 @@ describe("createInMemoryPanelStore", () => {
     ]);
   });
 
+  it("listAllSites: tüm kiracıların sitelerini döndürür (worker için)", async () => {
+    const store = createInMemoryPanelStore();
+    const t1 = await store.createTenant({ name: "A", kind: "agency" });
+    const t2 = await store.createTenant({ name: "B", kind: "direct" });
+    const c1 = await store.createClient({ tenantId: t1.id, name: "M1" });
+    const c2 = await store.createClient({ tenantId: t2.id, name: "M2" });
+    await store.createSite({ clientId: c1.id, url: "https://a.com" });
+    await store.createSite({ clientId: c2.id, url: "https://b.com" });
+    const all = await store.listAllSites();
+    expect(all.map((s) => s.url).sort()).toEqual(["https://a.com", "https://b.com"]);
+  });
+
   it("audit log: mutasyonlar kaydedilir ve kiracı bazında listelenir", async () => {
     const store = createInMemoryPanelStore();
     const tenant = await store.createTenant({ name: "A", kind: "agency" });
