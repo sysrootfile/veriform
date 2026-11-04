@@ -181,6 +181,11 @@ export function createPostgresPanelStore(connectionString: string): PostgresPane
       return result.rows[0] ? clone(mapSite(result.rows[0])) : null;
     },
 
+    async listAllSites() {
+      const result = await pool.query("select * from sites order by created_at, id");
+      return clone(result.rows.map(mapSite));
+    },
+
     async getSiteByToken(token) {
       const result = await pool.query("select * from sites where ingest_token = $1", [token]);
       return result.rows[0] ? clone(mapSite(result.rows[0])) : null;
