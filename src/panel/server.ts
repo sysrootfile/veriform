@@ -324,6 +324,26 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+    // Worker tetikleyicisi — cron/CI'dan çağrılır (SESSION_SECRET header doğrulaması)
+    if (req.method === "POST" && url.pathname === "/internal/run-scheduled") {
+      if ((req.headers["x-worker-token"] ?? "") !== SESSION_SECRET || SESSION_SECRET === "dev-secret-change-me") {
+        res.writeHead(403, { "content-type": "application/json" });
+        res.end(JSON.stringify({ error: "geçersiz worker token'ı" }));
+        return;
+      }
+      try {
+        const { runScheduledScans } = await import("../scanner/scheduler-run.js");
+        const outcome = await runScheduledScans(store);
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify({ scanned: outcome.scanned.length, failed: outcome.failed.length }));
+      } catch (error) {
+        console.error("[worker] tarama turu hatası:", error);
+        res.writeHead(500, { "content-type": "application/json" });
+        res.end(JSON.stringify({ error: "tarama turu başarısız" }));
+      }
+      return;
+    }
+
     // Korunan rotalar — oturum zorunlu
     const tenantId = sessionTenantId(req);
     if (!tenantId) {
