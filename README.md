@@ -53,6 +53,10 @@ kırmızıya düşer — sessiz yeşil, `PG_URL` kapısının sessiz `describe.s
 
 Aynı ayrım worker ucu için de geçerli: `/internal/run-scheduled` `WORKER_TOKEN` ister, oturum anahtarı header'a sızmaz; `WORKER_TOKEN` tanımsız uç 403 döner.
 
+## Deploy
+
+Tek sunucuda `docker compose up -d --build` ile panel + Postgres ayağa kalkar; `/healthz` `store:"postgres"` döner. Zorunlu anahtarlar, şema init tuzağı, tarama zamanlayıcısının iki modeli (dahili döngü vs `WORKER_TOKEN`'lı cron), TLS/register kapatma ve yedek-geri alma adımları: [docs/deploy.md](docs/deploy.md).
+
 ## Embed kurulumu (v0 demo)
 
 ```bash
