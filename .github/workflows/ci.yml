@@ -2,6 +2,8 @@ name: CI
 
 # Remote yokken bu dosya koşmaz; push/PR ile etkinleşir (handoff maddesi 3).
 # node 22 + pnpm 12 → Dockerfile'ın taşıdığı sürümlerle birebir aynı.
+# Eyleyici major'leri node24 runtime'lı (checkout v7 / setup-node v7 / action-setup v6):
+# v4'in node20 deprecated uyarısını kaldırır. Runner ubuntu-latest bilinçli olarak sabit değil.
 
 on:
   push:
@@ -18,11 +20,11 @@ jobs:
     name: typecheck + build + birim testleri
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
         with:
           version: 12.11.2
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: pnpm
@@ -51,11 +53,11 @@ jobs:
     env:
       PG_URL: postgresql://postgres:ci-password@127.0.0.1:5432/veriform
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
         with:
           version: 12.11.2
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: pnpm
