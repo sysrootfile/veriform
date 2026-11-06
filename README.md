@@ -17,6 +17,12 @@ pnpm test        # vitest run
 pnpm test:watch  # vitest
 ```
 
+Paneli lokal çalıştırmak için oturum anahtarı zorunlu — kodda ve compose'da default yok:
+
+```bash
+SESSION_SECRET=$(openssl rand -hex 32) pnpm panel
+```
+
 Postgres entegrasyon testleri yalnızca `PG_URL` verilince koşar (örn. docker'da
 `postgres:16-alpine` + `src/panel/schema.sql` uygulanmış veritabanı):
 
