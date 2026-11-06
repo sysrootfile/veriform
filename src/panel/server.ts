@@ -27,6 +27,7 @@ import { DSAR_TYPES } from "../dsar/types.js";
 import { renderDsarFormPage, renderDsarPanelPage } from "../dsar/render.js";
 import { generateAcikRizaMetni, generateAydinlatmaMetni, generateCerezPolitikasi } from "../draft/generator.js";
 import { createMailSenderFromEnv } from "./mailer.js";
+import { resolvePanelSecrets, verifyWorkerToken } from "./secrets.js";
 import { buildDsarNotificationEmail } from "../dsar/notifications.js";
 import { renderDraftPageHtml } from "../draft/render.js";
 import { CATEGORY_LABELS, COOKIE_LABELS } from "../report/render.js";
@@ -41,9 +42,11 @@ import { CATEGORY_LABELS, COOKIE_LABELS } from "../report/render.js";
  */
 
 const PORT = Number(process.env.PORT ?? 4620);
-const SESSION_SECRET = process.env.SESSION_SECRET ?? "dev-secret-change-me";
-if (!process.env.SESSION_SECRET) {
-  console.warn("[DEV] SESSION_SECRET ayarlı değil — geliştirme anahtarı kullanılıyor");
+const { sessionSecret: SESSION_SECRET, workerToken: WORKER_TOKEN } = resolvePanelSecrets(
+  process.env as Record<string, string | undefined>,
+);
+if (!WORKER_TOKEN) {
+  console.warn("[DEV] WORKER_TOKEN ayarlı değil — /internal/run-scheduled her çağrıda 403 döner");
 }
 
 const store = process.env.DATABASE_URL
@@ -418,9 +421,12 @@ const server = createServer(async (req, res) => {
       return;
     }
 
-    // Worker tetikleyicisi — cron/CI'dan çağrılır (SESSION_SECRET header doğrulaması)
+    // Worker tetikleyicisi — cron/CI'dan çağrılır (WORKER_TOKEN ayrı bir anahtardır,
+    // oturum imza anahtarı header'a sızmaz; token tanımsızsa kapı fail-closed)
     if (req.method === "POST" && url.pathname === "/internal/run-scheduled") {
-      if ((req.headers["x-worker-token"] ?? "") !== SESSION_SECRET || SESSION_SECRET === "dev-secret-change-me") {
+      const header = req.headers["x-worker-token"];
+      const presented = Array.isArray(header) ? header[0] : header;
+      if (!verifyWorkerToken(presented, WORKER_TOKEN)) {
         res.writeHead(403, { "content-type": "application/json" });
         res.end(JSON.stringify({ error: "geçersiz worker token'ı" }));
         return;
