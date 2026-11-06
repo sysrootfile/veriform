@@ -15,6 +15,8 @@ TDD mantığında ilerleriz: **kırmızı test → yeşil implementasyon → ref
 pnpm install
 pnpm test        # vitest run
 pnpm test:watch  # vitest
+pnpm typecheck   # tsc --noEmit
+pnpm build       # dist/ → embed + panel + scan bundle'ları
 ```
 
 Paneli lokal çalıştırmak için oturum anahtarı zorunlu — kodda ve compose'da default yok:
@@ -35,6 +37,16 @@ PG_URL=postgresql://postgres:veriform@127.0.0.1:54329/veriform pnpm test -- src/
 1. **İzleyici ham veri saklamaz** — script yalnızca alan adı/meta veri kaydeder; değer içeriği sunucuya hiç gitmez.
 2. Multi-tenant: ajans → alt müşteri → site hiyerarşisi.
 3. Kanıt kayıtları append-only ve hash zincirli; Türkiye'de saklanır. *(Tek istisna: ajans bir müşteriyi kalıcı sildiğinde o müşterinin siteleri, taramaları ve kanıt zinciri birlikte silinir — silme öncesi dönem için append-only geçerlidir.)*
+
+## Anahtar rotasyonu (SESSION_SECRET)
+
+`SESSION_SECRET` zorunludur ve varsayılanı yoktur; eksik veya bilinen geliştirme değeri ise panel boot etmez (exit 1). Rotasyon oturumları düşürmeden yapılır:
+
+1. `.env` içinde `SESSION_SECRET_PREVIOUS`e mevcut anahtarı yaz, `SESSION_SECRET`ı yenisiyle değiştir (`openssl rand -hex 32`).
+2. `docker compose up -d` — imzalama yalnız yeni anahtarla yapılır, doğrulama yeni + eski listeyi kabul eder.
+3. Bir tam oturum süresi (7 gün) sonra `SESSION_SECRET_PREVIOUS` satırını sil ve yeniden up et; eski çerezler o anda düşer.
+
+Aynı ayrım worker ucu için de geçerli: `/internal/run-scheduled` `WORKER_TOKEN` ister, oturum anahtarı header'a sızmaz; `WORKER_TOKEN` tanımsız uç 403 döner.
 
 ## Embed kurulumu (v0 demo)
 

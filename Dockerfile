@@ -17,4 +17,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN if [ "$WITH_SCANNER" = "1" ]; then pnpm install --frozen-lockfile --allow-build=esbuild && apk add --no-cache chromium && echo "chromium kuruldu"; else pnpm install --frozen-lockfile --prod --allow-build=esbuild; fi
 COPY --from=build /app/dist ./dist
 EXPOSE 4620
+# /healthz ile canlılık: node global fetch, ek bağımlılık yok (curl/busybox varsayımı yok)
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:' + (process.env.PORT || 4620) + '/healthz').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
 CMD ["node", "dist/panel.mjs"]
