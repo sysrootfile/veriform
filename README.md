@@ -86,3 +86,9 @@ Gerçek headless tarayıcıya (kurulu chromium; yoksa Windows'ta Edge kanalı) e
 ## Durum
 
 Faz 0 — MVP (8 hafta): embed script çekirdeği (form keşfi + PII sınıflandırma) → hedef tespiti + rapor v1 → çerez tarayıcı + Consent Mode v2 banner + rıza kanıtı → white-label ajans paneli + pilot (3–5 ajans).
+
+## Lisans
+
+BUSL-1.1 (Business Source License 1.1) — bkz. [LICENSE](LICENSE). Kopyalamak, değiştirmek ve **production dışı** kullanmak serbest; ticari/production kullanımı lisansörün ticari lisansına tabi. Her sürümün Change Date'inden (`November 7, 2030`) ya da ilk public dağıtımdan dört yıl sonra (hangisi önce gelirse) o sürüm AGPL-3.0+ altına geçer.
+
+`LICENSE` dosyasındaki `Licensor` ve `Licensed Work` telif satırı henüz placeholder — yayın/dağıtım kararından önce hukuki ünvanla doldurulmalı.
