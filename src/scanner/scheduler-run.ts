@@ -1,7 +1,7 @@
 import { isDue } from "./scheduler.js";
 import { diffScans, type ScanDiff } from "./diff.js";
 import { buildChangeAlertEmail, shouldNotifyChange } from "../panel/notifications.js";
-import { buildEmbedSource, scanSite } from "./scan.js";
+import { buildEmbedSource, scanSite, type ScanResult } from "./scan.js";
 import type { FormInventoryReport } from "../report/types.js";
 import type { OutgoingEmail } from "../panel/mailer.js";
 import type { PanelStore } from "../panel/store.js";
@@ -20,6 +20,9 @@ export interface ScheduledScanOutcome {
   notified: Array<{ siteId: string; to: string }>;
 }
 
+/** Tarama işinin yüzeyi — testlerde tarayıcısız sahte sürümle değiştirilir. */
+export type SiteScanner = (url: string) => Promise<ScanResult>;
+
 export interface SchedulerRunOptions {
   timeoutMs?: number | undefined;
   /** Değişiklik tespit edilince çağrılır — glue katmanı mail göndericiye bağlar. */
@@ -28,19 +31,30 @@ export interface SchedulerRunOptions {
   now?: (() => number) | undefined;
   /** Notifier hataları yutulmaz — testlerde gözlemlenebilir. */
   throwOnNotifierError?: boolean | undefined;
+  /** Varsayılan: embed kaynağını üretip gerçek headless tarayıcıyla tarama. */
+  scan?: SiteScanner | undefined;
 }
 
 export async function runScheduledScans(
   store: PanelStore,
   options: SchedulerRunOptions = {},
 ): Promise<ScheduledScanOutcome> {
+  // Embed kaynağı yalnızca gerçek tarayıcı yolu kullanıldığında üretilir.
+  const scan: SiteScanner =
+    options.scan ??
+    ((url) =>
+      buildEmbedSource().then((embedSource) =>
+        scanSite(url, {
+          embedSource,
+          ...(options.timeoutMs !== undefined ? { timeoutMs: options.timeoutMs } : {}),
+        }),
+      ));
+
   const sites = await store.listAllSites();
   const nowMs = (options.now ?? Date.now)();
   const scanned: ScheduledScanOutcome["scanned"] = [];
   const failed: ScheduledScanOutcome["failed"] = [];
   const notified: ScheduledScanOutcome["notified"] = [];
-
-  const embedSource = await buildEmbedSource();
 
   for (const site of sites) {
     const scans = await store.listScans(site.id);
@@ -49,10 +63,7 @@ export async function runScheduledScans(
     if (!isDue(site, lastScanAt, nowMs)) continue;
 
     try {
-      const result = await scanSite(site.url, {
-        embedSource,
-        ...(options.timeoutMs !== undefined ? { timeoutMs: options.timeoutMs } : {}),
-      });
+      const result = await scan(site.url);
       const saved = await store.saveScan({
         siteId: site.id,
         report: result.report,
