@@ -1,0 +1,74 @@
+name: CI
+
+# Remote yokken bu dosya koşmaz; push/PR ile etkinleşir (handoff maddesi 3).
+# node 22 + pnpm 12 → Dockerfile'ın taşıdığı sürümlerle birebir aynı.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: typecheck + build + birim testleri
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.11.2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm build
+      - run: pnpm test
+
+  integration:
+    name: Postgres entegrasyonu (PG_URL'siz koşamaz)
+    runs-on: ubuntu-latest
+    services:
+      db:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci-password
+          POSTGRES_DB: veriform
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d veriform"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      PG_URL: postgresql://postgres:ci-password@127.0.0.1:5432/veriform
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.11.2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: schema.sql uygula (psql varsayımı yok)
+        run: node scripts/apply-schema.mjs
+      - name: entegrasyon testini koş
+        run: pnpm exec vitest run src/panel/store.pg.test.ts | tee pg-integration.log
+      - name: atlama işaretliyse kırmızı ol
+        run: |
+          set -euo pipefail
+          if grep -q "skipped" pg-integration.log; then
+            echo "::error::store.pg.test.ts atlandı — PG_URL ya da db service'ı çalışmıyor, yeşil CI yanıltıcı olur."
+            exit 1
+          fi
+          grep -q "passed" pg-integration.log
