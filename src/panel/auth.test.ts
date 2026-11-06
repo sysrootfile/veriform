@@ -5,6 +5,7 @@ import {
   SESSION_TTL_MS,
   verifyPassword,
   verifySessionToken,
+  verifySessionTokenAny,
 } from "./auth.js";
 
 const SECRET = "test-secret";
@@ -73,5 +74,47 @@ describe("createSessionToken / verifySessionToken", () => {
     expect(verifySessionToken("", SECRET)).toBeNull();
     expect(verifySessionToken("abc", SECRET)).toBeNull();
     expect(verifySessionToken("a.b", SECRET)).toBeNull();
+  });
+});
+
+describe("verifySessionTokenAny (anahtar rotasyonu)", () => {
+  const NEW = "rotated-secret";
+  const OLD = "previous-secret";
+
+  it("tek anahtarlı listede doğrular", () => {
+    const token = createSessionToken("tenant-1", OLD);
+    expect(verifySessionTokenAny(token, [OLD])).toBe("tenant-1");
+  });
+
+  it("eski anahtarla imzalı çerez rotasyon sonrası çalışmaya devam eder", () => {
+    const token = createSessionToken("tenant-1", OLD);
+    expect(verifySessionTokenAny(token, [NEW, OLD])).toBe("tenant-1");
+  });
+
+  it("yeni anahtarla imzalı çerez listede doğrulanır", () => {
+    const token = createSessionToken("tenant-1", NEW);
+    expect(verifySessionTokenAny(token, [NEW, OLD])).toBe("tenant-1");
+  });
+
+  it("eski anahtar listeden çıkınca oturum düşer", () => {
+    const token = createSessionToken("tenant-1", OLD);
+    expect(verifySessionTokenAny(token, [NEW])).toBeNull();
+  });
+
+  it("listede hiç tanıdık anahtar yoksa reddeder", () => {
+    const token = createSessionToken("tenant-1", OLD);
+    expect(verifySessionTokenAny(token, ["x", "y"])).toBeNull();
+  });
+
+  it("boş anahtar listesi ve çöp token reddedilir, throw etmez", () => {
+    const token = createSessionToken("tenant-1", OLD);
+    expect(verifySessionTokenAny(token, [])).toBeNull();
+    expect(verifySessionTokenAny("", [NEW, OLD])).toBeNull();
+    expect(verifySessionTokenAny("a.b", [NEW, OLD])).toBeNull();
+  });
+
+  it("süresi dolmuş token hiçbir anahtarda geçmez", () => {
+    const token = createSessionToken("tenant-1", OLD, 1_000_000);
+    expect(verifySessionTokenAny(token, [NEW, OLD], 1_000_000 + SESSION_TTL_MS + 1)).toBeNull();
   });
 });

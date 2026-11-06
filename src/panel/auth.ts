@@ -67,3 +67,20 @@ export function verifySessionToken(token: string, secret: string, now = Date.now
   if (!tenantId || !Number.isFinite(exp) || exp <= now) return null;
   return tenantId;
 }
+
+/**
+ * Anahtar rotasyonu: çerez tek bir anahtarla değil, kabul listesiyle doğrulanır.
+ * Liste sıralıdır — yeni anahtar başta, devrede tutulan eski anahtar(lar) sonda.
+ * Eski anahtar listeden çıkınca o anahtarla açılmış oturumlar düşer.
+ */
+export function verifySessionTokenAny(
+  token: string,
+  secrets: readonly string[],
+  now = Date.now(),
+): string | null {
+  for (const secret of secrets) {
+    const tenantId = verifySessionToken(token, secret, now);
+    if (tenantId) return tenantId;
+  }
+  return null;
+}

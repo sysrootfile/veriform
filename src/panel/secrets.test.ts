@@ -23,6 +23,7 @@ describe("resolvePanelSecrets", () => {
   it("gerçek anahtarı kabul eder, WORKER_TOKEN yoksa null döner", () => {
     expect(resolvePanelSecrets({ SESSION_SECRET: REAL })).toEqual({
       sessionSecret: REAL,
+      sessionSecrets: [REAL],
       workerToken: null,
     });
   });
@@ -57,5 +58,41 @@ describe("verifyWorkerToken", () => {
     expect(verifyWorkerToken("", TOKEN)).toBe(false);
     expect(verifyWorkerToken(`${TOKEN}tas`, TOKEN)).toBe(false);
     expect(verifyWorkerToken("kisa", TOKEN)).toBe(false);
+  });
+});
+
+describe("resolvePanelSecrets — anahtar rotasyonu", () => {
+  const NEW = "n".repeat(64);
+  const OLD = "o".repeat(64);
+
+  it("SESSION_SECRET_PREVIOUS yoksa tek anahtar döner", () => {
+    const secrets = resolvePanelSecrets({ SESSION_SECRET: NEW });
+    expect(secrets.sessionSecrets).toEqual([NEW]);
+  });
+
+  it("rotasyon sırasında eski anahtar listenin sonunda taşınır", () => {
+    const secrets = resolvePanelSecrets({
+      SESSION_SECRET: NEW,
+      SESSION_SECRET_PREVIOUS: OLD,
+    });
+    expect(secrets.sessionSecret).toBe(NEW);
+    expect(secrets.sessionSecrets).toEqual([NEW, OLD]);
+  });
+
+  it("eski ve yeni aynıysa tekrarlanmaz", () => {
+    const secrets = resolvePanelSecrets({
+      SESSION_SECRET: NEW,
+      SESSION_SECRET_PREVIOUS: NEW,
+    });
+    expect(secrets.sessionSecrets).toEqual([NEW]);
+  });
+
+  it("boş veya geliştirme işareti PREVIOUS kabul edilmez", () => {
+    expect(() =>
+      resolvePanelSecrets({ SESSION_SECRET: NEW, SESSION_SECRET_PREVIOUS: "   " }),
+    ).not.toThrow();
+    expect(() =>
+      resolvePanelSecrets({ SESSION_SECRET: NEW, SESSION_SECRET_PREVIOUS: "dev-secret-change-me" }),
+    ).toThrow(/geliştirme işareti/);
   });
 });
