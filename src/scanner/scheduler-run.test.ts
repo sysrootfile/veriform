@@ -1,133 +1,136 @@
 import { describe, expect, it } from "vitest";
-import { createServer, type Server } from "node:http";
-import { createInMemoryPanelStore } from "../panel/store.js";
-import { runScheduledScans } from "./scheduler-run.js";
+import { createInMemoryPanelStore, type PanelStore } from "../panel/store.js";
+import type { FormInventoryReport, ReportForm } from "../report/types.js";
+import { runScheduledScans, type SiteScanner } from "./scheduler-run.js";
+import type { ScanResult } from "./scan.js";
 
-const fixture = `<!doctype html><html lang="tr"><head><title>T</title></head>
-<body><form action="/uye" method="post"><label>E-Posta</label><input name="email" type="email"></form></body></html>`;
+/**
+ * Worker döngüsü testleri tarayıcı başlatmaz: tarama işi `scan` enjeksiyonuyla
+ * verilir. Gerçek headless tarayıcı yolu src/scanner/scan.test.ts'de ölçülür.
+ */
 
-function fixtureServer(): { server: Server; url: Promise<string> } {
-  const server = createServer((req, res) => {
-    res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
-    res.end(fixture);
-  });
-  return {
-    server,
-    url: new Promise<string>((resolve) => {
-      server.listen(0, "127.0.0.1", () => {
-        const addr = server.address();
-        const port = typeof addr === "object" && addr ? addr.port : 0;
-        resolve(`http://127.0.0.1:${port}/`);
-      });
-    }),
+const SITE_URL = "https://ornek-musteri.com/";
+const DEAD_URL = "http://127.0.0.1:1/";
+
+const EMAIL_FORM: ReportForm[] = [
+  { ref: "form-0", fields: [{ name: "email", category: "email" }] },
+];
+
+const EMAIL_PLUS_TCKN_FORM: ReportForm[] = [
+  {
+    ref: "form-0",
+    fields: [
+      { name: "email", category: "email" },
+      { name: "tcno", category: "tckn" },
+    ],
+  },
+];
+
+function scanResult(url: string, forms: ReportForm[]): ScanResult {
+  const report: FormInventoryReport = {
+    siteOrigin: url,
+    formCount: forms.length,
+    fieldCount: forms.reduce((total, form) => total + form.fields.length, 0),
+    categoryCounts: [{ category: "email", forms: forms.length }],
+    destinations: [{ origin: url, forms: forms.length, sameOrigin: true }],
+    riskFlags: [],
+    review: [],
+    forms,
   };
+  return { url, finalUrl: url, report, observedTargets: [], cookies: [], scripts: [] };
+}
+
+/** handler'ı kaçıncı çağrı olduğuyla besler; görülen URL'leri sayarak bırakır. */
+function recorder(
+  handler: (url: string, call: number) => ScanResult,
+): { scan: SiteScanner; urls: string[] } {
+  const urls: string[] = [];
+  const scan: SiteScanner = async (url) => {
+    urls.push(url);
+    return handler(url, urls.length);
+  };
+  return { scan, urls };
+}
+
+async function seededStore(
+  intervalHours: number | null,
+): Promise<{ store: PanelStore; siteId: string; tenantId: string }> {
+  const store = createInMemoryPanelStore();
+  const tenant = await store.createTenant({ name: "A", kind: "direct" });
+  const client = await store.createClient({ tenantId: tenant.id, name: "M" });
+  const site = await store.createSite({ clientId: client.id, url: SITE_URL });
+  if (intervalHours !== null) await store.setScanSchedule(site.id, intervalHours);
+  return { store, siteId: site.id, tenantId: tenant.id };
 }
 
 describe("runScheduledScans (worker döngüsü)", () => {
   it("çizelgesi açık ve vakti gelen siteleri tarayıp kaydeder; ikinci tur atlar", async () => {
-    const { server, url: urlPromise } = fixtureServer();
-    const url = await urlPromise;
-    const store = createInMemoryPanelStore();
-    const tenant = await store.createTenant({ name: "A", kind: "direct" });
-    const client = await store.createClient({ tenantId: tenant.id, name: "M" });
-    const site = await store.createSite({ clientId: client.id, url });
-    await store.setScanSchedule(site.id, 24);
+    const { store, siteId } = await seededStore(24);
+    const { scan, urls } = recorder((url) => scanResult(url, EMAIL_FORM));
 
-    try {
-      const first = await runScheduledScans(store);
-      if (first.scanned.length !== 1) {
-        console.log("DEBUG first:", JSON.stringify(first, null, 2));
-      }
-      expect(first.scanned, JSON.stringify(first.failed)).toHaveLength(1);
-      expect(first.scanned[0]!.siteId).toBe(site.id);
-      expect(first.scanned[0]!.report.formCount).toBe(1);
+    const first = await runScheduledScans(store, { scan });
+    expect(first.scanned, JSON.stringify(first.failed)).toHaveLength(1);
+    expect(first.scanned[0]!.siteId).toBe(siteId);
+    expect(first.scanned[0]!.report.formCount).toBe(1);
 
-      // ikinci tur: az önce tarandı, 24 saat dolmadı → vakti yok
-      const second = await runScheduledScans(store);
-      expect(second.scanned).toHaveLength(0);
-      expect((await store.listScans(site.id))).toHaveLength(1);
-    } finally {
-      server.close();
-    }
-  }, 60_000);
+    // ikinci tur: az önce tarandı, 24 saat dolmadı → vakti yok
+    const second = await runScheduledScans(store, { scan });
+    expect(second.scanned).toHaveLength(0);
+    expect(await store.listScans(siteId)).toHaveLength(1);
+    expect(urls).toHaveLength(1);
+  });
 
   it("çizelgesi kapalı siteler atlanır", async () => {
-    const { server, url: urlPromise } = fixtureServer();
-    const url = await urlPromise;
-    const store = createInMemoryPanelStore();
-    const tenant = await store.createTenant({ name: "A", kind: "direct" });
-    const client = await store.createClient({ tenantId: tenant.id, name: "M" });
-    await store.createSite({ clientId: client.id, url });
+    const { store } = await seededStore(null);
+    const { scan, urls } = recorder((url) => {
+      throw new Error(`kapalı site tarandı: ${url}`);
+    });
 
-    try {
-      const result = await runScheduledScans(store);
-      expect(result.scanned).toHaveLength(0);
-    } finally {
-      server.close();
-    }
-  }, 30_000);
+    const result = await runScheduledScans(store, { scan });
+    expect(result.scanned).toHaveLength(0);
+    expect(urls).toHaveLength(0);
+  });
 
   it("tarama hatası sonucu düşürür ve diğer siteleri engellemez", async () => {
-    const { server, url: urlPromise } = fixtureServer();
-    const url = await urlPromise;
     const store = createInMemoryPanelStore();
     const tenant = await store.createTenant({ name: "A", kind: "direct" });
     const client = await store.createClient({ tenantId: tenant.id, name: "M" });
-    // çizelge açık ama ölü port + sağlıklı fixture sitesi
-    const dead = await store.createSite({ clientId: client.id, url: "http://127.0.0.1:1/" });
-    await store.setScanSchedule(dead.id, 24);
-    const good = await store.createSite({ clientId: client.id, url });
+    const deadSite = await store.createSite({ clientId: client.id, url: DEAD_URL });
+    await store.setScanSchedule(deadSite.id, 24);
+    const good = await store.createSite({ clientId: client.id, url: SITE_URL });
     await store.setScanSchedule(good.id, 24);
 
-    try {
-      const result = await runScheduledScans(store);
-      expect(result.failed.length).toBeGreaterThanOrEqual(1);
-      expect(result.scanned.map((s) => s.siteId)).toContain(good.id);
-    } finally {
-      server.close();
-    }
-  }, 60_000);
+    const { scan, urls } = recorder((url) => {
+      if (url === DEAD_URL) throw new Error("connect ECONNREFUSED 127.0.0.1:1");
+      return scanResult(url, EMAIL_FORM);
+    });
+
+    const result = await runScheduledScans(store, { scan });
+    expect(result.failed.map((f) => f.siteId)).toContain(deadSite.id);
+    expect(result.scanned.map((s) => s.siteId)).toContain(good.id);
+    expect(urls).toHaveLength(2);
+  });
 
   it("değişiklik tespit edilirse notifier çağrılır ve sahip e-postalanır", async () => {
-    const { server, url: urlPromise } = fixtureServer();
-    const url = await urlPromise;
-    const store = createInMemoryPanelStore();
-    const tenant = await store.createTenant({ name: "A", kind: "direct" });
+    const { store, siteId, tenantId } = await seededStore(24);
     await store.createUser({
-      tenantId: tenant.id,
+      tenantId,
       email: "owner@ajans.com",
       passwordHash: "scrypt:aa:bb",
       role: "owner",
     });
-    const client = await store.createClient({ tenantId: tenant.id, name: "M" });
-    const site = await store.createSite({ clientId: client.id, url });
-    await store.setScanSchedule(site.id, 24);
 
-    // ilk tur: referans rapor (zaman T)
     let fakeNow = Date.now();
-    await runScheduledScans(store, { now: () => fakeNow });
+    const { scan } = recorder((url, call) =>
+      scanResult(url, call === 1 ? EMAIL_FORM : EMAIL_PLUS_TCKN_FORM),
+    );
+    await runScheduledScans(store, { scan, now: () => fakeNow });
 
-    // 25 saat ileri sar + farklı rapor enjekte et → sonraki turda diff oluşsun
+    // 25 saat ileri: aynı site yeniden taranır ve yeni bir alan çıkar
     fakeNow += 25 * 3_600_000;
-    await store.saveScan({
-      siteId: site.id,
-      report: {
-        siteOrigin: url,
-        formCount: 2,
-        fieldCount: 3,
-        categoryCounts: [{ category: "tckn", forms: 1 }],
-        destinations: [],
-        riskFlags: [],
-        review: [],
-        forms: [{ ref: "form-0", fields: [{ name: "tcno", category: "tckn" }] }],
-      },
-      cookies: [],
-      observedTargets: [],
-      scripts: [],
-    });
-
     const sent: Array<{ to: string; subject: string }> = [];
     const result = await runScheduledScans(store, {
+      scan,
       now: () => fakeNow,
       notifier: async (email) => {
         sent.push({ to: email.to, subject: email.subject });
@@ -137,52 +140,29 @@ describe("runScheduledScans (worker döngüsü)", () => {
     expect(result.scanned).toHaveLength(1);
     expect(sent).toHaveLength(1);
     expect(sent[0]!.to).toBe("owner@ajans.com");
-    expect(sent[0]!.subject).toContain(url);
-    server.close();
-  }, 60_000);
+    expect(sent[0]!.subject).toContain(SITE_URL);
+    expect(await store.listScans(siteId)).toHaveLength(2);
+  });
 
   it("notifier hatası tarama turunu engellemez", async () => {
-    const { server, url: urlPromise } = fixtureServer();
-    const url = await urlPromise;
-    const store = createInMemoryPanelStore();
-    const tenant = await store.createTenant({ name: "A", kind: "direct" });
-    await store.createUser({
-      tenantId: tenant.id,
-      email: "owner@ajans.com",
-      passwordHash: "scrypt:aa:bb",
-      role: "owner",
-    });
-    const client = await store.createClient({ tenantId: tenant.id, name: "M" });
-    const site = await store.createSite({ clientId: client.id, url });
-    await store.setScanSchedule(site.id, 24);
-
+    const { store, siteId } = await seededStore(24);
     let fakeNow = Date.now();
-    await runScheduledScans(store, { now: () => fakeNow });
-    fakeNow += 25 * 3_600_000;
-    await store.saveScan({
-      siteId: site.id,
-      report: {
-        siteOrigin: url,
-        formCount: 2,
-        fieldCount: 3,
-        categoryCounts: [{ category: "tckn", forms: 1 }],
-        destinations: [],
-        riskFlags: [],
-        review: [],
-        forms: [{ ref: "form-0", fields: [{ name: "tcno", category: "tckn" }] }],
-      },
-      cookies: [],
-      observedTargets: [],
-      scripts: [],
-    });
+    const { scan } = recorder((url, call) =>
+      scanResult(url, call === 1 ? EMAIL_FORM : EMAIL_PLUS_TCKN_FORM),
+    );
+    await runScheduledScans(store, { scan, now: () => fakeNow });
 
+    fakeNow += 25 * 3_600_000;
     const result = await runScheduledScans(store, {
+      scan,
       now: () => fakeNow,
       notifier: async () => {
         throw new Error("SMTP down");
       },
     });
+
     expect(result.scanned).toHaveLength(1); // tarama yine kaydedildi
-    server.close();
-  }, 60_000);
+    expect(result.notified).toHaveLength(0);
+    expect(await store.listScans(siteId)).toHaveLength(2);
+  });
 });
