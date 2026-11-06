@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
 import { login, registerTenant } from "./accounts.js";
-import { createSessionToken, verifySessionToken } from "./auth.js";
+import { createSessionToken, verifySessionTokenAny } from "./auth.js";
 import { createIngestApi, IngestError } from "./ingest.js";
 import { receiptsToCsv } from "./chain.js";
 import { createApiKey } from "./api-keys.js";
@@ -42,7 +42,11 @@ import { CATEGORY_LABELS, COOKIE_LABELS } from "../report/render.js";
  */
 
 const PORT = Number(process.env.PORT ?? 4620);
-const { sessionSecret: SESSION_SECRET, workerToken: WORKER_TOKEN } = resolvePanelSecrets(
+const {
+  sessionSecret: SESSION_SECRET,
+  sessionSecrets: SESSION_SECRETS,
+  workerToken: WORKER_TOKEN,
+} = resolvePanelSecrets(
   process.env as Record<string, string | undefined>,
 );
 if (!WORKER_TOKEN) {
@@ -121,7 +125,7 @@ function parseCookies(req: import("node:http").IncomingMessage): Record<string, 
 
 function sessionTenantId(req: import("node:http").IncomingMessage): string | null {
   const token = parseCookies(req)["vf_session"];
-  return token ? verifySessionToken(token, SESSION_SECRET) : null;
+  return token ? verifySessionTokenAny(token, SESSION_SECRETS) : null;
 }
 
 function setSessionHeader(res: import("node:http").ServerResponse, token: string): void {
