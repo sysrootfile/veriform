@@ -29,8 +29,13 @@ Postgres entegrasyon testleri yalnızca `PG_URL` verilince koşar (örn. docker'
 `postgres:16-alpine` + `src/panel/schema.sql` uygulanmış veritabanı):
 
 ```bash
-PG_URL=postgresql://postgres:veriform@127.0.0.1:54329/veriform pnpm test -- src/panel/store.pg.test.ts
+# `pnpm test -- <dosya>` filterı vitest'e ulaşmıyor — tüm suite'i koşar; tek dosya için:
+PG_URL=postgresql://postgres:veriform@127.0.0.1:54329/veriform pnpm exec vitest run src/panel/store.pg.test.ts
 ```
+
+CI: `pnpm typecheck` + `pnpm build` + birim suite'i ve `postgres:16-alpine` service'ı üzerinde
+entegrasyon koşusu (`.github/workflows/ci.yml`). Entegrasyon job'ı test atlanmışsa bilerek
+kırmızıya düşer — sessiz yeşil, `PG_URL` kapısının sessiz `describe.skip`'ı yüzünden yanıltıcı olur.
 
 ## Mimari ilkeler
 
