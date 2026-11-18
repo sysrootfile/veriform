@@ -28,7 +28,8 @@ import { DSAR_TYPES } from "../dsar/types.js";
 import { renderDsarFormPage, renderDsarPanelPage } from "../dsar/render.js";
 import { generateAcikRizaMetni, generateAydinlatmaMetni, generateCerezPolitikasi } from "../draft/generator.js";
 import { createMailSenderFromEnv } from "./mailer.js";
-import { resolvePanelSecrets, verifyWorkerToken } from "./secrets.js";
+import { resolvePanelSecrets } from "./secrets.js";
+import { handleWorkerRun } from "./worker.js";
 import { buildDsarNotificationEmail } from "../dsar/notifications.js";
 import { renderDraftPageHtml } from "../draft/render.js";
 import { CATEGORY_LABELS, COOKIE_LABELS } from "../report/render.js";
@@ -430,21 +431,12 @@ const server = createServer(async (req, res) => {
     if (req.method === "POST" && url.pathname === "/internal/run-scheduled") {
       const header = req.headers["x-worker-token"];
       const presented = Array.isArray(header) ? header[0] : header;
-      if (!verifyWorkerToken(presented, WORKER_TOKEN)) {
-        res.writeHead(403, { "content-type": "application/json" });
-        res.end(JSON.stringify({ error: "geçersiz worker token'ı" }));
-        return;
-      }
-      try {
-        const { runScheduledScans } = await import("../scanner/scheduler-run.js");
-        const outcome = await runScheduledScans(store);
-        res.writeHead(200, { "content-type": "application/json" });
-        res.end(JSON.stringify({ scanned: outcome.scanned.length, failed: outcome.failed.length }));
-      } catch (error) {
-        console.error("[worker] tarama turu hatası:", error);
-        res.writeHead(500, { "content-type": "application/json" });
-        res.end(JSON.stringify({ error: "tarama turu başarısız" }));
-      }
+      const result = await handleWorkerRun(
+        { store, workerToken: WORKER_TOKEN, mailSender },
+        presented,
+      );
+      res.writeHead(result.status, { "content-type": "application/json" });
+      res.end(JSON.stringify(result.json));
       return;
     }
 

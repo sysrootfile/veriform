@@ -151,16 +151,19 @@ Her turda yalnız çizelgesi açık ve vakti gelen siteler taranır (`isDue`), s
 ```bash
 curl -fsS -X POST https://panel.ajans.com/internal/run-scheduled \
   -H "x-worker-token: $WORKER_TOKEN"
-# yanıt: {"scanned":3,"failed":0}
+# yanıt: {"scanned":3,"failed":0,"notified":1}
 ```
 
-crontab için saate uygun aralık: `*/5 * * * *`. **Bilinen fark:** bu uç `runScheduledScans(store)`
-çağrısını `notifier` vermeden yapıyor (`server.ts:440`), yani değişiklik uyarı e-postaları **bu yoldan
-gitmez**. Harici cron modeline geçeceksen önce o satırın `notifier`'a bağlanması gerekir.
+crontab için saate uygun aralık: `*/5 * * * *`. Uç, turu dahili döngüyle **aynı notifier
+bağlantısıyla** çağırır (`src/panel/worker.ts` → `handleWorkerRun`): değişiklik uyarı e-postaları
+bu yoldan da gider, `notified` sayacı yanıtta görünür. Eski sürümde uç `notifier` vermeden
+çağırıyordu ve cron modelinde uyarı e-postası hiç gitmiyordu (2026-11-07 ölçümü); 2026-11-18'de
+kapatıldı ve canlı ölçüldü (§13).
 
 Her iki yolda da SMTP tanımsızsa mail log'a düşer — bildirim bekliyorsan `SMTP_*` set et.
 
-**Worker ucu konteynerde ölçüldü** (`WORKER_TOKEN` set iken):
+**Worker ucu konteynerde ölçüldü** (2026-11-07, `WORKER_TOKEN` set iken; yanıt biçimi o sürümde
+`notified` içermiyordu):
 
 | Çağrı | Sonuç |
 |---|---|
@@ -289,7 +292,6 @@ exists` alır — bu yüzden hedef hep boş olsun, sonra `ALTER DATABASE … REN
   sıfırlanır, çok kopyada paylaşılır değil, ters proxy arkasında tek balta haline gelir (§6).
 - Compose `build` kullanıyor, `image:` satırı yok → etiketli rollback kurulu değil (§8).
 - `vf_session`'da `Secure` bayrağı yok; `/register` ve `/login`'de throttle yok (§4).
-- `/internal/run-scheduled` turu `notifier` vermeden çalışıyor → cron modelinde uyarı e-postası yok (§5).
 
 ## 11. Canlı ölçüm kaydı — 2026-11-07
 
@@ -340,3 +342,28 @@ Probe sonunda konteynerler, volume ve imaj silindi; mevcut `veriform_pgdata` vol
 Kod değişikliği: `PanelStore.ping()` portu (in-memory: no-op, Postgres: `select 1`),
 `src/panel/health.ts` → `checkHealth`, `/healthz` artık `ok:false` durumunda `503` döner.
 Dockerfile HEALTHCHECK değişmedi (`r.ok` zaten 503'te exit 1 üretiyor).
+
+## 13. Canlı ölçüm kaydı — 2026-11-18 (worker ucu notifier)
+
+Ortam: Docker 29.9.3, Windows host. İzole `vfworker` projesi, taze `pgdata` volume'ü,
+`WITH_SCANNER=1` imaj (chromium dahil), panel `4621`, db `5433`, `ENABLE_SCAN_SCHEDULER=0`
+(yalnız cron ucu koşsun diye). Host'ta fixture sunucu `0.0.0.0:8092` — ilk denemede `8091`
+başka bir uygulamanın portuydu, taramalar 0 form ile geçersiz ölçüm üretti; port değiştirilip
+site URL'si güncellenerek tekrarlandı. Probe sonunda konteynerler, volume, imaj ve fixture
+dosyaları silindi; mevcut `veriform_pgdata` volume'üne dokunulmadı.
+
+| Ölçülen | Sonuç |
+|---|---|
+| `pnpm typecheck` | 0 hata |
+| `vitest run` (lokal) | 300 passed / 6 skipped (47 dosya passed, 1 skipped) |
+| `POST /register` + `/clients` + site + `/sites/:id/schedule` | hepsi 302, oturum çereziyle |
+| token'sız / yanlış token `POST /internal/run-scheduled` | 403 / 403 |
+| 1. tur (önceki tarama yok) | `200 {"scanned":1,"failed":0,"notified":0}` — DB'de 1 form / 1 alan |
+| Önceki tarama 25 saat geriye alındı + fixture'a `tcno` alanı eklendi | `update scans … '25 hours'`, ikinci sayfa 2 alan |
+| 2. tur (değişiklik var) | `200 {"scanned":1,"failed":0,"notified":1}` — DB'de 1 form / 2 alan |
+| Panel log | `[mailer:console] → owner@probe.test \| Veriform uyarısı: … 1 değişiklik tespit edildi` |
+
+Kod değişikliği: uç `src/panel/worker.ts` → `handleWorkerRun`'a delege ediliyor; tur artık
+`notifier: mailSender.send` ile çağrılıyor ve yanıt `notified` sayacını içeriyor.
+`SMTP_*` bu koşuda tanımsızdı — mail console sender'a düştü; gerçek SMTP kutu teslimatı
+hâlâ ÖLÇÜLMEDİ (§11 ile aynı sınır).
