@@ -6,8 +6,7 @@ services:
       POSTGRES_DB: veriform
     volumes:
       - pgdata:/var/lib/postgresql/data
-      # İlk init'te şema otomatik uygulanır
-      - ./src/panel/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      # Şema initdb mount'uyla değil, panel açılışındaki migration koşucusuyla kurulur/güncellenir
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d veriform"]
       interval: 3s

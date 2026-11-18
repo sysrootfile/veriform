@@ -1,4 +1,4 @@
--- Veriform Panel Şeması — Postgres 15+
+-- Veriform Panel Şeması — Postgres 15+ (migration 001, src/panel/migrate.ts koşar)
 -- Bu şema, createInMemoryPanelStore ile aynı sözleşmeyi uygular (src/panel/store.ts).
 -- Multi-tenancy: tablo başına RLS; API katmanı her bağlantıda
 -- SET app.current_tenant = '<uuid>' ayarlar. Panel admin rolü bypass eder.

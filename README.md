@@ -26,7 +26,7 @@ SESSION_SECRET=$(openssl rand -hex 32) pnpm panel
 ```
 
 Postgres entegrasyon testleri yalnızca `PG_URL` verilince koşar (örn. docker'da
-`postgres:16-alpine` + `src/panel/schema.sql` uygulanmış veritabanı):
+`postgres:16-alpine` + `pnpm migrate` ile şeması kurulmuş veritabanı):
 
 ```bash
 # `pnpm test -- <dosya>` filterı vitest'e ulaşmıyor — tüm suite'i koşar; tek dosya için:

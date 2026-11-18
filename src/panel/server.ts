@@ -14,6 +14,7 @@ import { renderReportHtml } from "../report/render.js";
 import { createPanelService } from "./service.js";
 import { createInMemoryPanelStore } from "./store.js";
 import { createPostgresPanelStore } from "./store.pg.js";
+import { migrateDatabase } from "./migrate.js";
 import { checkHealth } from "./health.js";
 import {
   renderApiKeysPage,
@@ -36,7 +37,7 @@ import { CATEGORY_LABELS, COOKIE_LABELS } from "../report/render.js";
 
 /**
  * Panel sunucusu (thin glue — tüm mantık service/render/auth katmanlarında ve testlidir).
- * Depo seçimi ortamdan: DATABASE_URL → Postgres (schema.sql uygulanmış olmalı),
+ * Depo seçimi ortamdan: DATABASE_URL → Postgres (migration'lar açılışta otomatik uygulanır),
  * yoksa in-memory (geliştirme; demo kiracı yalnız bu modda seed edilir).
  * Oturum: imzalı token çerezi (vf_session). Ingest uçları çerezle değil
  * site token'ıyla kimliklenir. Rotalar renderer'a yalnızca kod/boolean geçirir —
@@ -53,6 +54,13 @@ const {
 );
 if (!WORKER_TOKEN) {
   console.warn("[DEV] WORKER_TOKEN ayarlı değil — /internal/run-scheduled her çağrıda 403 döner");
+}
+
+// Şema güncelliği açılışta garanti edilir — başarısız migration süreci durdurur (fail-fast).
+if (process.env.DATABASE_URL) {
+  const migration = await migrateDatabase(process.env.DATABASE_URL);
+  for (const file of migration.baselined) console.log(`[migrate] baseline (mevcut şema kaydedildi): ${file}`);
+  for (const file of migration.applied) console.log(`[migrate] uygulandı: ${file}`);
 }
 
 const store = process.env.DATABASE_URL

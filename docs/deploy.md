@@ -62,6 +62,8 @@ HEALTHCHECK konteyneri `unhealthy` işaretler. `store:"memory"` görürsen
 `DATABASE_URL` set edilmemiş demektir — prod'da bu veri kaybı demek, durdur ve `.env`'i düzelt.
 
 Boot sırasında konteyner loglarında şunları beklersin:
+- `[migrate] uygulandı: 001_init.sql` (boş volume) ya da `[migrate] baseline …` (eski volume) —
+  şema güncelse migrate satırı hiç çıkmaz (§3).
 - `[sched] sürekli izleme döngüsü: 300000ms aralıkla` — yalnız `ENABLE_SCAN_SCHEDULER=1` ise.
 - `WORKER_TOKEN ayarlı değil` uyarısı — token boşsa çıkar; dahili döngü kullanıyorsan normal,
   harici cron kullanacaksan hatadır.
@@ -78,21 +80,23 @@ durdurulunca `503 {"ok":false}` ve konteyner `unhealthy` (3 ardışık başarıs
 `200 {"ok":true}` + `healthy` ölçüldü (§12). Yani compose `healthy` artık DB erişimini de kanıtlıyor;
 yine de yayında en az bir gerçek okuma/yazma (`/register` 302'si ya da bir tarama kaydı) doğrulanmalı.
 
-## 3. Şema
+## 3. Şema ve migration
 
-`src/panel/schema.sql` 182 satır, `IF NOT EXISTS` içermez — **tek seferlik init içindir**.
+Şema `src/panel/migrations/001_init.sql`; koşucu `src/panel/migrate.ts` (birim + PG entegrasyon testli).
 
-- Compose yolu: `./src/panel/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro` mount'u,
-  Postgres yalnızca **boş `pgdata` volume'ünde** bu dosyayı uygular. Volume doluysa ikinci boot'ta
-  şema hiç uygulanmaz (sessizce atlanır).
-- CI/manuel yol: `PG_URL=… node scripts/apply-schema.mjs`. Dikkat: bu script `PG_URL` okur,
-  panel `DATABASE_URL` okur — aynı veritabanına iki farklı değişken adıyla bağlanıyorsun.
-- İkinci kez uygularsan `relation "tenants" already exists` alırsın. Bu hata boşa çalıştırma
-  işaretidir, şemanın gerçekten uygulanmadığı anlamına gelmez; tablo listesini
-  (`tenants, clients, users, audit_log, api_keys, sites, scans, consent_receipts, dsar_requests, corrections`)
-  `psql`/`pg` ile sayarak doğrula.
-- Şemada sonraki değişiklik = migration yazılmalı. Bugün migration aracı yok; bu bir yayınlama
-  eşiği, el yordamı `ALTER` ile geçme.
+- Panel açılışta `DATABASE_URL` varsa migration'ları otomatik koşar. Başarısız migration
+  süreci durdurur (fail-fast) — yarım şemayla servis verilmez.
+- Dosyalar `NNN_ad.sql` biçiminde, sürüm sırasıyla uygulanır. Uygulanan sürümler
+  `schema_migrations (version, applied_at)` tablosunda tutulur; ikinci koşu no-op'tur.
+- Her migration kendi transaction'ında koşar; hata rollback edilir ve sürüm kaydedilmez.
+- Advisory lock: panel açılışı ile CLI eşzamanlı koşsa bile çakışmaz (§15'te ölçüldü).
+- **Baseline:** initdb mount'uyla kurulmuş eski volume'de şema vardır ama kayıt tablosu yoktur.
+  Koşucu `tenants` tablosunu görürse ilk migration'ı YENİDEN ÇALIŞTIRMADAN kaydeder
+  (`[migrate] baseline …`) — mevcut veri korunur.
+- CLI/manuel yol: `PG_URL=… pnpm migrate` (ya da `DATABASE_URL`). CI entegrasyon job'ı bunu kullanır.
+- Compose'da initdb mount'u yok: şemayı panel kurar. Boş volume'de ilk boot migration'ı uygular.
+- Şema değişikliği = yeni dosya (`002_….sql`). Uygulanmış dosyayı sonradan düzenleme —
+  yeniden koşmaz, değişikliğin sessizce kaybolur.
 
 **Volume tuzağı (ölçüldü):** `POSTGRES_PASSWORD` yalnız `pgdata` **boşken** init sırasında Postgres'e
 gider. Var olan bir volume ile `.env`'deki parolayı değiştirirsen `db` konteyneri `healthy` kalır
@@ -219,6 +223,9 @@ arkasında pratikte nasıl davranır) — proxy'li gerçek deneme bu turda yapı
 git pull && docker compose build panel && docker compose up -d   # kesinti: birkaç saniye
 ```
 
+Yeni sürümde migration dosyaları varsa panel açılışta otomatik uygular (§3); şema değişikliği
+içeren güncellemelerde önce `pg_dump` al (§8).
+
 `SESSION_SECRET` rotasyonu (kesintisiz, README'deki prosedürle aynı):
 1. `.env`: `SESSION_SECRET_PREVIOUS=<mevcut secret>`, `SESSION_SECRET=<yeni secret>`.
 2. `docker compose up -d` — imzalama yalnız yeni anahtarla, doğrulama yeni + eski listeyle yapılır.
@@ -274,6 +281,7 @@ exists` alır — bu yüzden hedef hep boş olsun, sonra `ALTER DATABASE … REN
 ## 9. Yayın öncesi kontrol listesi
 
 - [ ] `curl /healthz` → `200 {"ok":true,"store":"postgres"}` — uç artık DB'ye `select 1` atıyor, 503 = DB kırık
+- [ ] Boot logunda `[migrate] uygulandı/baseline` ya da migrate satırı yok (şema güncel); `schema_migrations` dolu
 - [ ] Uygulama tarafı gerçek okuma/yazma: `/register` 302 döndü mü (400 = Postgres bağlantısı kırık)
 - [ ] `pgdata` volume'ü ile `POSTGRES_PASSWORD` uyumlu mu (eski volume + yeni parola = sessiz kırık)
 - [ ] `/register` ile tek hesap açıldı, anonim `/clients` → 302 `/login`
@@ -288,7 +296,6 @@ exists` alır — bu yüzden hedef hep boş olsun, sonra `ALTER DATABASE … REN
 
 ## 10. Bilinen sınırlar
 
-- Migration aracı yok; şema değişikliği elle ve riskli.
 - `runScheduledScans` tek süreçte `setInterval` — çok kopyalı (scaled) deploy'ta aynı site
   birden fazla taranabilir. Faz 1'de ayrı worker konteynerine taşınacak.
 - `dist/` gitignored; imaj her boot'ta `pnpm build:panel` çıktısını kendisi üretiyor (Dockerfile multi-stage).
@@ -395,3 +402,27 @@ Kod değişikliği: `buildSessionCookie` / `buildLogoutCookie` (`src/panel/auth.
 IP başına limiter (`createRateLimiter`, `/tarama` ile aynı desen). Anahtar hâlâ
 `req.socket.remoteAddress`: proxy arkasında tek paylaşımlı balta (§6) — bu davranış değişmedi,
 denek proxy kurulmadığı için ÖLÇÜLMEDİ notu yerinde duruyor.
+
+## 15. Canlı ölçüm kaydı — 2026-11-18 (migration koşucusu)
+
+Ortam: izole `vf-mig-probe` projesi, taze volume, db `15432` / panel `14620`, `WITH_SCANNER=1`
+imaj. Kullanıcının `veriform_pgdata` volume'üne ve `veriform-pg` konteynerine dokunulmadı.
+Probe sonunda konteynerler, volume, imaj ve geçici override dosyası silindi.
+
+| Senaryo | Ölçülen |
+|---|---|
+| Legacy volume (şema elle kurulmuş, 1 kiracı, `schema_migrations` yok) + panel boot | log `[migrate] baseline (mevcut şema kaydedildi): 001_init.sql`, healthz `200 {"ok":true,"store":"postgres"}`, `Legacy Ajans` satırı korundu |
+| Sıfır volume + panel boot (initdb mount'u yok) | log `[migrate] uygulandı: 001_init.sql`, healthz 200, `POST /register` → `302` ve kiracı oluştu |
+| Panel restart (şema güncel) | migrate logu yok (no-op), healthz 200 |
+| CLI legacy veritabanı (`node dist/migrate.mjs`, `PG_URL`) | ilk koşu `baseline … 001_init.sql`, ikinci koşu `şema güncel — iş yok`, veri korundu |
+| İmaj içeriği | `dist/migrations/001_init.sql` konteynerde mevcut (build kopyası çalışıyor) |
+| Eşzamanlı iki koşucu (PG entegrasyon testi) | toplam 1 uygulama, `schema_migrations` satır sayısı 1 |
+| Bozuk migration (002, transaction ortasında `1/0`) | test kırmızı→yeşil: 002 kaydedilmedi, kısmi tablo rollback oldu |
+| `pnpm typecheck` | 0 hata |
+| `vitest run` (lokal, PG_URL'siz) | 310 passed / 10 skipped (48 dosya passed, 1 skipped) |
+| `migrate.test.ts` PG_URL ile | 11/11 passed (7 birim + 4 entegrasyon) |
+| `store.pg.test.ts` PG_URL ile | 6/6 passed |
+
+TDD sırasında yakalanan gerçek yarış: `create table if not exists schema_migrations` advisory
+lock'tan ÖNCE koşuyordu — eşzamanlı iki koşucu PG'nin `pg_type_typname_nsp_index` unique
+ihlaliyle çöküyordu (test kırmızıyı gösterdi). Tablo oluşturma lock içine alındı, test yeşile döndü.
