@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
 import { login, registerTenant } from "./accounts.js";
-import { createSessionToken, verifySessionTokenAny } from "./auth.js";
+import { buildLogoutCookie, buildSessionCookie, createSessionToken, verifySessionTokenAny } from "./auth.js";
 import { createIngestApi, IngestError } from "./ingest.js";
 import { receiptsToCsv } from "./chain.js";
 import { createApiKey } from "./api-keys.js";
@@ -90,6 +90,11 @@ if (process.env.ENABLE_SCAN_SCHEDULER === "1") {
 }
 // Kamu /tarama POST için IP başına hız sınırı (5 istek / dakika)
 const scanLimiter = createRateLimiter({ max: 5, windowMs: 60_000 });
+// Auth POST'ları için IP başına hız sınırı — kaba kuvvet ve kayıt spam'ine karşı
+const loginLimiter = createRateLimiter({ max: 10, windowMs: 60_000 });
+const registerLimiter = createRateLimiter({ max: 5, windowMs: 60_000 });
+// TLS sonlandıran proxy arkasında SESSION_COOKIE_SECURE=1 ver; düz HTTP'de Secure çerezi düşürür
+const COOKIE_SECURE = process.env.SESSION_COOKIE_SECURE === "1";
 
 // Demo kiracı yalnızca geliştirme (in-memory) modunda seed edilir;
 // Postgres modunda ilk kurulum /register üzerinden yapılır.
@@ -131,10 +136,7 @@ function sessionTenantId(req: import("node:http").IncomingMessage): string | nul
 }
 
 function setSessionHeader(res: import("node:http").ServerResponse, token: string): void {
-  res.setHeader(
-    "set-cookie",
-    `vf_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${7 * 24 * 60 * 60}`,
-  );
+  res.setHeader("set-cookie", buildSessionCookie(token, COOKIE_SECURE));
 }
 
 /** JSON yanıtları için standart başlıklar — nosniff MIME-sniffing ile HTML render'ı engeller. */
@@ -168,6 +170,11 @@ const server = createServer(async (req, res) => {
     }
 
     if (req.method === "POST" && url.pathname === "/login") {
+      if (!loginLimiter.allow(req.socket.remoteAddress ?? "bilinmeyen")) {
+        res.writeHead(429, { "content-type": "text/plain; charset=utf-8" });
+        res.end("Çok fazla giriş denemesi — bir dakika bekleyip tekrar deneyin");
+        return;
+      }
       const form = new URLSearchParams(await readBody(req));
       try {
         const tenantId = await login(store, {
@@ -191,6 +198,11 @@ const server = createServer(async (req, res) => {
     }
 
     if (req.method === "POST" && url.pathname === "/register") {
+      if (!registerLimiter.allow(req.socket.remoteAddress ?? "bilinmeyen")) {
+        res.writeHead(429, { "content-type": "text/plain; charset=utf-8" });
+        res.end("Çok fazla kayıt denemesi — bir dakika bekleyip tekrar deneyin");
+        return;
+      }
       const form = new URLSearchParams(await readBody(req));
       try {
         const { tenant } = await registerTenant(store, {
@@ -212,7 +224,7 @@ const server = createServer(async (req, res) => {
     }
 
     if (req.method === "GET" && url.pathname === "/logout") {
-      res.setHeader("set-cookie", "vf_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0");
+      res.setHeader("set-cookie", buildLogoutCookie(COOKIE_SECURE));
       res.writeHead(302, { location: "/login" });
       res.end();
       return;

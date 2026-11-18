@@ -84,3 +84,14 @@ export function verifySessionTokenAny(
   }
   return null;
 }
+
+/** Secure bayrağı yalnız TLS arkasında anlamlıdır; düz HTTP'de çerezi tamamen düşürür. */
+export function buildSessionCookie(token: string, secure: boolean): string {
+  const base = `vf_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${SESSION_TTL_MS / 1000}`;
+  return secure ? `${base}; Secure` : base;
+}
+
+export function buildLogoutCookie(secure: boolean): string {
+  const base = "vf_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0";
+  return secure ? `${base}; Secure` : base;
+}

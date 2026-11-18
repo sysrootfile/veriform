@@ -33,6 +33,7 @@ Kapılar konteyner içinde ölçüldü (imajı `node dist/panel.mjs` ile doğrud
 | `POSTGRES_PASSWORD` | evet | hem `db` konteyneri hem `DATABASE_URL` bu parolayı kullanır | `openssl rand -hex 16` |
 | `SESSION_SECRET` | evet | `vf_session` çerezinin HMAC-SHA256 imza anahtarı | `openssl rand -hex 32` |
 | `SESSION_SECRET_PREVIOUS` | hayır | rotasyon penceresinde eski anahtarla açılmış oturumları yaşatır | rotasyon günü eski secret |
+| `SESSION_COOKIE_SECURE` | hayır | `1` ise `vf_session` çerezine `Secure` bayrağı eklenir (yalnız HTTPS'te gönderilir). TLS arkasında `1` yap; düz HTTP'de `0`/boş | — |
 | `WORKER_TOKEN` | hayır | `/internal/run-scheduled` tetikleyici anahtarı. **Ayarlanmazsa uç her çağrıda 403 döner** (fail-closed) | `openssl rand -hex 16` |
 | `DATABASE_URL` | hayır | doluysa Postgres store, boşsa in-memory. compose otomatik kurar | — |
 | `PORT` / `HOST` | hayır | varsayılan `4620` / `0.0.0.0` | — |
@@ -119,14 +120,16 @@ ufw deny 4620/tcp   # ya da bind'i "127.0.0.1:4620:4620" yap, proxy'yi localhost
 
 1. Tarayıcıda `http://<sunucu>:4620/register` (bind'i localhost'a çevirdiysen SSH tüneli: `ssh -L 4620:127.0.0.1:4620 sunucu`).
 2. Ajans adı + e-posta + parola gir — `kind` sunucu tarafında `"agency"` olarak sabit (`server.ts:197`).
-3. Oturum çerezi 7 gün (`Max-Age`), `HttpOnly`, `SameSite=Lax`.
+3. Oturum çerezi 7 gün (`Max-Age`), `HttpOnly`, `SameSite=Lax`; `SESSION_COOKIE_SECURE=1` ise ayrıca `Secure`.
 4. `/clients` → müşteri ekle → site ekle → siteden embed snippet + ingest token'ı al.
 
-**Güvenlik uyarısı (kodda ölçüldü):** `/register` ve `/login` throttle'suz — bellek içi rate limiter
-yalnız kamu `/tarama` POST'unda (`server.ts:90`). Şifre scrypt ile hash'leniyor ama parola deneme
-hızı sunucu tarafında sınırsız. Ters proxy'de `/register` ve `/login` için rate-limit koy ya da
-kendi ajansın dışında `/register`'ı kapat. Ayrıca `vf_session` çerezinde `Secure` bayrağı yok
-(`server.ts:131`) — düz HTTP'ye inen ilk istekte çerez gider. TLS aşağıda zorunlu.
+**Auth throttle ve Secure (2026-11-18'de kapatıldı, §14):** `/register` POST IP başına 5/dk,
+`/login` POST IP başına 10/dk ile sınırlı; aşım `429` döner (başarısız denemeler de sayaçtan yer).
+Limiter anahtarı `req.socket.remoteAddress` — ters proxy arkasında tüm ziyaretçiler proxy IP'sini
+paylaşır, limit site geneline iner (§6); proxy katmanında ayrıca limit koy. `vf_session` çerezine
+`Secure` bayrağı `SESSION_COOKIE_SECURE=1` ile eklenir; TLS arkasında bunu aç, düz HTTP'de açma
+(çerez hiç gönderilmez, oturum kurulamaz). Eski sürümde her iki uç throttle'suzdu ve `Secure` yoktu
+(2026-11-07 ölçümü).
 
 **Akış konteynerde ölçüldü:** `POST /register` → `302 → /clients` ve
 `set-cookie: vf_session=<token>; HttpOnly; SameSite=Lax; Path=/; Max-Age=604800`; oturumsuz
@@ -192,7 +195,8 @@ panel.ajans.com {
 ```
 
 nginx ise `proxy_set_header Host/X-Forwarded-Proto` ayarla ve `client_max_body_size`'ı tarama
-bedenlerine göre yükselt. Sonrasında `PANEL_URL=https://panel.ajans.com` ver; compose hâlâ
+bedenlerine göre yükselt. Sonrasında `PANEL_URL=https://panel.ajans.com` ver ve
+`SESSION_COOKIE_SECURE=1` yap (oturum çerezi yalnız HTTPS'te gönderilsin). Compose hâlâ
 `4620:4620` publish ediyor, bunu internete kapatmak için bind'i `127.0.0.1:4620:4620`'ya çevir ya da
 firewall'la (`ufw deny 4620`).
 
@@ -275,7 +279,7 @@ exists` alır — bu yüzden hedef hep boş olsun, sonra `ALTER DATABASE … REN
 - [ ] `/register` ile tek hesap açıldı, anonim `/clients` → 302 `/login`
 - [ ] Site + embed + ingest token'ı ile gerçek tarama kaydı (`/tarama` ya da panel)
 - [ ] `WORKER_TOKEN` ya set ya bilinçli olarak boş (uç 403) — hangisi seçildiyse cron da ona göre
-- [ ] Ters proxy HTTPS + HTTP→HTTPS yönlendirmesi, `4620` internete kapalı
+- [ ] Ters proxy HTTPS + HTTP→HTTPS yönlendirmesi, `4620` internete kapalı, `SESSION_COOKIE_SECURE=1`
 - [ ] SMTP: test bildirimi gerçekten kutuya düştü mü
 - [ ] Yedek komutu cron'landı ve **geri yükleme de denendi** (denenmemiş yedek yedek değildir)
 - [ ] `LICENSE` dosyasındaki `Licensor` placeholder'ı hukuki ünvanla dolduruldu
@@ -291,7 +295,6 @@ exists` alır — bu yüzden hedef hep boş olsun, sonra `ALTER DATABASE … REN
 - Rate limiter bellek içi ve anahtarı `req.socket.remoteAddress`: panel yeniden başladığında sayaçlar
   sıfırlanır, çok kopyada paylaşılır değil, ters proxy arkasında tek balta haline gelir (§6).
 - Compose `build` kullanıyor, `image:` satırı yok → etiketli rollback kurulu değil (§8).
-- `vf_session`'da `Secure` bayrağı yok; `/register` ve `/login`'de throttle yok (§4).
 
 ## 11. Canlı ölçüm kaydı — 2026-11-07
 
@@ -367,3 +370,28 @@ Kod değişikliği: uç `src/panel/worker.ts` → `handleWorkerRun`'a delege edi
 `notifier: mailSender.send` ile çağrılıyor ve yanıt `notified` sayacını içeriyor.
 `SMTP_*` bu koşuda tanımsızdı — mail console sender'a düştü; gerçek SMTP kutu teslimatı
 hâlâ ÖLÇÜLMEDİ (§11 ile aynı sınır).
+
+## 14. Canlı ölçüm kaydı — 2026-11-18 (Secure çerez + auth throttle)
+
+Ortam: Docker 29.9.3, Windows host. İzole `vfauth` projesi, taze `pgdata` volume'ü,
+`WITH_SCANNER=0` imaj, panel `4621`, `ENABLE_SCAN_SCHEDULER=0`. Önce `SESSION_COOKIE_SECURE=1`
+ile koşuldu, sonra aynı imajla `0`'a çevrilip negatif yön ölçüldü. Probe sonunda konteynerler,
+volume ve imaj silindi; mevcut `veriform_pgdata` volume'üne dokunulmadı.
+
+| Ölçülen | Sonuç |
+|---|---|
+| `pnpm typecheck` | 0 hata |
+| `vitest run` (lokal) | 303 passed / 6 skipped (47 dosya passed, 1 skipped) |
+| `POST /register` (SECURE=1) | `302`, `set-cookie: vf_session=…; HttpOnly; SameSite=Lax; Path=/; Max-Age=604800; Secure` |
+| Aynı e-posta ile 4 tekrar kayıt | dördü de `400` (zaten kayıtlı) — sayaç işliyor |
+| 6. kayıt denemesi (aynı IP, 1 dk içinde) | `429` — "Çok fazla kayıt denemesi — bir dakika bekleyip tekrar deneyin" |
+| Yanlış parola `POST /login` ×10 | on'u da `302 /login?error=1` |
+| 11. giriş denemesi | `429` — "Çok fazla giriş denemesi — bir dakika bekleyip tekrar deneyin" |
+| `GET /logout` (SECURE=1) | `set-cookie: vf_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0; Secure` |
+| `SESSION_COOKIE_SECURE=0` ile kayıt | `302`, çerezde `Secure` YOK (lokal HTTP davranışı korundu) |
+
+Kod değişikliği: `buildSessionCookie` / `buildLogoutCookie` (`src/panel/auth.ts`, birim testli),
+`SESSION_COOKIE_SECURE` env (compose default `0`), `/login` POST 10/dk ve `/register` POST 5/dk
+IP başına limiter (`createRateLimiter`, `/tarama` ile aynı desen). Anahtar hâlâ
+`req.socket.remoteAddress`: proxy arkasında tek paylaşımlı balta (§6) — bu davranış değişmedi,
+denek proxy kurulmadığı için ÖLÇÜLMEDİ notu yerinde duruyor.

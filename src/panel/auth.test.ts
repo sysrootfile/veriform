@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildLogoutCookie,
+  buildSessionCookie,
   createSessionToken,
   hashPassword,
   SESSION_TTL_MS,
@@ -116,5 +118,32 @@ describe("verifySessionTokenAny (anahtar rotasyonu)", () => {
   it("süresi dolmuş token hiçbir anahtarda geçmez", () => {
     const token = createSessionToken("tenant-1", OLD, 1_000_000);
     expect(verifySessionTokenAny(token, [NEW, OLD], 1_000_000 + SESSION_TTL_MS + 1)).toBeNull();
+  });
+});
+
+describe("oturum çerezi bayrakları", () => {
+  it("varsayılan çerez HttpOnly/SameSite=Lax/Path=/ taşır, Secure taşımaz", () => {
+    const cookie = buildSessionCookie("token-abc", false);
+    expect(cookie).toContain("vf_session=token-abc");
+    expect(cookie).toContain("HttpOnly");
+    expect(cookie).toContain("SameSite=Lax");
+    expect(cookie).toContain("Path=/");
+    expect(cookie).toContain(`Max-Age=${SESSION_TTL_MS / 1000}`);
+    expect(cookie).not.toContain("Secure");
+  });
+
+  it("secure=true çereze Secure bayrağı ekler, token'ı bozmaz", () => {
+    const token = createSessionToken("tenant-1", SECRET);
+    const cookie = buildSessionCookie(token, true);
+    expect(cookie).toContain(`vf_session=${token}`);
+    expect(cookie.endsWith("; Secure")).toBe(true);
+    expect(cookie).toContain("HttpOnly");
+  });
+
+  it("logout çerezi değeri boşaltır ve Max-Age=0 verir; secure bayrağı taşınır", () => {
+    expect(buildLogoutCookie(false)).toBe("vf_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0");
+    expect(buildLogoutCookie(true)).toBe(
+      "vf_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0; Secure",
+    );
   });
 });
