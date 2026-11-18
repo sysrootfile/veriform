@@ -125,7 +125,11 @@ ufw deny 4620/tcp   # ya da bind'i "127.0.0.1:4620:4620" yap, proxy'yi localhost
 1. Tarayıcıda `http://<sunucu>:4620/register` (bind'i localhost'a çevirdiysen SSH tüneli: `ssh -L 4620:127.0.0.1:4620 sunucu`).
 2. Ajans adı + e-posta + parola gir — `kind` sunucu tarafında `"agency"` olarak sabit (`server.ts:197`).
 3. Oturum çerezi 7 gün (`Max-Age`), `HttpOnly`, `SameSite=Lax`; `SESSION_COOKIE_SECURE=1` ise ayrıca `Secure`.
-4. `/clients` → müşteri ekle → site ekle → siteden embed snippet + ingest token'ı al.
+4. `/clients` → müşteri ekle → site ekle → müşteri detayından embed snippet + ingest token'ı al.
+   Snippet panelin kendi adresini gösterir (`http(s)://<host>/embed.js`); ayrı CDN yok.
+   Oturumlu sayfaların hepsinde üstte ortak nav var (Müşteriler / Denetim İzi / API Anahtarları /
+   API Docs + Çıkış); aktif sayfa `aria-current="page"` ile işaretli. `GET /embed.js` kamu rotası —
+   `application/javascript`, `max-age=3600`, `nosniff`; build yoksa 404 + `pnpm build:embed` notu.
 
 **Auth throttle ve Secure (2026-11-18'de kapatıldı, §14):** `/register` POST IP başına 5/dk,
 `/login` POST IP başına 10/dk ile sınırlı; aşım `429` döner (başarısız denemeler de sayaçtan yer).
@@ -426,3 +430,17 @@ Probe sonunda konteynerler, volume, imaj ve geçici override dosyası silindi.
 TDD sırasında yakalanan gerçek yarış: `create table if not exists schema_migrations` advisory
 lock'tan ÖNCE koşuyordu — eşzamanlı iki koşucu PG'nin `pg_type_typname_nsp_index` unique
 ihlaliyle çöküyordu (test kırmızıyı gösterdi). Tablo oluşturma lock içine alındı, test yeşile döndü.
+
+## 16. Canlı ölçüm kaydı — 2026-11-18 (panel nav + embed serve)
+
+Ortam: izole `vf-ux-probe` projesi, db `15433` / panel `14621`, `WITH_SCANNER=0` imaj.
+Kullanıcının `veriform_pgdata` volume'üne dokunulmadı.
+
+| Senaryo | Ölçülen |
+|---|---|
+| `GET /embed.js` (oturumsuz) | `200`, `application/javascript; charset=utf-8`, 23386 bayt (imajda `dist/veriform-embed.js` fallback'i; `src/` final imajda yok) |
+| Müşteri detay snippet'i (browser) | `<script src="http://127.0.0.1:14621/embed.js" data-site-token="…">` — `cdn.veriform.io` yok |
+| Nav (browser) | `/clients`, müşteri detay, `/audit`, `/settings/api-keys` sayfalarında 5 link + Çıkış; nav ile geçişler çalıştı; aktif sayfa `aria-current` doğru |
+| Çıkış (browser) | Çıkış → `/login`; sonrasında `/clients` → `302 /login` |
+| `pnpm typecheck` | 0 hata |
+| `vitest run` (lokal, PG_URL'siz) | 318 passed / 10 skipped (49 dosya passed, 1 skipped) |

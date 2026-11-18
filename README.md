@@ -63,10 +63,11 @@ Tek sunucuda `docker compose up -d --build` ile panel + Postgres ayağa kalkar; 
 pnpm build:embed   # dist/veriform-embed.js (~11 KB IIFE)
 ```
 
-Müşteri sitesine eklenecek snippet:
+Panel embed'i kendi adresinden servis eder: `GET /embed.js` (oturum gerekmez, `max-age=3600`).
+Müşteri sitesine eklenecek snippet — `<panel-adresi>` ve token'ı müşteri detay sayfası hazır gösterir:
 
 ```html
-<script src="https://cdn.veriform.io/v1/veriform-embed.js" async></script>
+<script src="https://<panel-adresi>/embed.js" data-site-token="…" async></script>
 ```
 
 Script sayfada `window.__veriform` tanıtıcısını açar:

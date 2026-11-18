@@ -31,6 +31,7 @@ import { generateAcikRizaMetni, generateAydinlatmaMetni, generateCerezPolitikasi
 import { createMailSenderFromEnv } from "./mailer.js";
 import { resolvePanelSecrets } from "./secrets.js";
 import { handleWorkerRun } from "./worker.js";
+import { handleEmbedJs } from "./embed.js";
 import { buildDsarNotificationEmail } from "../dsar/notifications.js";
 import { renderDraftPageHtml } from "../draft/render.js";
 import { CATEGORY_LABELS, COOKIE_LABELS } from "../report/render.js";
@@ -147,6 +148,15 @@ function setSessionHeader(res: import("node:http").ServerResponse, token: string
   res.setHeader("set-cookie", buildSessionCookie(token, COOKIE_SECURE));
 }
 
+/** Embed snippet'inde gösterilen mutlak adres — proxy arkasında x-forwarded-proto esas alınır. */
+function embedUrl(req: import("node:http").IncomingMessage): string {
+  const host = req.headers.host;
+  if (!host) return "/embed.js";
+  const forwarded = req.headers["x-forwarded-proto"];
+  const proto = (typeof forwarded === "string" ? forwarded.split(",")[0]!.trim() : "") || "http";
+  return `${proto}://${host}/embed.js`;
+}
+
 /** JSON yanıtları için standart başlıklar — nosniff MIME-sniffing ile HTML render'ı engeller. */
 function jsonRes(
   res: import("node:http").ServerResponse,
@@ -167,6 +177,19 @@ const server = createServer(async (req, res) => {
       const health = await checkHealth(store, process.env.DATABASE_URL ? "postgres" : "memory");
       res.writeHead(health.ok ? 200 : 503, { "content-type": "application/json" });
       res.end(JSON.stringify(health));
+      return;
+    }
+
+    // Embed scripti panelin kendi adresinden sunulur — müşteri snippet'i bu adresi kullanır.
+    if (req.method === "GET" && url.pathname === "/embed.js") {
+      const result = await handleEmbedJs(buildEmbedSource);
+      const headers: Record<string, string> = {
+        "content-type": result.contentType,
+        "x-content-type-options": "nosniff",
+      };
+      if (result.cacheControl) headers["cache-control"] = result.cacheControl;
+      res.writeHead(result.status, headers);
+      res.end(result.body);
       return;
     }
 
@@ -549,6 +572,7 @@ const server = createServer(async (req, res) => {
           sites: sites.map((s) => ({ id: s.id, url: s.url, ingestToken: s.ingestToken })),
           accent: client?.brandColor,
           logoUrl: client?.brandLogoUrl,
+          embedSrc: embedUrl(req),
         }),
       );
       return;

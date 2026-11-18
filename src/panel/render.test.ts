@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { StoredScan } from "./types.js";
 import {
+  renderApiKeysPage,
+  renderAuditPage,
   renderClientDetailPage,
   renderClientsPage,
   renderLoginPage,
@@ -278,6 +280,63 @@ describe("renderClientDetailPage", () => {
     });
     expect(html).not.toContain("<script>a()");
     expect(html).toContain("&lt;script&gt;");
+  });
+});
+
+describe("panel navigasyonu", () => {
+  const navLinks = ['href="/clients"', 'href="/audit"', 'href="/settings/api-keys"', 'href="/api/docs"', 'href="/logout"'];
+
+  it("oturumlu sayfaların hepsinde ortak nav ve çıkış linki var", () => {
+    const pages = [
+      renderClientsPage({ tenantName: "A", clients: [] }),
+      renderClientDetailPage({ clientName: "M", clientHref: "/clients/c1", sites: [] }),
+      renderSitePage({ siteId: "s1", siteUrl: "https://x.com", chainValid: true, scans: [] }),
+      renderAuditPage({ entries: [] }),
+      renderApiKeysPage({ keys: [] }),
+    ];
+    for (const html of pages) {
+      for (const link of navLinks) expect(html).toContain(link);
+    }
+  });
+
+  it("aktif sayfa aria-current ile işaretlenir", () => {
+    expect(renderClientsPage({ tenantName: "A", clients: [] })).toContain('href="/clients" aria-current="page"');
+    expect(renderAuditPage({ entries: [] })).toContain('href="/audit" aria-current="page"');
+    expect(renderApiKeysPage({ keys: [] })).toContain('href="/settings/api-keys" aria-current="page"');
+  });
+
+  it("kamu sayfalarında (login/register) nav yok", () => {
+    expect(renderLoginPage()).not.toContain('href="/logout"');
+    expect(renderRegisterPage()).not.toContain('href="/logout"');
+  });
+});
+
+describe("embed snippet", () => {
+  it("verilen panel adresini gösterir, olmayan CDN'i değil", () => {
+    const html = renderClientDetailPage({
+      clientName: "M",
+      clientHref: "/clients/c1",
+      sites: [],
+      embedSrc: "https://panel.ajans.com/embed.js",
+    });
+    expect(html).toContain("https://panel.ajans.com/embed.js");
+    expect(html).not.toContain("cdn.veriform.io");
+  });
+
+  it("embedSrc verilmezse göreli /embed.js kullanır", () => {
+    const html = renderClientDetailPage({ clientName: "M", clientHref: "/clients/c1", sites: [] });
+    expect(html).toContain("/embed.js");
+    expect(html).not.toContain("cdn.veriform.io");
+  });
+
+  it("embedSrc HTML'e kaçırılır", () => {
+    const html = renderClientDetailPage({
+      clientName: "M",
+      clientHref: "/clients/c1",
+      sites: [],
+      embedSrc: 'https://x.com/"><script>a()</script>',
+    });
+    expect(html).not.toContain("<script>a()");
   });
 });
 

@@ -26,10 +26,18 @@ const STYLE = `
   .badge-ok { color: #127a3d; background: #e8f5ee; padding: .2rem .55rem; border-radius: 999px; font-size: .82rem; font-weight: 600; }
   .badge-warn { color: #b45309; background: #fdf2e3; padding: .2rem .55rem; border-radius: 999px; font-size: .82rem; font-weight: 600; }
   .empty { color: #777; }
-  form { margin: 1rem 0; display: flex; gap: .5rem; }
-  input, button { padding: .45rem .7rem; border: 1px solid #ccc; border-radius: 6px; font-size: .92rem; }
+  form { margin: 1rem 0; display: flex; gap: .5rem; flex-wrap: wrap; }
+  input, button, select { padding: .45rem .7rem; border: 1px solid #ccc; border-radius: 6px; font-size: .92rem; }
   button { background: var(--accent); color: #fff; border: none; cursor: pointer; }
+  button:hover { filter: brightness(1.15); }
   button.danger { background: #8b1d1d; }
+  a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .topnav { display: flex; flex-wrap: wrap; gap: .25rem; align-items: center; border-bottom: 1px solid #e5e5ea; padding-bottom: .6rem; margin-bottom: 1.2rem; }
+  .topnav a { color: #444; text-decoration: none; font-size: .88rem; padding: .35rem .65rem; border-radius: 6px; }
+  .topnav a:hover { background: #f2f2f5; color: #16161f; }
+  .topnav a[aria-current="page"] { background: var(--accent); color: #fff; font-weight: 600; }
+  .topnav .nav-logout { margin-left: auto; color: #8b1d1d; }
+  .topnav .nav-logout:hover { background: #fbeaea; color: #8b1d1d; }
   footer { color: #888; font-size: .8rem; border-top: 1px solid #eee; margin-top: 2rem; padding-top: .8rem; }
 `;
 
@@ -43,7 +51,27 @@ function safeLogoUrl(url?: string | undefined): string | undefined {
   return url && /^https?:\/\/\S+$/i.test(url) ? url : undefined;
 }
 
-const page = (title: string, body: string, accent?: string | undefined): string =>
+type NavActive = "clients" | "audit" | "api-keys" | "api-docs";
+
+const NAV_ITEMS: Array<{ href: string; label: string; key: NavActive }> = [
+  { href: "/clients", label: "Müşteriler", key: "clients" },
+  { href: "/audit", label: "Denetim İzi", key: "audit" },
+  { href: "/settings/api-keys", label: "API Anahtarları", key: "api-keys" },
+  { href: "/api/docs", label: "API Docs", key: "api-docs" },
+];
+
+function nav(active: NavActive): string {
+  const links = NAV_ITEMS.map(
+    (item) =>
+      `<a href="${item.href}"${item.key === active ? ' aria-current="page"' : ""}>${item.label}</a>`,
+  ).join("\n");
+  return `<nav class="topnav" aria-label="Panel">
+${links}
+<a href="/logout" class="nav-logout">Çıkış</a>
+</nav>`;
+}
+
+const page = (title: string, body: string, accent?: string | undefined, navActive?: NavActive): string =>
   `<!doctype html>
 <html lang="tr">
 <head>
@@ -54,6 +82,7 @@ const page = (title: string, body: string, accent?: string | undefined): string 
 ${STYLE}</style>
 </head>
 <body>
+${navActive ? nav(navActive) : ""}
 ${body}
 <footer>Veriform panel — izleyici ham veri saklamaz; kanıtlar kurcalama kanıtlı zincirde.</footer>
 </body>
@@ -100,6 +129,7 @@ ${demoLink}
   <button type="submit">Müşteri ekle</button>
 </form>`,
     input.accent,
+    "clients",
   );
 }
 
@@ -230,6 +260,8 @@ ${paginationNote}
 ${rows}
 </table>
 ${bannerForm}`,
+    undefined,
+    "clients",
   );
 }
 
@@ -246,6 +278,8 @@ export function renderClientDetailPage(input: {
   sites: Array<{ id: string; url: string; ingestToken: string }>;
   accent?: string | undefined;
   logoUrl?: string | undefined;
+  /** Panelin kendi embed adresi — snippet'te gösterilir (varsayılan göreli yol). */
+  embedSrc?: string | undefined;
 }): string {
   const e = escapeHtml;
   const rows = input.sites.length
@@ -266,7 +300,8 @@ export function renderClientDetailPage(input: {
     input.clientName,
     `<h1>${logo}${e(input.clientName)}</h1>
 <h2>Siteler</h2>
-<p class="empty">İnject token'ı embed scriptinize ekleyin: <code>&lt;script src="https://cdn.veriform.io/v1/veriform-embed.js" data-site-token="…"&gt;&lt;/script&gt;</code></p>
+<p class="empty">Embed scriptini sitenizin <code>&lt;head&gt;</code> bölümüne ekleyin; <code>data-site-token</code> yerine aşağıdaki ingest token'ı yazın:</p>
+<p><code>&lt;script src="${e(input.embedSrc ?? "/embed.js")}" data-site-token="…"&gt;&lt;/script&gt;</code></p>
 <table>
 <tr><th>Site</th><th>Ingest token</th><th class="num">Rapor</th></tr>
 ${rows}
@@ -287,6 +322,7 @@ ${rows}
   <button type="submit" class="danger">Müşteriyi kalıcı sil</button>
 </form>`,
     input.accent,
+    "clients",
   );
 }
 
@@ -311,6 +347,8 @@ export function renderAuditPage(input: {
 <tr><th>Zaman</th><th>Eylem</th><th>Detay</th></tr>
 ${rows}
 </table>`,
+    undefined,
+    "audit",
   );
 }
 
@@ -353,6 +391,8 @@ ${rows}
 </form>
 <h2>Dokümantasyon</h2>
 <p><a href="/api/docs">Headless API dokümantasyonu →</a></p>`,
+    undefined,
+    "api-keys",
   );
 }
 
