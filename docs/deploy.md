@@ -55,7 +55,9 @@ docker compose ps      # panel konteyneri "healthy" olmalı
 curl -fsS http://127.0.0.1:4620/healthz
 ```
 
-`/healthz` `{"ok":true,"store":"postgres"}` döner (`src/panel/server.ts:154`). `store:"memory"` görürsen
+`/healthz` `{"ok":true,"store":"postgres"}` döner (`src/panel/server.ts:155`). Uç, `PanelStore.ping()`
+ile veritabanına `select 1` atar: DB erişilemezse `503` + `{"ok":false,"store":"postgres"}` döner ve
+HEALTHCHECK konteyneri `unhealthy` işaretler. `store:"memory"` görürsen
 `DATABASE_URL` set edilmemiş demektir — prod'da bu veri kaybı demek, durdur ve `.env`'i düzelt.
 
 Boot sırasında konteyner loglarında şunları beklersin:
@@ -68,11 +70,12 @@ chromium kurulumuyla build oldu, `veriform-db-1 Up (healthy)` + `veriform-panel-
 `docker inspect` health `healthy`, `curl /healthz` → `{"ok":true,"store":"postgres"}`, log'da
 `[sched] sürekli izleme döngüsü: 300000ms aralıkla`. Build + boot + ilk tarama ~4 dk sürdü (chromium indirme dahil).
 
-**/healthz kör noktası (ölçüldü):** `/healthz` yalnız sürecin ayakta olduğunu söylüyor — veritabanına
-sorgu atmıyor. Postgres parolası bozukken (aşağıdaki volume tuzağı) `{"ok":true,"store":"postgres"}`
-ve HEALTHCHECK `healthy` kalmaya devam etti, Writes ise 4xx/5xx verdi. Yani compose `healthy` tek
-başına "sistem çalışıyor" kanıtı değil; yayında en az bir gerçek okuma (`/clients` 302'si ya da bir
-tarama kaydı) de doğrulanmalı. Kalıcı çözüm healthz'e `select 1` eklemek — kod tarafında yapılmadı.
+**/healthz kör noktası kapatıldı (2026-11-18'de ölçüldü):** Eski sürümde `/healthz` yalnız sürecin
+ayakta olduğunu söylüyor, veritabanına sorgu atmıyordu; kırık Postgres parolasında `ok:true` +
+`healthy` kalıyordu (2026-11-07 ölçümü, §11). Artık uç `select 1` atıyor: izole probe'da DB
+durdurulunca `503 {"ok":false}` ve konteyner `unhealthy` (3 ardışık başarısız), DB geri gelince
+`200 {"ok":true}` + `healthy` ölçüldü (§12). Yani compose `healthy` artık DB erişimini de kanıtlıyor;
+yine de yayında en az bir gerçek okuma/yazma (`/register` 302'si ya da bir tarama kaydı) doğrulanmalı.
 
 ## 3. Şema
 
@@ -91,9 +94,11 @@ tarama kaydı) de doğrulanmalı. Kalıcı çözüm healthz'e `select 1` eklemek
   eşiği, el yordamı `ALTER` ile geçme.
 
 **Volume tuzağı (ölçüldü):** `POSTGRES_PASSWORD` yalnız `pgdata` **boşken** init sırasında Postgres'e
-gider. Var olan bir volume ile `.env`'deki parolayı değiştirirsen konteynerler `healthy` kalır,
-panel boot eder, `/healthz` yeşildir — ama her yazma `password authentication failed for user
-"postgres"` ile patlar ve kullanıcı generic "Kayıt başarısız" görür. Elimde 2026-11-04'ten kalma bir
+gider. Var olan bir volume ile `.env`'deki parolayı değiştirirsen `db` konteyneri `healthy` kalır
+(pg_isready parola doğrulamaz) ama panelin her yazması `password authentication failed for user
+"postgres"` ile patlar ve kullanıcı generic "Kayıt başarısız" görür. 2026-11-18'den beri `/healthz`
+bu durumda `503` döner ve panel konteyneri `unhealthy` olur — sessiz kırıklık artık healthz'de görünür.
+Elimde 2026-11-04'ten kalma bir
 `veriform_pgdata` vardı; yeni parolayla boot bu hatayı üretti. Parolayı mevcut volume'e uydurmanın
 yolu ya eski parolayı bilmek ya da `ALTER USER postgres PASSWORD …` (parola bilgisiyle) ya da volume'ü
 silmek — yani **parola rotasyonu şema yedeği kadar ciddi bir iş**. Kanıt olarak taze volume'de
@@ -261,7 +266,7 @@ exists` alır — bu yüzden hedef hep boş olsun, sonra `ALTER DATABASE … REN
 
 ## 9. Yayın öncesi kontrol listesi
 
-- [ ] `curl /healthz` → `{"ok":true,"store":"postgres"}` — **bu tek başına yetmez**, DB'ye sorgu atmıyor
+- [ ] `curl /healthz` → `200 {"ok":true,"store":"postgres"}` — uç artık DB'ye `select 1` atıyor, 503 = DB kırık
 - [ ] Uygulama tarafı gerçek okuma/yazma: `/register` 302 döndü mü (400 = Postgres bağlantısı kırık)
 - [ ] `pgdata` volume'ü ile `POSTGRES_PASSWORD` uyumlu mu (eski volume + yeni parola = sessiz kırık)
 - [ ] `/register` ile tek hesap açıldı, anonim `/clients` → 302 `/login`
@@ -282,8 +287,6 @@ exists` alır — bu yüzden hedef hep boş olsun, sonra `ALTER DATABASE … REN
 - `dist/` gitignored; imaj her boot'ta `pnpm build:panel` çıktısını kendisi üretiyor (Dockerfile multi-stage).
 - Rate limiter bellek içi ve anahtarı `req.socket.remoteAddress`: panel yeniden başladığında sayaçlar
   sıfırlanır, çok kopyada paylaşılır değil, ters proxy arkasında tek balta haline gelir (§6).
-- `/healthz` veritabanına sorgu atmıyor: kırık Postgres bağlantısında da `ok:true` ve konteyner
-  `healthy` (§2 ve §3'te ölçüldü). Prod izlemesi tek başına healthz'e güvenmemeli.
 - Compose `build` kullanıyor, `image:` satırı yok → etiketli rollback kurulu değil (§8).
 - `vf_session`'da `Secure` bayrağı yok; `/register` ve `/login`'de throttle yok (§4).
 - `/internal/run-scheduled` turu `notifier` vermeden çalışıyor → cron modelinde uyarı e-postası yok (§5).
@@ -317,3 +320,23 @@ Ortam: Docker 29.9.2, Docker Compose v5.6.1, Windows host. İzole `vfprobe` proj
 Ölçülemeyen: TLS sonlandırması sonrası oturum akışı ve `X-Forwarded-For` arkasında limiter (§6),
 SMTP'nin gerçek kutuya düşürmesi (bu koşuda `SMTP_*` tanımsızdı, mail yolu log'a düşüyor),
 çok kopyalı (scaled) deploy davranışı.
+
+## 12. Canlı ölçüm kaydı — 2026-11-18 (healthz DB probu)
+
+Ortam: Docker 29.9.3, Windows host. İzole `vfhealth` projesi, taze `pgdata` volume'ü,
+`WITH_SCANNER=0` imaj (healthz probu chromium gerektirmez), panel `4621` ve db `5433` portlarında.
+Probe sonunda konteynerler, volume ve imaj silindi; mevcut `veriform_pgdata` volume'üne dokunulmadı.
+
+| Ölçülen | Sonuç |
+|---|---|
+| `pnpm typecheck` | 0 hata |
+| `vitest run` (lokal, PG_URL'siz) | 295 passed / 6 skipped (46 dosya passed, 1 skipped) |
+| `store.pg.test.ts` gerçek PG'ye karşı (probe db, `PG_URL` ile) | 6/6 passed — `ping` gerçek DB'de resolve, erişilemeyen DB'de reject |
+| Taze stack `curl /healthz` | `200 {"ok":true,"store":"postgres"}`, her iki konteyner `healthy` |
+| `docker compose stop db` sonrası `/healthz` | `503 {"ok":false,"store":"postgres"}` |
+| HEALTHCHECK (30s aralık, 3 retry) | panel `unhealthy`, fail streak 3 |
+| `docker compose start db` + 40s | `200 {"ok":true,"store":"postgres"}`, panel yeniden `healthy` |
+
+Kod değişikliği: `PanelStore.ping()` portu (in-memory: no-op, Postgres: `select 1`),
+`src/panel/health.ts` → `checkHealth`, `/healthz` artık `ok:false` durumunda `503` döner.
+Dockerfile HEALTHCHECK değişmedi (`r.ok` zaten 503'te exit 1 üretiyor).

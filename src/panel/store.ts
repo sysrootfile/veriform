@@ -18,6 +18,8 @@ import { hashApiKey } from "./api-keys.js";
  */
 
 export interface PanelStore {
+  /** Canlılık probu: depo erişilemezse reject eder (/healthz bunu kullanır). */
+  ping(): Promise<void>;
   createTenant(input: {
     name: string;
     kind: TenantKind;
@@ -114,6 +116,8 @@ export function createInMemoryPanelStore(): PanelStore {
   const clone = deepClone;
 
   return {
+    async ping() {},
+
     async createTenant(input) {
       const tenant: Tenant = {
         id: crypto.randomUUID(),

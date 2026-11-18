@@ -148,4 +148,15 @@ d("createPostgresPanelStore (GERÇEK Postgres — docker veriform-pg)", () => {
     expect(done.respondedAt).toBeDefined();
     expect((await store.listDsars(site.id))).toHaveLength(1);
   });
+
+  it("ping gerçek DB'ye select 1 atar; erişilemeyen DB'de reddedilir", async () => {
+    await expect(store.ping()).resolves.toBeUndefined();
+
+    const broken = createPostgresPanelStore("postgres://postgres:yanlis@127.0.0.1:1/yok");
+    try {
+      await expect(broken.ping()).rejects.toThrow();
+    } finally {
+      await broken.close();
+    }
+  });
 });

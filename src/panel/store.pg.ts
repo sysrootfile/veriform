@@ -130,6 +130,10 @@ export function createPostgresPanelStore(connectionString: string): PostgresPane
   }
 
   return {
+    async ping() {
+      await pool.query("select 1");
+    },
+
     async createTenant(input) {
       const result = await pool.query(
         "insert into tenants (name, kind, brand_color, brand_logo_url) values ($1, $2, $3, $4) returning *",

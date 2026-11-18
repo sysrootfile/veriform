@@ -14,6 +14,7 @@ import { renderReportHtml } from "../report/render.js";
 import { createPanelService } from "./service.js";
 import { createInMemoryPanelStore } from "./store.js";
 import { createPostgresPanelStore } from "./store.pg.js";
+import { checkHealth } from "./health.js";
 import {
   renderApiKeysPage,
   renderAuditPage,
@@ -152,10 +153,9 @@ const server = createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", `http://127.0.0.1:${PORT}`);
   try {
     if (req.method === "GET" && url.pathname === "/healthz") {
-      res.writeHead(200, { "content-type": "application/json" });
-      res.end(
-        JSON.stringify({ ok: true, store: process.env.DATABASE_URL ? "postgres" : "memory" }),
-      );
+      const health = await checkHealth(store, process.env.DATABASE_URL ? "postgres" : "memory");
+      res.writeHead(health.ok ? 200 : 503, { "content-type": "application/json" });
+      res.end(JSON.stringify(health));
       return;
     }
 
