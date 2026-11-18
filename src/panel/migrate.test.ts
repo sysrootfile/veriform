@@ -92,15 +92,17 @@ describePg("runMigrations (PG entegrasyon)", () => {
     await admin.end();
   });
 
-  it("boş veritabanına 001'i uygular ve kaydeder; ikinci koşu no-op", async () => {
+  it("boş veritabanına tüm migration'ları uygular ve kaydeder; ikinci koşu no-op", async () => {
     const first = await runMigrations(client);
-    expect(first.applied).toEqual(["001_init.sql"]);
+    expect(first.applied).toEqual(["001_init.sql", "002_contact_requests.sql"]);
     expect(first.baselined).toEqual([]);
 
     const { rows: tables } = await client.query("select to_regclass('tenants') as reg");
     expect(tables[0].reg).not.toBeNull();
+    const { rows: contact } = await client.query("select to_regclass('contact_requests') as reg");
+    expect(contact[0].reg).not.toBeNull();
     const { rows: versions } = await client.query("select version from schema_migrations");
-    expect(versions.map((r) => r.version)).toEqual(["001_init.sql"]);
+    expect(versions.map((r) => r.version)).toEqual(["001_init.sql", "002_contact_requests.sql"]);
 
     const second = await runMigrations(client);
     expect(second.applied).toEqual([]);
@@ -113,13 +115,13 @@ describePg("runMigrations (PG entegrasyon)", () => {
     await client.query("insert into tenants (name, kind) values ('Eski Kiracı', 'agency')");
 
     const result = await runMigrations(client);
-    expect(result.applied).toEqual([]);
+    expect(result.applied).toEqual(["002_contact_requests.sql"]);
     expect(result.baselined).toEqual(["001_init.sql"]);
 
     const { rows: tenants } = await client.query("select name from tenants");
     expect(tenants.map((r) => r.name)).toEqual(["Eski Kiracı"]);
     const { rows: versions } = await client.query("select version from schema_migrations");
-    expect(versions.map((r) => r.version)).toEqual(["001_init.sql"]);
+    expect(versions.map((r) => r.version)).toEqual(["001_init.sql", "002_contact_requests.sql"]);
   }, 20_000);
 
   it("bozuk migration rollback olur ve kaydedilmez", async () => {
@@ -145,9 +147,9 @@ describePg("runMigrations (PG entegrasyon)", () => {
     try {
       const results = await Promise.all([runMigrations(client), runMigrations(other)]);
       const appliedTotal = results.flatMap((r) => r.applied);
-      expect(appliedTotal).toEqual(["001_init.sql"]);
+      expect(appliedTotal).toEqual(["001_init.sql", "002_contact_requests.sql"]);
       const { rows } = await client.query("select count(*)::int as n from schema_migrations");
-      expect(rows[0].n).toBe(1);
+      expect(rows[0].n).toBe(2);
     } finally {
       await other.end();
     }

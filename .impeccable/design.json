@@ -1,0 +1,209 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-18T15:20:55Z",
+  "title": "Design System: Veriform — Zincir Defter",
+  "extensions": {
+    "colorMeta": {
+      "paper": {
+        "role": "neutral",
+        "displayName": "Ledger Paper",
+        "canonical": "oklch(97.5% 0.004 121.6)",
+        "tonalRamp": ["oklch(15.0% 0.002 121.6)", "oklch(26.4% 0.004 121.6)", "oklch(37.9% 0.004 121.6)", "oklch(49.3% 0.004 121.6)", "oklch(60.7% 0.004 121.6)", "oklch(72.1% 0.004 121.6)", "oklch(83.6% 0.004 121.6)", "oklch(95.0% 0.002 121.6)"]
+      },
+      "desk": {
+        "role": "neutral",
+        "displayName": "Desk",
+        "canonical": "oklch(93.1% 0.010 119.6)",
+        "tonalRamp": ["oklch(15.0% 0.005 119.6)", "oklch(26.4% 0.008 119.6)", "oklch(37.9% 0.010 119.6)", "oklch(49.3% 0.010 119.6)", "oklch(60.7% 0.010 119.6)", "oklch(72.1% 0.010 119.6)", "oklch(83.6% 0.010 119.6)", "oklch(95.0% 0.006 119.6)"]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Registry Ink",
+        "canonical": "oklch(23.1% 0.018 266.2)",
+        "tonalRamp": ["oklch(15.0% 0.009 266.2)", "oklch(26.4% 0.016 266.2)", "oklch(37.9% 0.018 266.2)", "oklch(49.3% 0.018 266.2)", "oklch(60.7% 0.018 266.2)", "oklch(72.1% 0.018 266.2)", "oklch(83.6% 0.018 266.2)", "oklch(95.0% 0.011 266.2)"]
+      },
+      "ink-soft": {
+        "role": "neutral",
+        "displayName": "Soft Ink",
+        "canonical": "oklch(39.0% 0.025 266.9)",
+        "tonalRamp": ["oklch(15.0% 0.013 266.9)", "oklch(26.4% 0.022 266.9)", "oklch(37.9% 0.025 266.9)", "oklch(49.3% 0.025 266.9)", "oklch(60.7% 0.025 266.9)", "oklch(72.1% 0.025 266.9)", "oklch(83.6% 0.025 266.9)", "oklch(95.0% 0.015 266.9)"]
+      },
+      "ink-faint": {
+        "role": "neutral",
+        "displayName": "Faint Ink (placeholder)",
+        "canonical": "oklch(54.6% 0.026 269.2)",
+        "tonalRamp": ["oklch(15.0% 0.013 269.2)", "oklch(26.4% 0.023 269.2)", "oklch(37.9% 0.026 269.2)", "oklch(49.3% 0.026 269.2)", "oklch(60.7% 0.026 269.2)", "oklch(72.1% 0.026 269.2)", "oklch(83.6% 0.026 269.2)", "oklch(95.0% 0.016 269.2)"]
+      },
+      "blue": {
+        "role": "primary",
+        "displayName": "Ruling Blue",
+        "canonical": "oklch(46.4% 0.205 266.2)",
+        "tonalRamp": ["oklch(15.0% 0.102 266.2)", "oklch(26.4% 0.180 266.2)", "oklch(37.9% 0.205 266.2)", "oklch(49.3% 0.205 266.2)", "oklch(60.7% 0.205 266.2)", "oklch(72.1% 0.205 266.2)", "oklch(83.6% 0.205 266.2)", "oklch(95.0% 0.123 266.2)"]
+      },
+      "red": {
+        "role": "secondary",
+        "displayName": "Margin Red",
+        "canonical": "oklch(56.0% 0.182 29.0)",
+        "tonalRamp": ["oklch(15.0% 0.091 29.0)", "oklch(26.4% 0.160 29.0)", "oklch(37.9% 0.182 29.0)", "oklch(49.3% 0.182 29.0)", "oklch(60.7% 0.182 29.0)", "oklch(72.1% 0.182 29.0)", "oklch(83.6% 0.182 29.0)", "oklch(95.0% 0.109 29.0)"]
+      },
+      "green": {
+        "role": "primary",
+        "displayName": "Seal Green",
+        "canonical": "oklch(51.4% 0.117 153.6)",
+        "tonalRamp": ["oklch(15.0% 0.059 153.6)", "oklch(26.4% 0.104 153.6)", "oklch(37.9% 0.117 153.6)", "oklch(49.3% 0.117 153.6)", "oklch(60.7% 0.117 153.6)", "oklch(72.1% 0.117 153.6)", "oklch(83.6% 0.117 153.6)", "oklch(95.0% 0.070 153.6)"]
+      },
+      "amber": {
+        "role": "secondary",
+        "displayName": "Warning Amber",
+        "canonical": "oklch(55.5% 0.146 49.0)",
+        "tonalRamp": ["oklch(15.0% 0.073 49.0)", "oklch(26.4% 0.128 49.0)", "oklch(37.9% 0.146 49.0)", "oklch(49.3% 0.146 49.0)", "oklch(60.7% 0.146 49.0)", "oklch(72.1% 0.146 49.0)", "oklch(83.6% 0.146 49.0)", "oklch(95.0% 0.087 49.0)"]
+      },
+      "rule": {
+        "role": "primary",
+        "displayName": "Blue Ruling (30% alpha)",
+        "canonical": "rgba(36,71,201,.30)",
+        "tonalRamp": ["oklch(15.0% 0.102 266.2 / 0.3)", "oklch(26.4% 0.180 266.2 / 0.3)", "oklch(37.9% 0.205 266.2 / 0.3)", "oklch(49.3% 0.205 266.2 / 0.3)", "oklch(60.7% 0.205 266.2 / 0.3)", "oklch(72.1% 0.205 266.2 / 0.3)", "oklch(83.6% 0.205 266.2 / 0.3)", "oklch(95.0% 0.123 266.2 / 0.3)"]
+      },
+      "rule-soft": {
+        "role": "primary",
+        "displayName": "Blue Ruling (13% alpha)",
+        "canonical": "rgba(36,71,201,.13)",
+        "tonalRamp": ["oklch(15.0% 0.102 266.2 / 0.13)", "oklch(26.4% 0.180 266.2 / 0.13)", "oklch(37.9% 0.205 266.2 / 0.13)", "oklch(49.3% 0.205 266.2 / 0.13)", "oklch(60.7% 0.205 266.2 / 0.13)", "oklch(72.1% 0.205 266.2 / 0.13)", "oklch(83.6% 0.205 266.2 / 0.13)", "oklch(95.0% 0.123 266.2 / 0.13)"]
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Hero headline as the ledger's first entry. Archivo 900, one per page, text-wrap: balance." },
+      "headline": { "displayName": "Headline", "purpose": "Section titles under each antet. Archivo 800, balanced." },
+      "title": { "displayName": "Title", "purpose": "Step and plan names (1.25rem); annotation/aside heads use a 1.05rem cut of the same voice." },
+      "body": { "displayName": "Body", "purpose": "Default prose in ink; secondary prose in ink-soft capped at 65ch." },
+      "lead": { "displayName": "Lead", "purpose": "Paragraph under each headline, ink-soft, max 64ch; strong returns to full ink." },
+      "label": { "displayName": "Label (mono)", "purpose": "Form labels, antet, folio, meta strips — Spline Sans Mono caps with wide tracking." },
+      "numeric": { "displayName": "Numeric (mono)", "purpose": "Plan prices at 2.1rem; step numbers use the mono at 1.5rem in ruling blue." }
+    },
+    "shadows": [
+      { "name": "sheet-lift", "value": "0 2px 6px rgba(25,29,38,.07), 0 20px 48px rgba(25,29,38,.11)", "purpose": "The only neutral shadow: each paper sheet floating over the desk. Nothing else lifts." },
+      { "name": "seal-rest", "value": "0 6px 16px rgba(30,122,70,.28)", "purpose": "Primary seal-green buttons at rest." },
+      { "name": "seal-hover", "value": "0 9px 22px rgba(30,122,70,.34)", "purpose": "Primary buttons on fine-pointer hover, paired with translateY(-1px)." },
+      { "name": "nav-cta-rest", "value": "0 4px 12px rgba(30,122,70,.25)", "purpose": "Smaller shadow cut for the nav CTA at rest." },
+      { "name": "nav-cta-hover", "value": "0 7px 18px rgba(30,122,70,.32)", "purpose": "Nav CTA on fine-pointer hover." },
+      { "name": "punched-hole", "value": "inset 0 1px 3px rgba(25,29,38,.4)", "purpose": "Inset on desk-filled binding holes so they read as cut through the paper." }
+    ],
+    "motion": [
+      { "name": "ease-house", "value": "cubic-bezier(.23,1,.32,1)", "purpose": "The single easing curve (--ease) for every transition and entrance." },
+      { "name": "ui-fast", "value": "140ms", "purpose": "Demo control transitions (transform, border-color, color, background)." },
+      { "name": "ui", "value": "160ms", "purpose": "Ceiling for state transitions: buttons, nav CTA, input focus rule." },
+      { "name": "stamp-in", "value": "200ms", "purpose": "Kaşe press: scale .95→1 + opacity at constant rotate(-4deg); opacity-only under reduced motion." },
+      { "name": "rise", "value": "320ms", "purpose": "Entrance: opacity + translateY(10px)→0, staggered via --d in 60ms steps; fade-only 200ms under reduced motion." }
+    ],
+    "breakpoints": [
+      { "name": "md", "value": "900px" },
+      { "name": "sm", "value": "600px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Seal Button (primary)",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The mühür button: seal-green fill, mono-icon, uppercase Archivo — the primary action on every sheet.",
+      "html": "<button class=\"ds-btn-seal\" type=\"button\"><svg viewBox=\"0 0 24 24\" width=\"18\" height=\"18\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M5 22h14\"/><path d=\"M19.27 13.73A2.5 2.5 0 0 0 17.5 13h-11a2.5 2.5 0 0 0-2.5 2.5V16a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-.5a2.5 2.5 0 0 0-.73-1.77Z\"/><path d=\"M14 13V8.5C14 7 15 7 15 5a3 3 0 0 0-6 0c0 2 1 2 1 3.5V13\"/></svg> Defteri aç</button>",
+      "css": ".ds-btn-seal{display:inline-flex;align-items:center;gap:10px;background:var(--green,#1e7a46);color:#fff;font-family:\"Archivo\",system-ui,sans-serif;font-weight:700;font-size:.95rem;letter-spacing:.06em;text-transform:uppercase;padding:14px 24px;border:none;border-radius:6px;cursor:pointer;box-shadow:0 6px 16px rgba(30,122,70,.28);transition:transform 160ms cubic-bezier(.23,1,.32,1),box-shadow 160ms cubic-bezier(.23,1,.32,1)}.ds-btn-seal:active{transform:scale(.97)}.ds-btn-seal:focus-visible{outline:2px solid var(--blue,#2447c9);outline-offset:2px}@media (hover:hover) and (pointer:fine){.ds-btn-seal:hover{transform:translateY(-1px);box-shadow:0 9px 22px rgba(30,122,70,.34)}}@media (prefers-reduced-motion:reduce){.ds-btn-seal{transition:none}.ds-btn-seal:hover{transform:none}}"
+    },
+    {
+      "name": "Quiet Button (secondary)",
+      "kind": "button",
+      "refersTo": "button-quiet",
+      "description": "Ink-outlined secondary action; hover inks border and text to ruling blue.",
+      "html": "<button class=\"ds-btn-quiet\" type=\"button\">Örnek taramayı dene <svg viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M5 12h14m-6-6 6 6-6 6\"/></svg></button>",
+      "css": ".ds-btn-quiet{display:inline-flex;align-items:center;gap:8px;background:transparent;color:var(--ink,#191d26);font-family:\"Archivo\",system-ui,sans-serif;font-weight:700;font-size:.9rem;padding:12px 20px;border:2px solid var(--ink,#191d26);border-radius:6px;cursor:pointer;transition:transform 160ms cubic-bezier(.23,1,.32,1),border-color 160ms,color 160ms}.ds-btn-quiet:active{transform:scale(.97)}.ds-btn-quiet:focus-visible{outline:2px solid var(--blue,#2447c9);outline-offset:2px}@media (hover:hover) and (pointer:fine){.ds-btn-quiet:hover{border-color:var(--blue,#2447c9);color:var(--blue,#2447c9)}}@media (prefers-reduced-motion:reduce){.ds-btn-quiet{transition:none}}"
+    },
+    {
+      "name": "Demo Control Button",
+      "kind": "button",
+      "refersTo": "button-ctrl",
+      "description": "Compact 1.5px ink-outlined control for the live chain demo; 140ms transitions, blue wash on hover.",
+      "html": "<button class=\"ds-btn-ctrl\" type=\"button\"><svg viewBox=\"0 0 24 24\" width=\"15\" height=\"15\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M12 22s8-3.5 8-10V5l-8-3-8 3v7c0 6.5 8 10 8 10Z\"/><path d=\"m9 12 2 2 4-4\"/></svg> Zinciri doğrula</button>",
+      "css": ".ds-btn-ctrl{display:inline-flex;align-items:center;gap:6px;font-family:\"Archivo\",system-ui,sans-serif;font-weight:600;font-size:.78rem;padding:8px 12px;border:1.5px solid var(--ink,#191d26);border-radius:6px;background:transparent;color:var(--ink,#191d26);cursor:pointer;transition:transform 140ms cubic-bezier(.23,1,.32,1),border-color 140ms,color 140ms,background 140ms}.ds-btn-ctrl:active{transform:scale(.97)}.ds-btn-ctrl:disabled{opacity:.45;cursor:not-allowed}.ds-btn-ctrl:focus-visible{outline:2px solid var(--blue,#2447c9);outline-offset:2px}@media (hover:hover) and (pointer:fine){.ds-btn-ctrl:hover:not(:disabled){border-color:var(--blue,#2447c9);color:var(--blue,#2447c9);background:rgba(36,71,201,.07)}}@media (prefers-reduced-motion:reduce){.ds-btn-ctrl{transition:none}}"
+    },
+    {
+      "name": "Kaşe Stamp (ok / bad / warn)",
+      "kind": "chip",
+      "refersTo": "stamp-ok",
+      "description": "The signature verdict: mono-caps plaque, 2px self-colored border, pressed at -4deg with a 200ms scale-in.",
+      "html": "<span class=\"ds-stamp ds-ok\">DOĞRULANDI</span> <span class=\"ds-stamp ds-bad\">MÜHÜR KIRIK</span> <span class=\"ds-stamp ds-warn\">KONTROL EDİN</span>",
+      "css": ".ds-stamp{display:inline-block;font-family:\"Spline Sans Mono\",ui-monospace,monospace;font-weight:700;font-size:.62rem;letter-spacing:.1em;padding:2px 8px;border:2px solid currentColor;border-radius:4px;background:var(--paper,#f6f7f4);transform:rotate(-4deg);animation:ds-stamp-in 200ms cubic-bezier(.23,1,.32,1) both}.ds-stamp.ds-ok{color:var(--green,#1e7a46)}.ds-stamp.ds-bad{color:var(--red,#c93a2e)}.ds-stamp.ds-warn{color:var(--amber,#b45309)}@keyframes ds-stamp-in{from{opacity:0;transform:rotate(-4deg) scale(.95)}to{opacity:1;transform:rotate(-4deg) scale(1)}}@media (prefers-reduced-motion:reduce){.ds-stamp{animation:ds-fade-only 200ms both}@keyframes ds-fade-only{from{opacity:0}to{opacity:1}}}"
+    },
+    {
+      "name": "Ledger Chain Row",
+      "kind": "custom",
+      "refersTo": "sheet",
+      "description": "One evidence entry on blue ruling: mono meta over a bold summary, blue hash at right, stamp slot at top-right; tampered/broken washes.",
+      "html": "<ol class=\"ds-chain\"><li class=\"ds-chain-row\"><div class=\"ds-row-main\"><span class=\"ds-row-meta\">2026-11-12 09:14 · ornek-musteri.com</span><span class=\"ds-row-summary\">3 form · 2 çerez kategorisi · 1 onay</span></div><span class=\"ds-row-hash\"><svg viewBox=\"0 0 24 24\" width=\"13\" height=\"13\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7\"/><path d=\"M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7\"/></svg><span>da1099487b2c…</span></span><span class=\"ds-row-slot\"><span class=\"ds-row-stamp\">MÜHÜRLÜ</span></span></li><li class=\"ds-chain-row ds-tampered\"><div class=\"ds-row-main\"><span class=\"ds-row-meta\">2026-11-15 14:02 · ornek-musteri.com</span><span class=\"ds-row-summary\">4 form · 3 çerez kategorisi · 1 onay</span></div><span class=\"ds-row-hash\"><span>73eaec13f4cf…</span></span></li></ol>",
+      "css": ".ds-chain{list-style:none;margin:0;padding:0;border:2px solid var(--ink,#191d26);border-radius:8px;background:var(--paper,#f6f7f4);font-family:\"Archivo\",system-ui,sans-serif;max-width:480px}.ds-chain-row{position:relative;display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--rule,rgba(36,71,201,.30));background-image:repeating-linear-gradient(to bottom,transparent 0 27px,var(--rule-soft,rgba(36,71,201,.13)) 27px 28px)}.ds-chain-row:last-child{border-bottom:none}.ds-row-main{display:flex;flex-direction:column;gap:2px;min-width:0}.ds-row-meta{font-family:\"Spline Sans Mono\",ui-monospace,monospace;font-size:.68rem;color:var(--ink-soft,#3f4553);letter-spacing:.02em}.ds-row-summary{font-weight:700;font-size:.9rem;color:var(--ink,#191d26)}.ds-row-hash{display:inline-flex;align-items:center;gap:6px;font-family:\"Spline Sans Mono\",ui-monospace,monospace;font-size:.7rem;color:var(--blue,#2447c9);white-space:nowrap}.ds-chain-row.ds-tampered{background-color:rgba(180,83,9,.07)}.ds-chain-row.ds-tampered .ds-row-summary{text-decoration:underline wavy var(--amber,#b45309);text-underline-offset:4px}.ds-row-slot{position:absolute;right:12px;top:-9px}.ds-row-stamp{display:inline-block;font-family:\"Spline Sans Mono\",ui-monospace,monospace;font-weight:700;font-size:.62rem;letter-spacing:.1em;padding:2px 8px;border:2px solid currentColor;border-radius:4px;background:var(--paper,#f6f7f4);color:var(--green,#1e7a46);transform:rotate(-4deg)}"
+    },
+    {
+      "name": "Underline Field",
+      "kind": "input",
+      "refersTo": "input-field",
+      "description": "Boxless registry field: mono-caps label over a 2px blue-alpha bottom rule that inks to solid blue on focus.",
+      "html": "<div class=\"ds-field\"><label class=\"ds-field-label\" for=\"ds-f-name\">Ad soyad</label><input class=\"ds-field-input\" id=\"ds-f-name\" type=\"text\" placeholder=\"Adınız Soyadınız\"></div>",
+      "css": ".ds-field{display:flex;flex-direction:column;gap:6px;max-width:320px}.ds-field-label{font-family:\"Spline Sans Mono\",ui-monospace,monospace;font-size:.7rem;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft,#3f4553)}.ds-field-input{font-family:\"Archivo\",system-ui,sans-serif;font-size:.98rem;color:var(--ink,#191d26);background:transparent;border:none;border-bottom:2px solid var(--rule,rgba(36,71,201,.30));padding:9px 2px;border-radius:0;caret-color:var(--blue,#2447c9);transition:border-color 160ms cubic-bezier(.23,1,.32,1)}.ds-field-input:focus{outline:none;border-bottom-color:var(--blue,#2447c9)}.ds-field-input::placeholder{color:#6a7080}@media (prefers-reduced-motion:reduce){.ds-field-input{transition:none}}"
+    },
+    {
+      "name": "Ledger Nav Bar",
+      "kind": "nav",
+      "refersTo": "nav-bar",
+      "description": "Fixed paper bar with 2px blue baseline: mono brand with red interpunct, scrollspy links, green seal CTA.",
+      "html": "<header class=\"ds-nav\"><a class=\"ds-brand\" href=\"#\">VERİFORM<em>·</em>DEFTER</a><nav class=\"ds-nav-links\"><a href=\"#\" aria-current=\"true\">Defter</a><a href=\"#\">Nasıl işler</a><a href=\"#\">Paketler</a><a href=\"#\">İletişim</a></nav><a class=\"ds-nav-cta\" href=\"#\">Defteri aç</a></header>",
+      "css": ".ds-nav{display:flex;align-items:center;gap:20px;height:64px;padding:0 clamp(16px,4vw,40px);background:var(--paper,#f6f7f4);border-bottom:2px solid var(--blue,#2447c9);font-family:\"Archivo\",system-ui,sans-serif}.ds-brand{font-family:\"Spline Sans Mono\",ui-monospace,monospace;font-weight:700;font-size:.95rem;letter-spacing:.14em;color:var(--ink,#191d26);text-decoration:none;white-space:nowrap}.ds-brand em{font-style:normal;color:var(--red,#c93a2e)}.ds-nav-links{display:flex;gap:clamp(10px,2vw,22px);align-items:center;margin-left:auto}.ds-nav-links a{color:var(--ink-soft,#3f4553);text-decoration:none;font-size:.86rem;font-weight:600;white-space:nowrap;padding:6px 2px}.ds-nav-links a[aria-current=\"true\"]{color:var(--blue,#2447c9);text-decoration:underline;text-underline-offset:6px;text-decoration-thickness:2px}.ds-nav-links a:focus-visible,.ds-brand:focus-visible,.ds-nav-cta:focus-visible{outline:2px solid var(--blue,#2447c9);outline-offset:2px}.ds-nav-cta{display:inline-flex;align-items:center;gap:8px;background:var(--green,#1e7a46);color:#fff;text-decoration:none;font-weight:700;font-size:.82rem;letter-spacing:.05em;text-transform:uppercase;padding:9px 16px;border-radius:6px;white-space:nowrap;box-shadow:0 4px 12px rgba(30,122,70,.25);transition:transform 160ms cubic-bezier(.23,1,.32,1),box-shadow 160ms cubic-bezier(.23,1,.32,1)}.ds-nav-cta:active{transform:scale(.97)}@media (hover:hover) and (pointer:fine){.ds-nav-links a:hover{color:var(--blue,#2447c9)}.ds-nav-cta:hover{transform:translateY(-1px);box-shadow:0 7px 18px rgba(30,122,70,.32)}}@media (prefers-reduced-motion:reduce){.ds-nav-cta{transition:none}.ds-nav-cta:hover{transform:none}}"
+    },
+    {
+      "name": "Ledger Sheet (antet + margin + holes)",
+      "kind": "card",
+      "refersTo": "sheet",
+      "description": "The signature container: square paper lifted off the desk, red margin line, three punched binding holes, mono antet closed by a folio.",
+      "html": "<section class=\"ds-sheet\"><div class=\"ds-holes\" aria-hidden=\"true\"><span class=\"ds-hole\"></span><span class=\"ds-hole\"></span><span class=\"ds-hole\"></span></div><div class=\"ds-antet\"><span>VERİFORM — UYUM DEFTERİ</span><span>SAYFA 01 · GİREN KAYIT</span></div><h2 class=\"ds-sheet-title\">Üç adımda kanıt defteri</h2><p class=\"ds-sheet-lead\">Kurulum bir script etiketi kadardır. Sonrası defterin işi: izlemek, mühürlemek, uyarmak.</p></section>",
+      "css": ".ds-sheet{position:relative;max-width:720px;background:var(--paper,#f6f7f4);color:var(--ink,#191d26);font-family:\"Archivo\",system-ui,sans-serif;padding:44px clamp(24px,5vw,60px) 56px clamp(56px,8vw,100px);box-shadow:0 2px 6px rgba(25,29,38,.07),0 20px 48px rgba(25,29,38,.11)}.ds-sheet::before{content:\"\";position:absolute;top:0;bottom:0;left:clamp(40px,6vw,68px);width:2px;background:var(--red,#c93a2e);opacity:.65}.ds-holes{position:absolute;left:clamp(14px,2.6vw,28px);top:0;bottom:0;display:flex;flex-direction:column;justify-content:space-evenly;pointer-events:none}.ds-hole{width:16px;height:16px;border-radius:50%;background:var(--desk,#e7e9e2);box-shadow:inset 0 1px 3px rgba(25,29,38,.4)}.ds-antet{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;border-bottom:2px solid var(--ink,#191d26);padding-bottom:12px;margin-bottom:36px;font-family:\"Spline Sans Mono\",ui-monospace,monospace;font-size:.74rem;font-weight:600;letter-spacing:.16em;color:var(--ink,#191d26)}.ds-antet span:last-child{color:var(--ink-soft,#3f4553)}.ds-sheet-title{font-size:clamp(1.7rem,3.2vw,2.4rem);font-weight:800;letter-spacing:-.02em;line-height:1.1;margin:0 0 12px;text-wrap:balance}.ds-sheet-lead{font-size:1.08rem;line-height:1.65;color:var(--ink-soft,#3f4553);max-width:64ch;margin:0}"
+    }
+  ],
+  "narrative": {
+    "northStar": "Zincir Defter (The Chain Ledger)",
+    "overview": "The interface is not a website about a ledger; it is the ledger. The page background is a cool desk surface and every section is a sheet of Turkish registry paper lifted off it: a red margin line down the left, three binding holes punched through to the desk beneath, a letterspaced mono antet (\"VERİFORM — UYUM DEFTERİ\") closed by a folio (\"SAYFA NN · …\"), and content written as entries on blue ruling. The product's actual mechanism — a sha256 hash chain — runs live in the first viewport, so the visitor seals, tampers, and verifies records with their own hands before any claim is made. Persuasion is the artifact, not adjectives.\n\nThe palette behaves like stationery supplies, not brand paint: cold paper and desk neutrals, near-black ink for all prose, and chromatic color confined to the tools of the registry — the blue ruling pen, the red margin, the green seal, the amber warning, the red broken-seal stamp. Type splits by duty: Archivo (self-hosted variable, 100–900) speaks in heavy, tightly-tracked headlines and plain body; Spline Sans Mono (self-hosted variable, 300–700) records everything evidential — hashes, dates, prices, folios, labels. Motion is bureaucratic-physical: confirmations arrive as a kaşe stamp pressed at −4°, entries rise 10px into place, and every UI transition finishes within 160ms on a single decelerating curve.\n\nConfirmed rejections: no fabricated customers, logos, or testimonials (PRODUCT.md brand commitment); no framework — the surface is a pure render function with inline CSS/JS.",
+    "keyCharacteristics": [
+      "Every section is a ledger sheet: red margin, binding holes, antet + folio, ruled rows.",
+      "Text is achromatic ink; color lives only in rules, margin, stamps, links, and action fills.",
+      "Evidence (hashes, dates, prices, meta, labels) is always Spline Sans Mono.",
+      "The live hash-chain demo is the hero's right column — the mechanism is the pitch.",
+      "One easing curve, ≤160ms UI transitions, stamps pressed at 200ms, entrances at 320ms.",
+      "Browser chrome is themed: blue selection/caret/focus, blue-on-paper thin scrollbars."
+    ],
+    "rules": [
+      { "name": "The Achromatic Ink Rule", "body": "Prose is never colored. Headings and body sit in ink/ink-soft; chromatic color appears only in ruling, margin, stamps, links, hashes, check icons, and solid action fills. If a paragraph is blue, it is wrong.", "section": "colors" },
+      { "name": "The Blue Ruling Rule", "body": "Thin structure is drawn with the blue alphas (rule, rule-soft); heavy 2px ink borders are reserved for ledger frames — the antet baseline, the demo box, the tariff top edge, the footer. Never mix the two weights on the same element.", "section": "colors" },
+      { "name": "The Evidence Mono Rule", "body": "Anything a registry would record — hashes, timestamps, site names, prices, folios, record numbers, field labels, status lines — is set in Spline Sans Mono. Anything it would argue is set in Archivo. Mono is never used for paragraphs of persuasion.", "section": "typography" },
+      { "name": "The Folio Rule", "body": "Every section is a sheet and every sheet opens with the mono antet closed by its folio (\"SAYFA NN · <purpose>\"), carries the red margin line and three binding holes, and keeps content clear of the margin. A section without its antet is an unfinished page.", "section": "layout" },
+      { "name": "The One Lifted Sheet Rule", "body": "Only the sheet lifts off the desk and only seal-green buttons cast colored light. No card, row, input, or stamp ever gets a drop shadow; a stamp's authority comes from its border and rotation, not elevation.", "section": "elevation" },
+      { "name": "The Stamp Rule", "body": "A verdict is a kaşe, not a toast: mono caps, 2px self-colored border, −4° rotation, pressed in at 200ms scale .95→1. Reduced motion keeps the verdict but drops the press to opacity-only.", "section": "components" },
+      { "name": "The 160ms Rule", "body": "State transitions run ≤160ms (demo controls 140ms) on cubic-bezier(.23,1,.32,1); entrances may take 320ms with staggered delays (60ms steps). Hover effects exist only inside @media (hover:hover) and (pointer:fine); every pressable control answers :active with scale(.97).", "section": "components" }
+    ],
+    "dos": [
+      "Do keep all prose in ink/ink-soft and reserve chromatic color for ruling, margin, stamps, links, hashes, check icons, and action fills (the Achromatic Ink Rule).",
+      "Do draw thin division with the blue alphas (rule / rule-soft) and reserve 2px ink strokes for ledger frames (the Blue Ruling Rule).",
+      "Do set hashes, dates, prices, folios, meta, and field labels in Spline Sans Mono (the Evidence Mono Rule).",
+      "Do give every section its sheet: red margin, three binding holes, antet + \"SAYFA NN\" folio (the Folio Rule).",
+      "Do run UI transitions at ≤160ms on cubic-bezier(.23,1,.32,1), gate hover behind (hover:hover) and (pointer:fine), and answer :active with scale(.97).",
+      "Do theme browser surfaces: blue selection with white text, blue caret, 2px blue focus-visible outline offset 2px, thin blue-on-paper scrollbars.",
+      "Do provide the reduced-motion path: opacity-only stamp/rise at 200ms, transitions off, instant scrolling.",
+      "Do keep the demo honest: real crypto.subtle sha256, server-rendered seed hashes readable without JS, controls disabled with an explanatory status when crypto is unavailable."
+    ],
+    "donts": [
+      "Don't color body text, tint sheet surfaces, or add colored cards — the sheet stays flat paper; the only background washes are the tampered/broken row states and the annotation's faint blue rgba(36,71,201,.045).",
+      "Don't round the sheet or go past 8px radius anywhere; paper is square, controls are 4–8px, only binding holes are circular.",
+      "Don't shadow anything except the sheet and seal-green buttons (the One Lifted Sheet Rule); stamps and rows carry no elevation.",
+      "Don't use decorative color gradients, glass, or blur — the only gradient in the system is the ruled-line repeating-linear-gradient inside chain rows.",
+      "Don't stretch UI transitions past 160ms or animate hover on touch; entrances (320ms) and the stamp press (200ms) are the only longer motions.",
+      "Don't substitute system display faces or remote font CDNs — Archivo and Spline Sans Mono are self-hosted variable woff2 with latin/latin-ext splits.",
+      "Don't fabricate customer logos, testimonials, or benchmark numbers (PRODUCT.md: none exist; the live mechanism is the only proof)."
+    ]
+  }
+}

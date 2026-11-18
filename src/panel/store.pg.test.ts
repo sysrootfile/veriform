@@ -159,4 +159,20 @@ d("createPostgresPanelStore (GERÇEK Postgres — docker veriform-pg)", () => {
       await broken.close();
     }
   });
+
+  it("iletişim talebi gerçek veritabanında saklanır ve listelenir", async () => {
+    const req = await store.createContactRequest({
+      name: "PG Ajans",
+      email: "pg@ajans.com",
+      company: "PG A.Ş.",
+      package: "ultimate",
+      message: "özel kurulum talebi",
+    });
+    expect(req.id).toBeTruthy();
+    const listed = await store.listContactRequests();
+    const found = listed.find((r) => r.id === req.id);
+    expect(found?.company).toBe("PG A.Ş.");
+    expect(found?.package).toBe("ultimate");
+    expect(found?.message).toBe("özel kurulum talebi");
+  });
 });

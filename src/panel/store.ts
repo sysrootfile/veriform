@@ -4,7 +4,7 @@ import { computeDeadline, extendDeadline } from "../dsar/deadline.js";
 import type { DsarRequest, DsarStatus, DsarType } from "../dsar/types.js";
 import type { FormInventoryReport } from "../report/types.js";
 import { makeChainEntry, verifyStoredChain, verifyReceiptSelfHash, type StoredReceiptEntry } from "./chain.js";
-import type { Client, PanelUser, ScanCookie, ScannedScript, Site, SiteBannerConfig, StoredScan, Tenant, TenantKind } from "./types.js";
+import type { Client, ContactRequest, PanelUser, ScanCookie, ScannedScript, Site, SiteBannerConfig, StoredScan, Tenant, TenantKind } from "./types.js";
 import { deepClone, randomIngestToken } from "./shared.js";
 import type { Correction } from "./corrections.js";
 import type { AuditEntry } from "./types.js";
@@ -95,6 +95,15 @@ export interface PanelStore {
   /** Anahtar → kiracı kimliklendirme; bulunamayan/iptalli anahtar → null. */
   findTenantByApiKey(key: string): Promise<{ tenantId: string; keyId: string } | null>;
   touchApiKey(key: string): Promise<void>;
+  /** Landing iletişim talebi — operatör düzeyi (kiracı filtresi yok). */
+  createContactRequest(input: {
+    name: string;
+    email: string;
+    company?: string | undefined;
+    package?: ContactRequest["package"];
+    message: string;
+  }): Promise<ContactRequest>;
+  listContactRequests(): Promise<ContactRequest[]>;
   /** Değişiklik uyarısı bağlamı: site → kiracı + sahip e-postası (yoksa null). */
   getSiteAlertContext(
     siteId: string,
@@ -112,6 +121,7 @@ export function createInMemoryPanelStore(): PanelStore {
   const corrections: Array<Correction & { siteId: string }> = [];
   const auditLog: Array<AuditEntry & { tenantId: string }> = [];
   const apiKeys: Array<ApiKeyRecord & { tenantId: string; keyHash: string }> = [];
+  const contactRequests: ContactRequest[] = [];
 
   const clone = deepClone;
 
@@ -412,6 +422,24 @@ export function createInMemoryPanelStore(): PanelStore {
       const hash = hashApiKey(key);
       const found = apiKeys.find((k) => k.keyHash === hash);
       if (found) found.lastUsedAt = new Date().toISOString();
+    },
+
+    async createContactRequest(input) {
+      const req: ContactRequest = {
+        id: crypto.randomUUID(),
+        name: input.name,
+        email: input.email,
+        ...(input.company ? { company: input.company } : {}),
+        ...(input.package ? { package: input.package } : {}),
+        message: input.message,
+        createdAt: new Date().toISOString(),
+      };
+      contactRequests.push(req);
+      return clone(req);
+    },
+
+    async listContactRequests() {
+      return clone(contactRequests);
     },
 
     async getSiteAlertContext(siteId) {

@@ -337,4 +337,23 @@ describe("createInMemoryPanelStore", () => {
     expect(await store.verifySiteChain(site.id)).toBe(true);
     await expect(store.appendReceipt({ siteId: "yok", receipt: r1 })).rejects.toThrow(/site/);
   });
+
+  it("iletişim talebi saklanır, listelenir ve izole kopya döner", async () => {
+    const store = createInMemoryPanelStore();
+    const req = await store.createContactRequest({
+      name: "Ayşe",
+      email: "ayse@ajans.com",
+      package: "pro",
+      message: "15 site izlemek istiyoruz",
+    });
+    expect(req.id).toBeTruthy();
+    expect(req.createdAt).toBeTruthy();
+    req.message = "kurcalandı";
+    const listed = await store.listContactRequests();
+    expect(listed).toHaveLength(1);
+    expect(listed[0]!.message).toBe("15 site izlemek istiyoruz");
+    expect(listed[0]!.package).toBe("pro");
+    listed[0]!.message = "tekrar kurcalandı";
+    expect((await store.listContactRequests())[0]!.message).toBe("15 site izlemek istiyoruz");
+  });
 });

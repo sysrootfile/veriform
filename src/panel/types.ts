@@ -88,4 +88,17 @@ export interface AuditEntry {
   createdAt: string;
 }
 
+export type ContactPackage = "starter" | "pro" | "ultimate";
+
+/** Landing iletişim formu talebi — operatör düzeyi, kiracıya bağlı değil. */
+export interface ContactRequest {
+  id: string;
+  name: string;
+  email: string;
+  company?: string | undefined;
+  package?: ContactPackage | undefined;
+  message: string;
+  createdAt: string;
+}
+
 export type { ConsentReceipt };

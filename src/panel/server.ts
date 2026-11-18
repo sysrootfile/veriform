@@ -1,4 +1,5 @@
 import { createServer } from "node:http";
+import { readFile } from "node:fs/promises";
 import { login, registerTenant } from "./accounts.js";
 import { buildLogoutCookie, buildSessionCookie, createSessionToken, verifySessionTokenAny } from "./auth.js";
 import { createIngestApi, IngestError } from "./ingest.js";
@@ -32,6 +33,9 @@ import { createMailSenderFromEnv } from "./mailer.js";
 import { resolvePanelSecrets } from "./secrets.js";
 import { handleWorkerRun } from "./worker.js";
 import { handleEmbedJs } from "./embed.js";
+import { handleFontAsset } from "./assets.js";
+import { renderLandingPage } from "./landing.js";
+import { handleContactSubmit } from "./contact.js";
 import { buildDsarNotificationEmail } from "../dsar/notifications.js";
 import { renderDraftPageHtml } from "../draft/render.js";
 import { CATEGORY_LABELS, COOKIE_LABELS } from "../report/render.js";
@@ -102,6 +106,9 @@ const scanLimiter = createRateLimiter({ max: 5, windowMs: 60_000 });
 // Auth POST'ları için IP başına hız sınırı — kaba kuvvet ve kayıt spam'ine karşı
 const loginLimiter = createRateLimiter({ max: 10, windowMs: 60_000 });
 const registerLimiter = createRateLimiter({ max: 5, windowMs: 60_000 });
+// Landing iletişim formu: IP başına 3 talep / dakika
+const contactLimiter = createRateLimiter({ max: 3, windowMs: 60_000 });
+const OPERATOR_EMAIL = process.env.CONTACT_OPERATOR_EMAIL ?? "iletisim@veriform.io";
 // TLS sonlandıran proxy arkasında SESSION_COOKIE_SECURE=1 ver; düz HTTP'de Secure çerezi düşürür
 const COOKIE_SECURE = process.env.SESSION_COOKIE_SECURE === "1";
 
@@ -190,6 +197,56 @@ const server = createServer(async (req, res) => {
       if (result.cacheControl) headers["cache-control"] = result.cacheControl;
       res.writeHead(result.status, headers);
       res.end(result.body);
+      return;
+    }
+
+    // Self-host fontlar — yalnız beyaz listedeki woff2 adları (path traversal kapalı).
+    if (req.method === "GET" && url.pathname.startsWith("/assets/fonts/")) {
+      const name = url.pathname.slice("/assets/fonts/".length);
+      const result = await handleFontAsset(name, async (file) =>
+        readFile(new URL(`./assets/fonts/${file}`, import.meta.url)),
+      );
+      const headers: Record<string, string> = {
+        "content-type": result.contentType,
+        "x-content-type-options": "nosniff",
+      };
+      if (result.cacheControl) headers["cache-control"] = result.cacheControl;
+      res.writeHead(result.status, headers);
+      res.end(result.body ?? "font bulunamadı");
+      return;
+    }
+
+    // Kamu landing — auth kapısının önünde; contact dönüşü query ile durum basar.
+    if (req.method === "GET" && url.pathname === "/") {
+      const contactParam = url.searchParams.get("contact");
+      const contactStatus = contactParam === "ok" || contactParam === "invalid" ? contactParam : undefined;
+      res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      res.end(renderLandingPage({ contactStatus }));
+      return;
+    }
+
+    // Landing iletişim formu — kamu ucu, operatöre mail + DB kaydı.
+    if (req.method === "POST" && url.pathname === "/contact") {
+      const result = await handleContactSubmit({
+        form: new URLSearchParams(await readBody(req)),
+        store,
+        mailSender,
+        operatorEmail: OPERATOR_EMAIL,
+        limiter: contactLimiter,
+        ip: req.socket.remoteAddress ?? "bilinmeyen",
+      });
+      if (result.status === 303) {
+        res.writeHead(303, { location: result.location ?? "/" });
+        res.end();
+        return;
+      }
+      if (result.status === 400) {
+        res.writeHead(303, { location: "/?contact=invalid#iletisim" });
+        res.end();
+        return;
+      }
+      res.writeHead(429, { "content-type": "text/plain; charset=utf-8" });
+      res.end("Çok fazla talep — bir dakika bekleyip tekrar deneyin");
       return;
     }
 

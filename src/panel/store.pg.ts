@@ -15,7 +15,7 @@ import {
   type StoredReceiptEntry,
 } from "./chain.js";
 import type { PanelStore } from "./store.js";
-import type { Client, PanelUser, ScanCookie, ScannedScript, Site, SiteBannerConfig, StoredScan, Tenant, TenantKind } from "./types.js";
+import type { Client, ContactRequest, PanelUser, ScanCookie, ScannedScript, Site, SiteBannerConfig, StoredScan, Tenant, TenantKind } from "./types.js";
 import { deepClone, randomIngestToken } from "./shared.js";
 
 /**
@@ -112,6 +112,18 @@ function mapDsar(row: pg.QueryResultRow): DsarRequest {
     extended: Boolean(row.extended),
     ...(row.responded_at ? { respondedAt: iso(row.responded_at as Date) } : {}),
     ...(row.response_note ? { responseNote: String(row.response_note) } : {}),
+  };
+}
+
+function mapContact(row: pg.QueryResultRow): ContactRequest {
+  return {
+    id: String(row.id),
+    name: String(row.name),
+    email: String(row.email),
+    ...(row.company ? { company: String(row.company) } : {}),
+    ...(row.package ? { package: row.package as ContactRequest["package"] } : {}),
+    message: String(row.message),
+    createdAt: iso(row.created_at as Date),
   };
 }
 
@@ -335,6 +347,19 @@ export function createPostgresPanelStore(connectionString: string): PostgresPane
     async findUserByEmail(email) {
       const result = await pool.query("select * from users where email = $1", [email]);
       return result.rows[0] ? clone(mapUser(result.rows[0])) : null;
+    },
+
+    async createContactRequest(input) {
+      const result = await pool.query(
+        "insert into contact_requests (name, email, company, package, message) values ($1, $2, $3, $4, $5) returning *",
+        [input.name, input.email, input.company ?? null, input.package ?? null, input.message],
+      );
+      return clone(mapContact(result.rows[0]!));
+    },
+
+    async listContactRequests() {
+      const result = await pool.query("select * from contact_requests order by created_at, id");
+      return clone(result.rows.map(mapContact));
     },
 
     async saveDsar(input) {
