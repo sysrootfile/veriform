@@ -202,28 +202,35 @@ describe("createPanelService", () => {
 });
 
 describe("getOnboardingStatus", () => {
-  it("boş kiracıda üç adım da bekler", async () => {
+  const fresh = {
+    hasClient: false,
+    hasSite: false,
+    hasScan: false,
+    emailVerified: false,
+    hasEmbed: false,
+    hasBanner: false,
+  };
+
+  it("boş kiracıda altı adım da bekler", async () => {
     const store = createInMemoryPanelStore();
     const tenant = await store.createTenant({ name: "Yeni Ajans", kind: "agency" });
     const service = createPanelService(store, { tenantId: tenant.id });
-    expect(await service.getOnboardingStatus()).toEqual({
-      hasClient: false,
-      hasSite: false,
-      hasScan: false,
-    });
+    expect(await service.getOnboardingStatus()).toEqual(fresh);
   });
 
-  it("müşteri ve site var ama tarama yokken ilk iki adım tamam", async () => {
-    const { serviceA } = await setup();
+  it("müşteri ve site varken ilk iki adım tamam ve hedef kimlikler döner", async () => {
+    const { serviceA, clientA, siteA } = await setup();
     expect(await serviceA.getOnboardingStatus()).toEqual({
+      ...fresh,
       hasClient: true,
       hasSite: true,
-      hasScan: false,
+      firstClientId: clientA.id,
+      firstSiteId: siteA.id,
     });
   });
 
   it("ilk tarama gelince üçüncü adım da tamamlanır", async () => {
-    const { serviceA, siteA } = await setup();
+    const { serviceA, siteA, clientA } = await setup();
     await serviceA.ingestScan({
       siteId: siteA.id,
       report: emptyReport(),
@@ -231,19 +238,43 @@ describe("getOnboardingStatus", () => {
       observedTargets: [],
     });
     expect(await serviceA.getOnboardingStatus()).toEqual({
+      ...fresh,
       hasClient: true,
       hasSite: true,
       hasScan: true,
+      firstClientId: clientA.id,
+      firstSiteId: siteA.id,
+    });
+  });
+
+  it("embed bağlantısı, banner ve e-posta onayı ayrı adımlarda işaretlenir", async () => {
+    const { store, serviceA, siteA, clientA } = await setup();
+    await store.markEmbedSeen(siteA.id);
+    await serviceA.setBannerConfig(siteA.id, {
+      bannerVersion: "banner-2026-11",
+      texts: { title: "T", description: "D", acceptAll: "A", rejectAll: "R" },
+    });
+    const user = await store.createUser({
+      tenantId: clientA.tenantId,
+      email: "sahip@ajans.com",
+      passwordHash: "x",
+    });
+    await store.setUserEmailVerified(user.id);
+    expect(await serviceA.getOnboardingStatus()).toEqual({
+      hasClient: true,
+      hasSite: true,
+      hasScan: false,
+      emailVerified: true,
+      hasEmbed: true,
+      hasBanner: true,
+      firstClientId: clientA.id,
+      firstSiteId: siteA.id,
     });
   });
 
   it("başka kiracının verisi durumu etkilemez", async () => {
     const { serviceB } = await setup();
-    expect(await serviceB.getOnboardingStatus()).toEqual({
-      hasClient: false,
-      hasSite: false,
-      hasScan: false,
-    });
+    expect(await serviceB.getOnboardingStatus()).toEqual(fresh);
   });
 });
 

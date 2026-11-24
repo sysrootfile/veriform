@@ -74,6 +74,7 @@ function mapSite(row: pg.QueryResultRow): Site {
     ...(row.scan_interval_hours !== null && row.scan_interval_hours !== undefined
       ? { scanIntervalHours: Number(row.scan_interval_hours) }
       : {}),
+    ...(row.embed_last_seen_at ? { embedLastSeenAt: iso(row.embed_last_seen_at as Date) } : {}),
     createdAt: iso(row.created_at as Date),
   };
 }
@@ -244,6 +245,10 @@ export function createPostgresPanelStore(connectionString: string): PostgresPane
     async getSiteByToken(token) {
       const result = await pool.query("select * from sites where ingest_token = $1", [token]);
       return result.rows[0] ? clone(mapSite(result.rows[0])) : null;
+    },
+
+    async markEmbedSeen(siteId) {
+      await pool.query("update sites set embed_last_seen_at = now() where id = $1", [siteId]);
     },
 
     async setBannerConfig(siteId, config) {

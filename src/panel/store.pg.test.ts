@@ -49,6 +49,17 @@ d("createPostgresPanelStore (GERÇEK Postgres — docker veriform-pg)", () => {
     ).rejects.toThrow(/tenant/);
   });
 
+  it("markEmbedSeen: embed_last_seen_at sütununa yazar ve ISO okur", async () => {
+    const tenant = await store.createTenant({ name: "PG Seen", kind: "agency" });
+    const client = await store.createClient({ tenantId: tenant.id, name: "PG M" });
+    const site = await store.createSite({ clientId: client.id, url: "https://pg-seen.com" });
+    expect(site.embedLastSeenAt).toBeUndefined();
+    await store.markEmbedSeen(site.id);
+    const seen = (await store.getSite(site.id))?.embedLastSeenAt;
+    expect(seen).toBeDefined();
+    expect(Number.isNaN(Date.parse(seen!))).toBe(false);
+  });
+
   it("taramayı jsonb olarak yazar/okur; kurcalamadan izole kopya döner", async () => {
     const tenant = await store.createTenant({ name: "A", kind: "direct" });
     const client = await store.createClient({ tenantId: tenant.id, name: "M" });

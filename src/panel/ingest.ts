@@ -143,6 +143,8 @@ export function createIngestApi(store: PanelStore): IngestApi {
     async embedConfig(input) {
       const site = await store.getSiteByToken(input.token);
       if (!site) throw new IngestError(401, "geçersiz ingest token'ı");
+      // Config çekimi izleme kodunun yüklenişidir: bağlantı sinyali olarak damgalanır.
+      await store.markEmbedSeen(site.id);
       return site.bannerConfig ?? null;
     },
   };

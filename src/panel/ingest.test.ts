@@ -157,4 +157,14 @@ describe("createIngestApi", () => {
     const err = await api.embedConfig({ token: "yok" }).catch((e) => e);
     expect((err as IngestError).status).toBe(401);
   });
+
+  it("embedConfig bağlantı sinyali sayılır: site embedLastSeenAt damgalanır", async () => {
+    const { store, site } = await setup();
+    const api = createIngestApi(store);
+    expect((await store.getSite(site.id))?.embedLastSeenAt).toBeUndefined();
+    await api.embedConfig({ token: site.ingestToken });
+    const seen = (await store.getSite(site.id))?.embedLastSeenAt;
+    expect(seen).toBeDefined();
+    expect(Number.isNaN(Date.parse(seen!))).toBe(false);
+  });
 });

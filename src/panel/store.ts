@@ -47,6 +47,8 @@ export interface PanelStore {
   listAllSites(): Promise<Site[]>;
   /** Ingest kimliklendirme: token → site (bilinmeyen token → null). */
   getSiteByToken(token: string): Promise<Site | null>;
+  /** İzleme kodu bağlantı sinyali: embedLastSeenAt damgası (bilinmeyen site sessiz). */
+  markEmbedSeen(siteId: string): Promise<void>;
   saveScan(input: {
     siteId: string;
     report: FormInventoryReport;
@@ -258,6 +260,11 @@ export function createInMemoryPanelStore(): PanelStore {
     async getSite(siteId) {
       const site = sites.find((s) => s.id === siteId);
       return site ? clone(site) : null;
+    },
+
+    async markEmbedSeen(siteId) {
+      const site = sites.find((s) => s.id === siteId);
+      if (site) site.embedLastSeenAt = new Date().toISOString();
     },
 
     async listAllSites() {
