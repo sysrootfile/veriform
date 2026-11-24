@@ -635,18 +635,21 @@ const server = createServer(async (req, res) => {
     }
 
     if (req.method === "GET" && url.pathname === "/api/embed/config") {
+      // Embed müşteri sitesinde (farklı origin) çalışır; config çerezsiz,
+      // token-kapsamlı salt-okunur bir uç olduğundan ACAO * güvenli.
+      const cors = { "access-control-allow-origin": "*" };
       try {
         const config = await ingest.embedConfig({
           token: url.searchParams.get("token") ?? "",
         });
-        res.writeHead(200, { "content-type": "application/json" });
+        res.writeHead(200, { "content-type": "application/json", ...cors });
         res.end(JSON.stringify({ bannerConfig: config }));
       } catch (error) {
         if (error instanceof IngestError) {
-          res.writeHead(error.status, { "content-type": "application/json" });
+          res.writeHead(error.status, { "content-type": "application/json", ...cors });
           res.end(JSON.stringify({ error: error.message }));
         } else {
-          res.writeHead(400, { "content-type": "application/json" });
+          res.writeHead(400, { "content-type": "application/json", ...cors });
           res.end(JSON.stringify({ error: "geçersiz istek" }));
         }
       }
