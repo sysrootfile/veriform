@@ -295,8 +295,8 @@ exists` alır — bu yüzden hedef hep boş olsun, sonra `ALTER DATABASE … REN
 - [ ] SMTP: test bildirimi gerçekten kutuya düştü mü
 - [ ] Yedek komutu cron'landı ve **geri yükleme de denendi** (denenmemiş yedek yedek değildir)
 - [ ] `LICENSE` dosyasındaki `Licensor` placeholder'ı hukuki ünvanla dolduruldu
-- [ ] Repoya public kararında: `docs/pilot-ajans-listesi.md` ve `docs/red-team-dogrulama.md`
-  history'den çıkarıldı (private→public tüm commit'leri açar)
+- [x] Repoya public kararında: iş geliştirme notları history'den çıkarıldı (2026-11-24);
+  yayın temiz history'li yeni repoda yapıldı
 
 ## 10. Bilinen sınırlar
 

@@ -140,8 +140,8 @@ taslak üretmiyor ve üretmeli mi kararını da vermiyor.
 
 - `Licensor` ve telif satırları placeholder olarak duruyor (`LICENSE:5-7`); hukuki ünvanı kullanıcı
   kendisi dolduracak — bu bir mühendislik kararı değil.
-- Repoya public kararı ayrı bir iş: `docs/pilot-ajans-listesi.md` ve `docs/red-team-dogrulama.md`
-  history'den çıkarılmadan private→public yapılmaz.
+- Repoya public kararı uygulandı (2026-11-24): iş geliştirme notları history'den çıkarıldı,
+  yayın temiz history'li yeni repoda yapıldı.
 - LICENSE gövdesinin değiştirilmesi bir tercih değil, kapalı seçenek: Covenants of Licensor madde 4
   "Not to modify this License in any other way" diyor (`LICENSE:86`). Parametre alanları
   (Licensor / Change Date / Additional Use Grant) doldurulabilir; gövde SPDX metni ile birebir
