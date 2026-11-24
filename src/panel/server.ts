@@ -35,6 +35,7 @@ import { handleWorkerRun } from "./worker.js";
 import { handleEmbedJs } from "./embed.js";
 import { handleFontAsset } from "./assets.js";
 import { renderLandingPage } from "./landing.js";
+import { renderGuidePage } from "./guide.js";
 import { handleContactSubmit } from "./contact.js";
 import { buildDsarNotificationEmail } from "../dsar/notifications.js";
 import { renderDraftPageHtml } from "../draft/render.js";
@@ -564,6 +565,12 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === "GET" && url.pathname === "/rehber") {
+      res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      res.end(renderGuidePage());
+      return;
+    }
+
     // API anahtar yönetimi (panel)
     if (req.method === "GET" && url.pathname === "/settings/api-keys") {
       const keys = await store.listApiKeys(tenantId);
@@ -596,6 +603,7 @@ const server = createServer(async (req, res) => {
     if (req.method === "GET" && url.pathname === "/clients") {
       const tenant = await store.getTenant(tenantId);
       const clients = await service.getClientList();
+      const onboarding = await service.getOnboardingStatus();
       res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
       res.end(
         renderClientsPage({
@@ -604,6 +612,7 @@ const server = createServer(async (req, res) => {
           demoSiteHref: demoSiteId ? `/sites/${demoSiteId}` : undefined,
           accent: tenant?.brandColor,
           logoUrl: tenant?.brandLogoUrl,
+          onboarding,
         }),
       );
       return;

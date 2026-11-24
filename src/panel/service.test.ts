@@ -200,3 +200,49 @@ describe("createPanelService", () => {
     expect((err as IngestError).status).toBe(401);
   });
 });
+
+describe("getOnboardingStatus", () => {
+  it("boş kiracıda üç adım da bekler", async () => {
+    const store = createInMemoryPanelStore();
+    const tenant = await store.createTenant({ name: "Yeni Ajans", kind: "agency" });
+    const service = createPanelService(store, { tenantId: tenant.id });
+    expect(await service.getOnboardingStatus()).toEqual({
+      hasClient: false,
+      hasSite: false,
+      hasScan: false,
+    });
+  });
+
+  it("müşteri ve site var ama tarama yokken ilk iki adım tamam", async () => {
+    const { serviceA } = await setup();
+    expect(await serviceA.getOnboardingStatus()).toEqual({
+      hasClient: true,
+      hasSite: true,
+      hasScan: false,
+    });
+  });
+
+  it("ilk tarama gelince üçüncü adım da tamamlanır", async () => {
+    const { serviceA, siteA } = await setup();
+    await serviceA.ingestScan({
+      siteId: siteA.id,
+      report: emptyReport(),
+      cookies: [],
+      observedTargets: [],
+    });
+    expect(await serviceA.getOnboardingStatus()).toEqual({
+      hasClient: true,
+      hasSite: true,
+      hasScan: true,
+    });
+  });
+
+  it("başka kiracının verisi durumu etkilemez", async () => {
+    const { serviceB } = await setup();
+    expect(await serviceB.getOnboardingStatus()).toEqual({
+      hasClient: false,
+      hasSite: false,
+      hasScan: false,
+    });
+  });
+});

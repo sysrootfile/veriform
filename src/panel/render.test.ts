@@ -363,3 +363,67 @@ describe("renderLoginPage / renderRegisterPage", () => {
     expect(html).toContain('name="password"');
   });
 });
+
+describe("kurulum checklist'i (onboarding)", () => {
+  const status = (over: Partial<{ hasClient: boolean; hasSite: boolean; hasScan: boolean }> = {}) => ({
+    hasClient: false,
+    hasSite: false,
+    hasScan: false,
+    ...over,
+  });
+
+  it("kiracı yeniyken üç adımı ve rehber linkini basar", () => {
+    const html = renderClientsPage({ tenantName: "A", clients: [], onboarding: status() });
+    expect(html).toContain("Kurulum");
+    expect(html).toContain("Müşteri ekle");
+    expect(html).toContain("Site ekle");
+    expect(html).toContain("İlk tarama");
+    expect(html).toContain('href="/rehber"');
+  });
+
+  it("tamamlanan adım işaretlenir, bekleyen adım işaretlenmez", () => {
+    const html = renderClientsPage({
+      tenantName: "A",
+      clients: [{ id: "c1", name: "M" }],
+      onboarding: status({ hasClient: true }),
+    });
+    expect((html.match(/class="setup-done"/g) ?? []).length).toBe(1);
+  });
+
+  it("üç adım da tamamsa checklist tamamen gizlenir", () => {
+    const html = renderClientsPage({
+      tenantName: "A",
+      clients: [{ id: "c1", name: "M" }],
+      onboarding: status({ hasClient: true, hasSite: true, hasScan: true }),
+    });
+    expect(html).not.toContain("Kurulum");
+  });
+
+  it("onboarding girdisi yoksa checklist basılmaz (eski çağrılar bozulmaz)", () => {
+    const html = renderClientsPage({ tenantName: "A", clients: [] });
+    expect(html).not.toContain("Kurulum");
+  });
+});
+
+describe("boş durum yönlendirmeleri", () => {
+  it("site sayfası boş taramada CLI komutu değil panel içi yönlendirme gösterir", () => {
+    const html = renderSitePage({ siteId: "s1", siteUrl: "https://x.com", chainValid: true, scans: [] });
+    expect(html).not.toContain("pnpm demo");
+    expect(html).toContain("Sürekli İzleme çizelgesini açın");
+  });
+
+  it("müşteri detayı boş site listesinde ilk tarama yolunu anlatır", () => {
+    const html = renderClientDetailPage({ clientName: "M", clientHref: "/clients/c1", sites: [] });
+    expect(html).toContain("Henüz site eklenmedi");
+    expect(html).toContain("ilk tarama");
+  });
+
+  it("nav'da Rehber bağlantısı tüm oturumlu sayfalarda var", () => {
+    const pages = [
+      renderClientsPage({ tenantName: "A", clients: [] }),
+      renderAuditPage({ entries: [] }),
+      renderApiKeysPage({ keys: [] }),
+    ];
+    for (const html of pages) expect(html).toContain('href="/rehber"');
+  });
+});

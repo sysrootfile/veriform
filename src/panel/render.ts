@@ -26,6 +26,12 @@ const STYLE = `
   .badge-ok { color: #127a3d; background: #e8f5ee; padding: .2rem .55rem; border-radius: 999px; font-size: .82rem; font-weight: 600; }
   .badge-warn { color: #b45309; background: #fdf2e3; padding: .2rem .55rem; border-radius: 999px; font-size: .82rem; font-weight: 600; }
   .empty { color: #777; }
+  .setup { border: 1px solid #e5e5ea; border-radius: 8px; padding: .9rem 1.1rem; margin: 0 0 1.4rem; background: #fafafb; }
+  .setup h2 { margin: 0 0 .5rem; font-size: 1rem; }
+  .setup ol { margin: .3rem 0 .5rem; padding-left: 1.2rem; }
+  .setup li { margin: .35rem 0; font-size: .92rem; }
+  .setup li.setup-done { color: #127a3d; }
+  .setup-hint { color: #777; font-size: .85rem; }
   form { margin: 1rem 0; display: flex; gap: .5rem; flex-wrap: wrap; }
   input, button, select { padding: .45rem .7rem; border: 1px solid #ccc; border-radius: 6px; font-size: .92rem; }
   button { background: var(--accent); color: #fff; border: none; cursor: pointer; }
@@ -51,13 +57,14 @@ function safeLogoUrl(url?: string | undefined): string | undefined {
   return url && /^https?:\/\/\S+$/i.test(url) ? url : undefined;
 }
 
-type NavActive = "clients" | "audit" | "api-keys" | "api-docs";
+type NavActive = "clients" | "audit" | "api-keys" | "api-docs" | "guide";
 
 const NAV_ITEMS: Array<{ href: string; label: string; key: NavActive }> = [
   { href: "/clients", label: "Müşteriler", key: "clients" },
   { href: "/audit", label: "Denetim İzi", key: "audit" },
   { href: "/settings/api-keys", label: "API Anahtarları", key: "api-keys" },
   { href: "/api/docs", label: "API Docs", key: "api-docs" },
+  { href: "/rehber", label: "Rehber", key: "guide" },
 ];
 
 function nav(active: NavActive): string {
@@ -71,12 +78,13 @@ ${links}
 </nav>`;
 }
 
-const page = (title: string, body: string, accent?: string | undefined, navActive?: NavActive): string =>
+export const panelPage = (title: string, body: string, accent?: string | undefined, navActive?: NavActive): string =>
   `<!doctype html>
 <html lang="tr">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
 <title>Veriform Panel — ${escapeHtml(title)}</title>
 <style>:root { --accent: ${safeAccent(accent) ?? "#16161f"}; }
 ${STYLE}</style>
@@ -93,12 +101,23 @@ export interface ClientRow {
   name: string;
 }
 
+export interface OnboardingStatus {
+  hasClient: boolean;
+  hasSite: boolean;
+  hasScan: boolean;
+}
+
+function setupStep(done: boolean, title: string, hint: string): string {
+  return `<li${done ? ' class="setup-done"' : ""}>${done ? "✓" : "○"} <strong>${title}</strong> — <span class="setup-hint">${hint}</span></li>`;
+}
+
 export function renderClientsPage(input: {
   tenantName: string;
   clients: ClientRow[];
   demoSiteHref?: string | undefined;
   accent?: string | undefined;
   logoUrl?: string | undefined;
+  onboarding?: OnboardingStatus | undefined;
 }): string {
   const e = escapeHtml;
   const logoUrl = safeLogoUrl(input.logoUrl);
@@ -118,10 +137,25 @@ export function renderClientsPage(input: {
     ? `<p class="empty">Demo: <a href="${e(input.demoSiteHref)}">örnek site sayfası</a></p>`
     : "";
 
-  return page(
+  const ob = input.onboarding;
+  const setupSection =
+    ob && !(ob.hasClient && ob.hasSite && ob.hasScan)
+      ? `<section class="setup" aria-label="Kurulum">
+<h2>Kurulum</h2>
+<ol>
+${setupStep(ob.hasClient, "Müşteri ekle", "Aşağıdaki formla ilk müşterinizi kaydedin.")}
+${setupStep(ob.hasSite, "Site ekle", "Müşteri sayfasından site URL'i girin; embed snippet'ini sitenizin &lt;head&gt; bölümüne kurun.")}
+${setupStep(ob.hasScan, "İlk tarama", "Site sayfasındaki Sürekli İzleme çizelgesini açın — worker ilk taramayı yapar.")}
+</ol>
+<p class="setup-hint">Ayrıntılı anlatım: <a href="/rehber">Rehber</a></p>
+</section>`
+      : "";
+
+  return panelPage(
     input.tenantName,
     `<h1>${logo}Veriform Panel · ${e(input.tenantName)}</h1>
 ${demoLink}
+${setupSection}
 <h2>Müşteriler</h2>
 <table>${rows}</table>
 <form method="post" action="/clients">
@@ -186,7 +220,7 @@ export function renderSitePage(input: {
           return `<tr><td>${e(s.scannedAt)}</td><td class="num">${s.report.formCount}</td><td class="num">${s.report.riskFlags.length}</td><td class="num">${violations}</td></tr>`;
         })
         .join("\n")
-    : '<tr><td colspan="4" class="empty">Henüz tarama yok — `pnpm demo -- <site-url>` ile ilk taramayı çalıştırın.</td></tr>';
+    : '<tr><td colspan="4" class="empty">Henüz tarama yok — aşağıdaki Sürekli İzleme çizelgesini açın; worker vakti gelen siteleri tarar ve sonuçlar burada listelenir.</td></tr>';
 
   const draftLinks = (input.draftLinks ?? [])
     .map((d) => `<a href="${e(d.href)}">${e(d.label)}</a>`)
@@ -245,7 +279,7 @@ ${currScan.report.review
 </table>`
       : "";
 
-  return page(
+  return panelPage(
     input.siteUrl,
     `<h1>${e(input.siteUrl)}</h1>
 <p>${badge}</p>
@@ -289,14 +323,14 @@ export function renderClientDetailPage(input: {
             `<tr><td><a href="/sites/${e(s.id)}">${e(s.url)}</a></td><td><code>${e(s.ingestToken)}</code></td><td class="num"><a href="/sites/${e(s.id)}">Rapor →</a></td></tr>`,
         )
         .join("\n")
-    : '<tr><td colspan="3" class="empty">Henüz site eklenmedi.</td></tr>';
+    : '<tr><td colspan="3" class="empty">Henüz site eklenmedi — aşağıdaki formla ekleyin, embed snippet\'ini kurun ve Sürekli İzleme\'yi açın; ilk tarama worker turunda gelir.</td></tr>';
 
   const logoUrl = safeLogoUrl(input.logoUrl);
   const logo = logoUrl
     ? `<img src="${e(logoUrl)}" alt="${e(input.clientName)}" style="height:30px;vertical-align:middle;margin-right:.5rem">`
     : "";
 
-  return page(
+  return panelPage(
     input.clientName,
     `<h1>${logo}${e(input.clientName)}</h1>
 <h2>Siteler</h2>
@@ -339,7 +373,7 @@ export function renderAuditPage(input: {
         .join("\n")
     : '<tr><td colspan="3" class="empty">Denetim kaydı yok.</td></tr>';
 
-  return page(
+  return panelPage(
     "Denetim İzi",
     `<h1>Denetim İzi (Audit Log)</h1>
 <p class="empty">Panelde yapılan her mutasyon burada iz bırakır — KVKK m.12 kayıt yükümlülüğü zemin.</p>
@@ -376,7 +410,7 @@ export function renderApiKeysPage(input: {
         .join("\n")
     : '<tr><td colspan="4" class="empty">Henüz API anahtarı yok.</td></tr>';
 
-  return page(
+  return panelPage(
     "API Anahtarları",
     `<h1>Headless API Anahtarları</h1>
 ${newKeyBlock}
@@ -397,7 +431,7 @@ ${rows}
 }
 
 export function renderLoginPage(options: { hasError?: boolean } = {}): string {
-  return page(
+  return panelPage(
     "Giriş",
     `<h1>Veriform Panel · Giriş</h1>
 ${options.hasError ? `<p class="badge-warn">${LOGIN_ERROR_TEXT}</p>` : ""}
@@ -412,7 +446,7 @@ ${options.hasError ? `<p class="badge-warn">${LOGIN_ERROR_TEXT}</p>` : ""}
 
 export function renderRegisterPage(options: { errorKind?: "duplicate" | "generic" } = {}): string {
   const errorText = options.errorKind ? REGISTER_ERRORS[options.errorKind] : undefined;
-  return page(
+  return panelPage(
     "Kayıt",
     `<h1>Veriform Panel · Ajans Kaydı</h1>
 ${errorText ? `<p class="badge-warn">${errorText}</p>` : ""}

@@ -30,6 +30,8 @@ function denyAuditor(role: PanelContext["role"]): void {
 
 export interface PanelService {
   getClientList(): Promise<Client[]>;
+  /** Kurulum checklist'i: kiracının kendi verisinden türetilir (müşteri → site → ilk tarama). */
+  getOnboardingStatus(): Promise<{ hasClient: boolean; hasSite: boolean; hasScan: boolean }>;
   addClient(name: string): Promise<Client>;
   addSite(clientId: string, url: string): Promise<Site>;
   getClientSites(clientId: string): Promise<Site[]>;
@@ -81,6 +83,25 @@ export function createPanelService(store: PanelStore, context: PanelContext): Pa
   return {
     async getClientList() {
       return store.listClients(context.tenantId);
+    },
+
+    async getOnboardingStatus() {
+      const clients = await store.listClients(context.tenantId);
+      if (!clients.length) return { hasClient: false, hasSite: false, hasScan: false };
+      let hasSite = false;
+      let hasScan = false;
+      for (const client of clients) {
+        const sites = await store.listSites(client.id);
+        if (sites.length) hasSite = true;
+        for (const site of sites) {
+          if ((await store.listScans(site.id)).length) {
+            hasScan = true;
+            break;
+          }
+        }
+        if (hasScan) break;
+      }
+      return { hasClient: true, hasSite, hasScan };
     },
 
     async addClient(name) {
