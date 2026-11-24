@@ -57,12 +57,13 @@ function safeLogoUrl(url?: string | undefined): string | undefined {
   return url && /^https?:\/\/\S+$/i.test(url) ? url : undefined;
 }
 
-type NavActive = "clients" | "audit" | "api-keys" | "api-docs" | "guide";
+type NavActive = "clients" | "audit" | "api-keys" | "account" | "api-docs" | "guide";
 
 const NAV_ITEMS: Array<{ href: string; label: string; key: NavActive }> = [
   { href: "/clients", label: "Müşteriler", key: "clients" },
   { href: "/audit", label: "Denetim İzi", key: "audit" },
   { href: "/settings/api-keys", label: "API Anahtarları", key: "api-keys" },
+  { href: "/settings/account", label: "Hesap", key: "account" },
   { href: "/api/docs", label: "API Docs", key: "api-docs" },
   { href: "/rehber", label: "Rehber", key: "guide" },
 ];
@@ -119,6 +120,7 @@ export function renderClientsPage(input: {
   logoUrl?: string | undefined;
   onboarding?: OnboardingStatus | undefined;
   quota?: { label: string; used: number; limit: number | null } | undefined;
+  emailVerified?: boolean | undefined;
 }): string {
   const e = escapeHtml;
   const logoUrl = safeLogoUrl(input.logoUrl);
@@ -157,9 +159,15 @@ ${setupStep(ob.hasScan, "İlk tarama", "Site sayfasındaki Sürekli İzleme çiz
     ? `<p class="empty">Paket: ${e(q.label)} — ${q.limit === null ? `${q.used} site (sınırsız)` : `${q.used}/${q.limit} site kullanıldı`}</p>`
     : "";
 
+  const verifyNag =
+    input.emailVerified === false
+      ? `<p class="badge-warn">E-posta adresiniz doğrulanmadı — <a href="/settings/account">Hesap ayarları</a>ndan doğrulama bağlantısı gönderin.</p>`
+      : "";
+
   return panelPage(
     input.tenantName,
     `<h1>${logo}Veriform Panel · ${e(input.tenantName)}</h1>
+${verifyNag}
 ${quotaLine}
 ${demoLink}
 ${setupSection}
@@ -444,16 +452,26 @@ ${rows}
   );
 }
 
-export function renderLoginPage(options: { hasError?: boolean } = {}): string {
+export function renderLoginPage(
+  options: { hasError?: boolean; notice?: "reset" | "deleted" | undefined } = {},
+): string {
+  const noticeText =
+    options.notice === "reset"
+      ? "Şifreniz güncellendi — yeni şifrenizle giriş yapın."
+      : options.notice === "deleted"
+        ? "Hesabınız ve tüm verileriniz silindi."
+        : undefined;
   return panelPage(
     "Giriş",
     `<h1>Veriform Panel · Giriş</h1>
+${noticeText ? `<p class="badge-ok">${noticeText}</p>` : ""}
 ${options.hasError ? `<p class="badge-warn">${LOGIN_ERROR_TEXT}</p>` : ""}
 <form method="post" action="/login">
   <input name="email" type="email" placeholder="E-posta" required>
   <input name="password" type="password" placeholder="Şifre" required>
   <button type="submit">Giriş yap</button>
 </form>
+<p class="empty"><a href="/forgot-password">Şifreni mi unuttun?</a></p>
 <p class="empty">Hesabın yok mu? <a href="/register">Ajansını kaydet</a></p>`,
   );
 }
@@ -476,5 +494,104 @@ ${errorText ? `<p class="badge-warn">${errorText}</p>` : ""}
   <button type="submit">Kaydol</button>
 </form>
 <p class="empty">Zaten hesabın var mı? <a href="/login">Giriş yap</a></p>`,
+  );
+}
+
+export function renderForgotPasswordPage(options: { sent?: boolean } = {}): string {
+  return panelPage(
+    "Şifremi Unuttum",
+    `<h1>Şifre Sıfırlama</h1>
+${options.sent ? '<p class="badge-ok">Bu e-posta kayıtlıysa sıfırlama bağlantısı gönderildi. Gelen kutunuzu kontrol edin.</p>' : ""}
+<form method="post" action="/forgot-password">
+  <input name="email" type="email" placeholder="E-posta" required>
+  <button type="submit">Sıfırlama bağlantısı gönder</button>
+</form>
+<p class="empty"><a href="/login">Girişe dön</a></p>`,
+  );
+}
+
+const RESET_ERRORS = {
+  short: "Şifre en az 8 karakter olmalı.",
+  invalid: "Bağlantı geçersiz veya süresi dolmuş — yeni bir sıfırlama bağlantısı isteyin.",
+} as const;
+
+export function renderResetPasswordPage(input: {
+  token: string;
+  errorKind?: keyof typeof RESET_ERRORS;
+}): string {
+  const e = escapeHtml;
+  return panelPage(
+    "Yeni Şifre",
+    `<h1>Yeni Şifre Belirle</h1>
+${input.errorKind ? `<p class="badge-warn">${RESET_ERRORS[input.errorKind]}</p>` : ""}
+<form method="post" action="/reset-password">
+  <input type="hidden" name="token" value="${e(input.token)}">
+  <input name="password" type="password" placeholder="Yeni şifre" minlength="8" required>
+  <button type="submit">Şifreyi güncelle</button>
+</form>
+<p class="empty"><a href="/forgot-password">Yeni bağlantı iste</a> · <a href="/login">Girişe dön</a></p>`,
+  );
+}
+
+export function renderVerifyEmailResultPage(input: { ok: boolean }): string {
+  return panelPage(
+    "E-posta Doğrulama",
+    input.ok
+      ? `<h1>E-posta Doğrulama</h1>
+<p class="badge-ok">E-posta adresiniz doğrulandı.</p>
+<p><a href="/clients">Panele devam et →</a></p>`
+      : `<h1>E-posta Doğrulama</h1>
+<p class="badge-warn">Bağlantı geçersiz veya süresi dolmuş.</p>
+<p><a href="/settings/account">Hesap ayarları</a>ndan yeni doğrulama bağlantısı isteyebilirsiniz.</p>`,
+  );
+}
+
+const ACCOUNT_NOTICES = {
+  "verify-sent": "E-posta adresinize doğrulama bağlantısı gönderildi.",
+  "password-changed": "Şifreniz güncellendi.",
+} as const;
+
+const ACCOUNT_ERRORS = {
+  current: "Girdiğiniz mevcut şifre hatalı.",
+  short: "Şifre en az 8 karakter olmalı.",
+  mail: "E-posta gönderilemedi — daha sonra tekrar deneyin.",
+} as const;
+
+export function renderAccountSettingsPage(input: {
+  email: string;
+  emailVerified: boolean;
+  notice?: keyof typeof ACCOUNT_NOTICES | undefined;
+  errorKind?: keyof typeof ACCOUNT_ERRORS | undefined;
+}): string {
+  const e = escapeHtml;
+  const verifyBlock = input.emailVerified
+    ? '<p><span class="badge-ok">Doğrulandı</span></p>'
+    : `<p><span class="badge-warn">E-posta doğrulanmadı</span></p>
+<form method="post" action="/settings/account/resend-verification">
+  <button type="submit">Doğrulama bağlantısı gönder</button>
+</form>`;
+
+  return panelPage(
+    "Hesap Ayarları",
+    `<h1>Hesap Ayarları</h1>
+${input.notice ? `<p class="badge-ok">${ACCOUNT_NOTICES[input.notice]}</p>` : ""}
+${input.errorKind ? `<p class="badge-warn">${ACCOUNT_ERRORS[input.errorKind]}</p>` : ""}
+<h2>E-posta</h2>
+<p>${e(input.email)}</p>
+${verifyBlock}
+<h2>Şifre değiştir</h2>
+<form method="post" action="/settings/account/password">
+  <input name="currentPassword" type="password" placeholder="Mevcut şifre" required>
+  <input name="newPassword" type="password" placeholder="Yeni şifre" minlength="8" required>
+  <button type="submit">Şifreyi güncelle</button>
+</form>
+<h2>Hesabı sil</h2>
+<p class="empty">Hesabınız, müşterileriniz, siteleriniz ve tüm tarama/kanıt verileri kalıcı olarak silinir. Bu işlem geri alınamaz.</p>
+<form method="post" action="/settings/account/delete">
+  <label><input type="checkbox" name="confirm" required> Hesabımı ve tüm verilerimi kalıcı olarak silmeyi onaylıyorum</label>
+  <button type="submit" class="danger">Hesabı kalıcı olarak sil</button>
+</form>`,
+    undefined,
+    "account",
   );
 }

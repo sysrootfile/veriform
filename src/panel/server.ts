@@ -1,6 +1,14 @@
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { login, registerTenant } from "./accounts.js";
+import {
+  changePassword,
+  deleteAccount,
+  issueEmailVerification,
+  requestPasswordReset,
+  resetPassword,
+  verifyEmail,
+} from "./account-lifecycle.js";
 import { buildLogoutCookie, buildSessionCookie, createSessionToken, verifySessionTokenAny } from "./auth.js";
 import { createIngestApi, IngestError } from "./ingest.js";
 import { receiptsToCsv } from "./chain.js";
@@ -18,13 +26,17 @@ import { createPostgresPanelStore } from "./store.pg.js";
 import { migrateDatabase } from "./migrate.js";
 import { checkHealth } from "./health.js";
 import {
+  renderAccountSettingsPage,
   renderApiKeysPage,
   renderAuditPage,
   renderClientDetailPage,
   renderClientsPage,
+  renderForgotPasswordPage,
   renderLoginPage,
   renderRegisterPage,
+  renderResetPasswordPage,
   renderSitePage,
+  renderVerifyEmailResultPage,
 } from "./render.js";
 import { DSAR_TYPES } from "../dsar/types.js";
 import { renderDsarFormPage, renderDsarPanelPage } from "../dsar/render.js";
@@ -107,6 +119,8 @@ const scanLimiter = createRateLimiter({ max: 5, windowMs: 60_000 });
 // Auth POST'ları için IP başına hız sınırı — kaba kuvvet ve kayıt spam'ine karşı
 const loginLimiter = createRateLimiter({ max: 10, windowMs: 60_000 });
 const registerLimiter = createRateLimiter({ max: 5, windowMs: 60_000 });
+// Şifre sıfırlama istekleri: IP başına 3 / dakika (mail bombası ve token taramasına karşı)
+const resetLimiter = createRateLimiter({ max: 3, windowMs: 60_000 });
 // Landing iletişim formu: IP başına 3 talep / dakika
 const contactLimiter = createRateLimiter({ max: 3, windowMs: 60_000 });
 const OPERATOR_EMAIL = process.env.CONTACT_OPERATOR_EMAIL ?? "iletisim@veriform.io";
@@ -163,6 +177,15 @@ function embedUrl(req: import("node:http").IncomingMessage): string {
   const forwarded = req.headers["x-forwarded-proto"];
   const proto = (typeof forwarded === "string" ? forwarded.split(",")[0]!.trim() : "") || "http";
   return `${proto}://${host}/embed.js`;
+}
+
+/** Hesap maillerindeki bağlantılar için mutlak panel adresi. */
+function panelBaseUrl(req: import("node:http").IncomingMessage): string {
+  const host = req.headers.host;
+  if (!host) return `http://127.0.0.1:${PORT}`;
+  const forwarded = req.headers["x-forwarded-proto"];
+  const proto = (typeof forwarded === "string" ? forwarded.split(",")[0]!.trim() : "") || "http";
+  return `${proto}://${host}`;
 }
 
 /** JSON yanıtları için standart başlıklar — nosniff MIME-sniffing ile HTML render'ı engeller. */
@@ -253,8 +276,10 @@ const server = createServer(async (req, res) => {
 
     if (req.method === "GET" && url.pathname === "/login") {
       const hasError = url.searchParams.has("error") === true;
+      const noticeParam = url.searchParams.get("notice");
+      const notice = noticeParam === "reset" || noticeParam === "deleted" ? noticeParam : undefined;
       res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
-      res.end(renderLoginPage({ hasError }));
+      res.end(renderLoginPage({ hasError, notice }));
       return;
     }
 
@@ -294,13 +319,19 @@ const server = createServer(async (req, res) => {
       }
       const form = new URLSearchParams(await readBody(req));
       try {
-        const { tenant } = await registerTenant(store, {
+        const { tenant, user } = await registerTenant(store, {
           name: form.get("name") ?? "",
           kind: "agency",
           email: form.get("email") ?? "",
           password: form.get("password") ?? "",
           package: form.get("package"),
         });
+        // Doğrulama maili hatası kaydı düşürmez — bağlantı panelden yeniden istenebilir.
+        try {
+          await issueEmailVerification(store, mailSender, user, panelBaseUrl(req));
+        } catch (error) {
+          console.error("[account] doğrulama maili gönderilemedi:", error);
+        }
         setSessionHeader(res, createSessionToken(tenant.id, SESSION_SECRET));
         res.writeHead(302, { location: "/clients" });
         res.end();
@@ -317,6 +348,70 @@ const server = createServer(async (req, res) => {
       res.setHeader("set-cookie", buildLogoutCookie(COOKIE_SECURE));
       res.writeHead(302, { location: "/login" });
       res.end();
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/forgot-password") {
+      res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      res.end(renderForgotPasswordPage({ sent: url.searchParams.has("sent") }));
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/forgot-password") {
+      if (!resetLimiter.allow(req.socket.remoteAddress ?? "bilinmeyen")) {
+        res.writeHead(429, { "content-type": "text/plain; charset=utf-8" });
+        res.end("Çok fazla istek — bir dakika bekleyip tekrar deneyin");
+        return;
+      }
+      const form = new URLSearchParams(await readBody(req));
+      // Yanıt varlık sızdırmaz: mail hatası da dahil her durumda aynı yönlendirme.
+      try {
+        await requestPasswordReset(store, mailSender, form.get("email") ?? "", panelBaseUrl(req));
+      } catch (error) {
+        console.error("[account] sıfırlama maili gönderilemedi:", error);
+      }
+      res.writeHead(303, { location: "/forgot-password?sent=1" });
+      res.end();
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/reset-password") {
+      res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      res.end(renderResetPasswordPage({ token: url.searchParams.get("token") ?? "" }));
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/reset-password") {
+      if (!resetLimiter.allow(req.socket.remoteAddress ?? "bilinmeyen")) {
+        res.writeHead(429, { "content-type": "text/plain; charset=utf-8" });
+        res.end("Çok fazla istek — bir dakika bekleyip tekrar deneyin");
+        return;
+      }
+      const form = new URLSearchParams(await readBody(req));
+      const token = form.get("token") ?? "";
+      try {
+        await resetPassword(store, token, form.get("password") ?? "");
+        res.writeHead(303, { location: "/login?notice=reset" });
+        res.end();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "";
+        const errorKind = /en az 8/.test(message) ? "short" : "invalid";
+        res.writeHead(400, { "content-type": "text/html; charset=utf-8" });
+        res.end(renderResetPasswordPage({ token, errorKind }));
+      }
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/verify-email") {
+      let ok = false;
+      try {
+        await verifyEmail(store, url.searchParams.get("token") ?? "");
+        ok = true;
+      } catch {
+        ok = false;
+      }
+      res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      res.end(renderVerifyEmailResultPage({ ok }));
       return;
     }
 
@@ -601,8 +696,84 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+    // Hesap ayarları — doğrulama, şifre değiştirme, hesap silme
+    if (req.method === "GET" && url.pathname === "/settings/account") {
+      const user = await store.findUserByTenant(tenantId);
+      const noticeParam = url.searchParams.get("notice");
+      const errorParam = url.searchParams.get("error");
+      const notice = noticeParam === "verify-sent" || noticeParam === "password-changed" ? noticeParam : undefined;
+      const errorKind =
+        errorParam === "current" || errorParam === "short" || errorParam === "mail" ? errorParam : undefined;
+      res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      res.end(
+        renderAccountSettingsPage({
+          email: user?.email ?? "",
+          emailVerified: Boolean(user?.emailVerifiedAt),
+          notice,
+          errorKind,
+        }),
+      );
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/settings/account/resend-verification") {
+      const user = await store.findUserByTenant(tenantId);
+      if (user && !user.emailVerifiedAt) {
+        try {
+          await issueEmailVerification(store, mailSender, user, panelBaseUrl(req));
+          res.writeHead(303, { location: "/settings/account?notice=verify-sent" });
+        } catch (error) {
+          console.error("[account] doğrulama maili gönderilemedi:", error);
+          res.writeHead(303, { location: "/settings/account?error=mail" });
+        }
+      } else {
+        res.writeHead(303, { location: "/settings/account" });
+      }
+      res.end();
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/settings/account/password") {
+      const form = new URLSearchParams(await readBody(req));
+      try {
+        await changePassword(store, tenantId, form.get("currentPassword") ?? "", form.get("newPassword") ?? "");
+        await store.recordAudit(tenantId, "account.password_changed", {});
+        res.writeHead(303, { location: "/settings/account?notice=password-changed" });
+        res.end();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "";
+        if (/mevcut şifre/.test(message)) {
+          res.writeHead(303, { location: "/settings/account?error=current" });
+          res.end();
+          return;
+        }
+        if (/en az 8/.test(message)) {
+          res.writeHead(303, { location: "/settings/account?error=short" });
+          res.end();
+          return;
+        }
+        throw error;
+      }
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/settings/account/delete") {
+      const form = new URLSearchParams(await readBody(req));
+      if (form.get("confirm") !== "on") {
+        res.writeHead(303, { location: "/settings/account" });
+        res.end();
+        return;
+      }
+      await deleteAccount(store, tenantId);
+      res.setHeader("set-cookie", buildLogoutCookie(COOKIE_SECURE));
+      res.writeHead(303, { location: "/login?notice=deleted" });
+      res.end();
+      return;
+    }
+
     if (req.method === "GET" && url.pathname === "/clients") {
       const tenant = await store.getTenant(tenantId);
+      const user = await store.findUserByTenant(tenantId);
       const clients = await service.getClientList();
       const onboarding = await service.getOnboardingStatus();
       res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
@@ -615,6 +786,7 @@ const server = createServer(async (req, res) => {
           logoUrl: tenant?.brandLogoUrl,
           onboarding,
           quota: await service.getSiteQuota(),
+          emailVerified: Boolean(user?.emailVerifiedAt),
         }),
       );
       return;

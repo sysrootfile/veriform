@@ -1,13 +1,17 @@
 import { describe, expect, it } from "vitest";
 import type { StoredScan } from "./types.js";
 import {
+  renderAccountSettingsPage,
   renderApiKeysPage,
   renderAuditPage,
   renderClientDetailPage,
   renderClientsPage,
+  renderForgotPasswordPage,
   renderLoginPage,
   renderRegisterPage,
+  renderResetPasswordPage,
   renderSitePage,
+  renderVerifyEmailResultPage,
 } from "./render.js";
 
 function scan(over: Partial<StoredScan> = {}): StoredScan {
@@ -284,7 +288,7 @@ describe("renderClientDetailPage", () => {
 });
 
 describe("panel navigasyonu", () => {
-  const navLinks = ['href="/clients"', 'href="/audit"', 'href="/settings/api-keys"', 'href="/api/docs"', 'href="/logout"'];
+  const navLinks = ['href="/clients"', 'href="/audit"', 'href="/settings/api-keys"', 'href="/settings/account"', 'href="/api/docs"', 'href="/logout"'];
 
   it("oturumlu sayfaların hepsinde ortak nav ve çıkış linki var", () => {
     const pages = [
@@ -293,6 +297,7 @@ describe("panel navigasyonu", () => {
       renderSitePage({ siteId: "s1", siteUrl: "https://x.com", chainValid: true, scans: [] }),
       renderAuditPage({ entries: [] }),
       renderApiKeysPage({ keys: [] }),
+      renderAccountSettingsPage({ email: "a@b.com", emailVerified: true }),
     ];
     for (const html of pages) {
       for (const link of navLinks) expect(html).toContain(link);
@@ -303,6 +308,7 @@ describe("panel navigasyonu", () => {
     expect(renderClientsPage({ tenantName: "A", clients: [] })).toContain('href="/clients" aria-current="page"');
     expect(renderAuditPage({ entries: [] })).toContain('href="/audit" aria-current="page"');
     expect(renderApiKeysPage({ keys: [] })).toContain('href="/settings/api-keys" aria-current="page"');
+    expect(renderAccountSettingsPage({ email: "a@b.com", emailVerified: true })).toContain('href="/settings/account" aria-current="page"');
   });
 
   it("kamu sayfalarında (login/register) nav yok", () => {
@@ -478,5 +484,106 @@ describe("paket kotası (panel yüzeyi)", () => {
   it("quotaFull yokken uyarı çıkmaz", () => {
     const html = renderClientDetailPage({ clientName: "M", clientHref: "/clients/c1", sites: [] });
     expect(html).not.toContain("Site kotası doldu");
+  });
+});
+
+describe("şifre sıfırlama yüzeyi", () => {
+  it("forgot formu POST /forgot-password'e e-posta alanıyla gider", () => {
+    const html = renderForgotPasswordPage();
+    expect(html).toContain('action="/forgot-password"');
+    expect(html).toContain('name="email"');
+    expect(html).not.toContain('href="/logout"');
+  });
+
+  it("gönderim sonrası mesaj varlık sızdırmazdır", () => {
+    const html = renderForgotPasswordPage({ sent: true });
+    expect(html).toContain("Bu e-posta kayıtlıysa sıfırlama bağlantısı gönderildi");
+  });
+
+  it("reset formu token'ı gizli taşır ve POST /reset-password'e gider", () => {
+    const html = renderResetPasswordPage({ token: "a".repeat(64) });
+    expect(html).toContain('action="/reset-password"');
+    expect(html).toContain(`name="token" value="${"a".repeat(64)}"`);
+    expect(html).toContain('type="hidden"');
+    expect(html).toContain('minlength="8"');
+  });
+
+  it("reset token'ı HTML'e kaçırılır", () => {
+    const html = renderResetPasswordPage({ token: '"><script>a()</script>' });
+    expect(html).not.toContain("<script>a()");
+  });
+
+  it("reset hata kodları statik metne çevrilir", () => {
+    expect(renderResetPasswordPage({ token: "t", errorKind: "short" })).toContain("en az 8");
+    expect(renderResetPasswordPage({ token: "t", errorKind: "invalid" })).toContain("geçersiz veya süresi dolmuş");
+  });
+
+  it("doğrulama sonuç sayfası başarılı/başarısız durumları basar", () => {
+    const ok = renderVerifyEmailResultPage({ ok: true });
+    expect(ok).toContain("doğrulandı");
+    expect(ok).toContain('href="/clients"');
+    const bad = renderVerifyEmailResultPage({ ok: false });
+    expect(bad).toContain("geçersiz veya süresi dolmuş");
+    expect(bad).toContain('href="/settings/account"');
+  });
+
+  it("login sayfasında şifremi unuttum bağlantısı var", () => {
+    expect(renderLoginPage()).toContain('href="/forgot-password"');
+  });
+
+  it("login sıfırlama/silme sonrası bilgilendirme kaşesi basar", () => {
+    expect(renderLoginPage({ notice: "reset" })).toContain("Şifreniz güncellendi");
+    expect(renderLoginPage({ notice: "deleted" })).toContain("Hesabınız ve tüm verileriniz silindi");
+  });
+});
+
+describe("hesap ayarları sayfası", () => {
+  it("doğrulanmış e-posta kaşesi ve şifre değiştirme formu var", () => {
+    const html = renderAccountSettingsPage({ email: "a@b.com", emailVerified: true });
+    expect(html).toContain("a@b.com");
+    expect(html).toContain("Doğrulandı");
+    expect(html).toContain('action="/settings/account/password"');
+    expect(html).toContain('name="currentPassword"');
+    expect(html).toContain('name="newPassword"');
+  });
+
+  it("doğrulanmamış e-posta uyarısı ve yeniden gönderme formu var", () => {
+    const html = renderAccountSettingsPage({ email: "a@b.com", emailVerified: false });
+    expect(html).toContain("doğrulanmadı");
+    expect(html).toContain('action="/settings/account/resend-verification"');
+  });
+
+  it("hesap silme formu onay kutusu ister ve danger düğmesiyle gider", () => {
+    const html = renderAccountSettingsPage({ email: "a@b.com", emailVerified: true });
+    expect(html).toContain('action="/settings/account/delete"');
+    expect(html).toContain('name="confirm"');
+    expect(html).toContain('class="danger"');
+    expect(html).toContain("kalıcı");
+  });
+
+  it("bildirim ve hata kodları statik metne çevrilir", () => {
+    expect(renderAccountSettingsPage({ email: "a@b.com", emailVerified: false, notice: "verify-sent" })).toContain("doğrulama bağlantısı gönderildi");
+    expect(renderAccountSettingsPage({ email: "a@b.com", emailVerified: true, notice: "password-changed" })).toContain("Şifreniz güncellendi");
+    expect(renderAccountSettingsPage({ email: "a@b.com", emailVerified: true, errorKind: "current" })).toContain("mevcut şifre hatalı");
+    expect(renderAccountSettingsPage({ email: "a@b.com", emailVerified: true, errorKind: "short" })).toContain("en az 8");
+    expect(renderAccountSettingsPage({ email: "a@b.com", emailVerified: true, errorKind: "mail" })).toContain("E-posta gönderilemedi");
+  });
+
+  it("e-posta HTML'e kaçırılır", () => {
+    const html = renderAccountSettingsPage({ email: '"><script>a()</script>', emailVerified: true });
+    expect(html).not.toContain("<script>a()");
+  });
+});
+
+describe("doğrulanmamış e-posta uyarısı (clients)", () => {
+  it("emailVerified false ise ayarlara yönlendiren uyarı basılır", () => {
+    const html = renderClientsPage({ tenantName: "A", clients: [], emailVerified: false });
+    expect(html).toContain("doğrulanmadı");
+    expect(html).toContain('href="/settings/account"');
+  });
+
+  it("emailVerified true veya verilmezse uyarı yok", () => {
+    expect(renderClientsPage({ tenantName: "A", clients: [], emailVerified: true })).not.toContain("doğrulanmadı");
+    expect(renderClientsPage({ tenantName: "A", clients: [] })).not.toContain("doğrulanmadı");
   });
 });
