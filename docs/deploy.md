@@ -35,6 +35,7 @@ Kapılar konteyner içinde ölçüldü (imajı `node dist/panel.mjs` ile doğrud
 | `SESSION_SECRET_PREVIOUS` | hayır | rotasyon penceresinde eski anahtarla açılmış oturumları yaşatır | rotasyon günü eski secret |
 | `SESSION_COOKIE_SECURE` | hayır | `1` ise `vf_session` çerezine `Secure` bayrağı eklenir (yalnız HTTPS'te gönderilir). TLS arkasında `1` yap; düz HTTP'de `0`/boş | — |
 | `WORKER_TOKEN` | hayır | `/internal/run-scheduled` tetikleyici anahtarı. **Ayarlanmazsa uç her çağrıda 403 döner** (fail-closed) | `openssl rand -hex 16` |
+| `OPERATOR_EMAILS` | hayır | virgülle ayrılmış e-posta listesi; owner e-postası listede olan kiracılar `/operator/*` konsolunu görür (gelen kutusu + paket yönetimi). Boşsa konsol kimseye açılmaz | `sen@ornek.com` |
 | `DATABASE_URL` | hayır | doluysa Postgres store, boşsa in-memory. compose otomatik kurar | — |
 | `PORT` / `HOST` | hayır | varsayılan `4620` / `0.0.0.0` | — |
 | `ENABLE_SCAN_SCHEDULER` | hayır | `1` ise panel süreci içinde `setInterval` tarama döngüsü açılır | — |
