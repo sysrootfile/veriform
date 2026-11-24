@@ -9,7 +9,9 @@ import {
   renderForgotPasswordPage,
   renderLoginPage,
   renderOperatorContactsPage,
+  renderOperatorPlanRequestsPage,
   renderOperatorTenantsPage,
+  renderPlanPage,
   renderRegisterPage,
   renderResetPasswordPage,
   renderSitePage,
@@ -659,5 +661,117 @@ describe("operatör konsolu", () => {
   it("clients sayfası operatöre konsol linki gösterir, normal kiracıya göstermez", () => {
     expect(renderClientsPage({ tenantName: "A", clients: [], operator: true })).toContain('href="/operator/contacts"');
     expect(renderClientsPage({ tenantName: "A", clients: [] })).not.toContain('href="/operator/contacts"');
+  });
+});
+
+describe("renderPlanPage — plan ve kullanım", () => {
+  const base = {
+    package: "starter" as const,
+    trial: "none" as const,
+    trialDaysLeft: 0,
+    used: 2,
+    limit: 3,
+    clients: [{ name: "Müşteri A", siteCount: 2 }],
+  };
+
+  it("mevcut paket, kullanım ve müşteri kırılımını basar; nav Plan aktif", () => {
+    const html = renderPlanPage(base);
+    expect(html).toContain("Plan ve Kullanım");
+    expect(html).toContain("Starter");
+    expect(html).toContain("2/3");
+    expect(html).toContain("Müşteri A");
+    expect(html).toContain('href="/settings/plan" aria-current="page"');
+  });
+
+  it("üç paket için geçiş formu basar; mevcut paket form yerine rozet alır", () => {
+    const html = renderPlanPage(base);
+    expect(html).toContain('action="/settings/plan"');
+    expect(html).toContain('name="package" value="pro"');
+    expect(html).toContain('name="package" value="ultimate"');
+    expect(html).not.toContain('name="package" value="starter"');
+    expect(html).toContain("Mevcut");
+  });
+
+  it("deneme sürerken kalan gün, bittiyse uyarı basar", () => {
+    expect(renderPlanPage({ ...base, trial: "active", trialDaysLeft: 9 })).toContain("9 gün kaldı");
+    expect(renderPlanPage({ ...base, trial: "expired" })).toContain("Deneme sona erdi");
+  });
+
+  it("bekleyen talep varsa formlar kilitlenir ve hedef gösterilir", () => {
+    const html = renderPlanPage({ ...base, pendingTo: "pro" });
+    expect(html).toContain("bekleyen");
+    expect(html).toContain("disabled");
+    expect(html).toContain("Pro");
+  });
+
+  it("notice ve hata kodları statik metin basar", () => {
+    expect(renderPlanPage({ ...base, notice: "requested" })).toContain("operatöre iletildi");
+    expect(renderPlanPage({ ...base, errorKind: "pending" })).toContain("bekleyen");
+    expect(renderPlanPage({ ...base, errorKind: "same" })).toContain("Zaten bu pakettesiniz");
+    expect(renderPlanPage({ ...base, lastDecision: "approved" })).toContain("onaylandı");
+    expect(renderPlanPage({ ...base, lastDecision: "rejected" })).toContain("reddedildi");
+  });
+
+  it("müşteri adı HTML'e kaçırılır", () => {
+    const html = renderPlanPage({ ...base, clients: [{ name: '"><script>x()</script>', siteCount: 1 }] });
+    expect(html).not.toContain("<script>x()");
+  });
+
+  it("ultimate limiti sınırsız gösterir", () => {
+    expect(renderPlanPage({ ...base, package: "ultimate", limit: null })).toContain("sınırsız");
+  });
+});
+
+describe("renderOperatorPlanRequestsPage", () => {
+  const req = {
+    id: "r1",
+    tenantName: "Plan Ajans",
+    fromPackage: "starter" as const,
+    toPackage: "pro" as const,
+    status: "pending" as const,
+    createdAt: "2026-11-24T10:00:00.000Z",
+  };
+
+  it("pending satır: kiracı, geçiş, Onayla/Reddet formları", () => {
+    const html = renderOperatorPlanRequestsPage({ requests: [req] });
+    expect(html).toContain("Plan Ajans");
+    expect(html).toContain("Starter → Pro");
+    expect(html).toContain('action="/operator/plan-requests/r1/decide"');
+    expect(html).toContain('name="decision" value="approved"');
+    expect(html).toContain('name="decision" value="rejected"');
+    expect(html).toContain("Bekliyor");
+    expect(html).toContain('class="table-scroll"');
+  });
+
+  it("kararlanmış satır rozet basar, form basmaz", () => {
+    const approved = renderOperatorPlanRequestsPage({ requests: [{ ...req, status: "approved" }] });
+    expect(approved).toContain("Onaylandı");
+    expect(approved).not.toContain('action="/operator/plan-requests/r1/decide"');
+    expect(renderOperatorPlanRequestsPage({ requests: [{ ...req, status: "rejected" }] })).toContain("Reddedildi");
+  });
+
+  it("boş liste boş durum basar; kiracı adı kaçırılır", () => {
+    expect(renderOperatorPlanRequestsPage({ requests: [] })).toContain("Henüz plan talebi yok");
+    const html = renderOperatorPlanRequestsPage({ requests: [{ ...req, tenantName: '"><script>y()</script>' }] });
+    expect(html).not.toContain("<script>y()");
+  });
+
+  it("operatör nav Plan Talepleri içerir", () => {
+    expect(renderOperatorPlanRequestsPage({ requests: [] })).toContain('href="/operator/plan-requests"');
+  });
+});
+
+describe("clients deneme afişi", () => {
+  it("deneme sürerken kalan gün, bittiyse plan uyarısı", () => {
+    expect(
+      renderClientsPage({ tenantName: "A", clients: [], trial: "active", trialDaysLeft: 6 }),
+    ).toContain("6 gün kaldı");
+    const expired = renderClientsPage({ tenantName: "A", clients: [], trial: "expired" });
+    expect(expired).toContain("Deneme sona erdi");
+    expect(expired).toContain('href="/settings/plan"');
+  });
+
+  it("deneme yoksa afiş yok", () => {
+    expect(renderClientsPage({ tenantName: "A", clients: [] })).not.toContain("Deneme");
   });
 });

@@ -294,12 +294,61 @@ describe("site kotası (paket zorlaması)", () => {
   it("getSiteQuota paket etiketi, kullanım ve limiti döner", async () => {
     const { service, client } = await tenantWithPackage("pro");
     await service.addSite(client.id, "https://bir.com");
-    expect(await service.getSiteQuota()).toEqual({ label: "Pro", used: 1, limit: 15 });
+    expect(await service.getSiteQuota()).toEqual({
+      label: "Pro",
+      used: 1,
+      limit: 15,
+      trial: "none",
+      trialDaysLeft: 0,
+    });
   });
 
   it("ultimate quota limiti null döner", async () => {
     const { service } = await tenantWithPackage("ultimate");
-    expect(await service.getSiteQuota()).toEqual({ label: "Ultimate", used: 0, limit: null });
+    expect(await service.getSiteQuota()).toEqual({
+      label: "Ultimate",
+      used: 0,
+      limit: null,
+      trial: "none",
+      trialDaysLeft: 0,
+    });
+  });
+
+  it("deneme sürerken seçilen paket kotası geçerli; kalan gün raporlanır", async () => {
+    const store = createInMemoryPanelStore();
+    const tenant = await store.createTenant({
+      name: "Deneme",
+      kind: "agency",
+      package: "pro",
+      trialEndsAt: new Date(Date.now() + 5 * 86400000).toISOString(),
+    });
+    const service = createPanelService(store, { tenantId: tenant.id });
+    const client = await service.addClient("M");
+    for (let i = 1; i <= 4; i++) await service.addSite(client.id, `https://d${i}.com`);
+    const quota = await service.getSiteQuota();
+    expect(quota.label).toBe("Pro");
+    expect(quota.limit).toBe(15);
+    expect(quota.trial).toBe("active");
+    expect(quota.trialDaysLeft).toBe(5);
+  });
+
+  it("deneme bittiyse kota starter'a düşer ve expired raporlanır", async () => {
+    const store = createInMemoryPanelStore();
+    const tenant = await store.createTenant({
+      name: "Bitmiş",
+      kind: "agency",
+      package: "pro",
+      trialEndsAt: new Date(Date.now() - 86400000).toISOString(),
+    });
+    const service = createPanelService(store, { tenantId: tenant.id });
+    const client = await service.addClient("M");
+    for (let i = 1; i <= 3; i++) await service.addSite(client.id, `https://b${i}.com`);
+    await expect(service.addSite(client.id, "https://b4.com")).rejects.toThrow(/site kotası doldu/);
+    const quota = await service.getSiteQuota();
+    expect(quota.label).toBe("Starter");
+    expect(quota.limit).toBe(3);
+    expect(quota.trial).toBe("expired");
+    expect(quota.trialDaysLeft).toBe(0);
   });
 
   it("auditor kota doluyken de mutasyon yapamaz (önce rol denetimi)", async () => {

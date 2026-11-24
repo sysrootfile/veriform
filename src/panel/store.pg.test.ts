@@ -301,3 +301,68 @@ d("operatör portları (gerçek PG)", () => {
     }
   });
 });
+
+d("deneme + plan geçiş talepleri (gerçek PG)", () => {
+  let store: PostgresPanelStore;
+
+  beforeAll(() => {
+    store = createPostgresPanelStore(PG_URL);
+  });
+
+  afterAll(async () => {
+    await store.close();
+  });
+
+  it("trialEndsAt gerçek DB'de kalıcı; setTenantPackage denemeyi temizler", async () => {
+    const ends = "2026-12-08T00:00:00.000Z";
+    const t = await store.createTenant({ name: `PG Deneme ${randomUUID()}`, kind: "agency", package: "pro", trialEndsAt: ends });
+    expect(t.trialEndsAt).toBe(ends);
+    expect((await store.getTenant(t.id))?.trialEndsAt).toBe(ends);
+    await store.setTenantPackage(t.id, "ultimate");
+    const after = await store.getTenant(t.id);
+    expect(after?.package).toBe("ultimate");
+    expect(after?.trialEndsAt).toBeUndefined();
+  });
+
+  it("plan talebi akışı: pending tekliği, onay paketi uygular + denemeyi temizler, ret değiştirmez", async () => {
+    const t = await store.createTenant({
+      name: `PG Plan ${randomUUID()}`,
+      kind: "agency",
+      package: "starter",
+      trialEndsAt: "2026-12-08T00:00:00.000Z",
+    });
+    const req = await store.createPlanChangeRequest({ tenantId: t.id, toPackage: "pro" });
+    expect(req.fromPackage).toBe("starter");
+    expect(req.status).toBe("pending");
+    await expect(store.createPlanChangeRequest({ tenantId: t.id, toPackage: "ultimate" })).rejects.toThrow(/bekleyen/);
+    await expect(store.createPlanChangeRequest({ tenantId: t.id, toPackage: "starter" })).rejects.toThrow(/bekleyen|zaten bu pakettesiniz/);
+
+    const decided = await store.decidePlanChangeRequest(req.id, "approved");
+    expect(decided.status).toBe("approved");
+    expect(decided.decidedAt).toBeTruthy();
+    const after = await store.getTenant(t.id);
+    expect(after?.package).toBe("pro");
+    expect(after?.trialEndsAt).toBeUndefined();
+    await expect(store.decidePlanChangeRequest(req.id, "rejected")).rejects.toThrow(/sonuçlanmış/);
+
+    const req2 = await store.createPlanChangeRequest({ tenantId: t.id, toPackage: "ultimate" });
+    expect((await store.decidePlanChangeRequest(req2.id, "rejected")).status).toBe("rejected");
+    expect((await store.getTenant(t.id))?.package).toBe("pro");
+    expect((await store.listPlanChangeRequests(t.id)).map((r) => r.id).sort()).toEqual([req.id, req2.id].sort());
+  });
+
+  it("eşzamanlı karar tek kazanır; deleteTenant talepleri cascade eder", async () => {
+    const t = await store.createTenant({ name: `PG Yarış ${randomUUID()}`, kind: "agency" });
+    const req = await store.createPlanChangeRequest({ tenantId: t.id, toPackage: "pro" });
+    const results = await Promise.allSettled([
+      store.decidePlanChangeRequest(req.id, "approved"),
+      store.decidePlanChangeRequest(req.id, "rejected"),
+    ]);
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+
+    const t2 = await store.createTenant({ name: `PG Sil Plan ${randomUUID()}`, kind: "agency" });
+    const req2 = await store.createPlanChangeRequest({ tenantId: t2.id, toPackage: "pro" });
+    await store.deleteTenant(t2.id);
+    expect((await store.listPlanChangeRequests()).some((r) => r.id === req2.id)).toBe(false);
+  });
+});

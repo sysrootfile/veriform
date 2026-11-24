@@ -91,3 +91,22 @@ describe("kayıtta paket seçimi", () => {
     expect(tenant.package).toBe("starter");
   });
 });
+
+describe("kayıtta deneme süresi", () => {
+  it("registerTenant 14 günlük deneme başlatır", async () => {
+    const store = emptyStore();
+    const before = Date.now();
+    const { tenant } = await registerTenant(store, {
+      name: "Deneme Ajans",
+      kind: "agency",
+      email: "deneme@ajans.com",
+      password: PW_A,
+      package: "pro",
+    });
+    expect(tenant.trialEndsAt).toBeTruthy();
+    const ends = new Date(tenant.trialEndsAt!).getTime();
+    expect(ends).toBeGreaterThanOrEqual(before + 14 * 86400000 - 1000);
+    expect(ends).toBeLessThanOrEqual(Date.now() + 14 * 86400000 + 1000);
+    expect((await store.getTenant(tenant.id))?.trialEndsAt).toBe(tenant.trialEndsAt);
+  });
+});

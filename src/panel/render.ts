@@ -1,5 +1,5 @@
 import type { ContactPackage, ContactRequest, StoredScan, TenantKind } from "./types.js";
-import { PLAN_LABELS } from "./plans.js";
+import { PLAN_LABELS, PLAN_LIMITS } from "./plans.js";
 import { diffScans } from "../scanner/diff.js";
 
 /**
@@ -28,6 +28,8 @@ const STYLE = `
   .badge-ok { color: #127a3d; background: #e8f5ee; padding: .2rem .55rem; border-radius: 999px; font-size: .82rem; font-weight: 600; }
   .badge-warn { color: #b45309; background: #fdf2e3; padding: .2rem .55rem; border-radius: 999px; font-size: .82rem; font-weight: 600; }
   .empty { color: #777; }
+  .plan-list { list-style: none; padding: 0; display: flex; flex-direction: column; gap: .6rem; }
+  .plan-list form { display: inline; }
   .setup { border: 1px solid #e5e5ea; border-radius: 8px; padding: .9rem 1.1rem; margin: 0 0 1.4rem; background: #fafafb; }
   .setup h2 { margin: 0 0 .5rem; font-size: 1rem; }
   .setup ol { margin: .3rem 0 .5rem; padding-left: 1.2rem; }
@@ -59,10 +61,11 @@ function safeLogoUrl(url?: string | undefined): string | undefined {
   return url && /^https?:\/\/\S+$/i.test(url) ? url : undefined;
 }
 
-type NavActive = "clients" | "audit" | "api-keys" | "account" | "api-docs" | "guide";
+type NavActive = "clients" | "audit" | "api-keys" | "account" | "api-docs" | "guide" | "plan";
 
 const NAV_ITEMS: Array<{ href: string; label: string; key: NavActive }> = [
   { href: "/clients", label: "Müşteriler", key: "clients" },
+  { href: "/settings/plan", label: "Plan", key: "plan" },
   { href: "/audit", label: "Denetim İzi", key: "audit" },
   { href: "/settings/api-keys", label: "API Anahtarları", key: "api-keys" },
   { href: "/settings/account", label: "Hesap", key: "account" },
@@ -124,6 +127,8 @@ export function renderClientsPage(input: {
   quota?: { label: string; used: number; limit: number | null } | undefined;
   emailVerified?: boolean | undefined;
   operator?: boolean | undefined;
+  trial?: "none" | "active" | "expired" | undefined;
+  trialDaysLeft?: number | undefined;
 }): string {
   const e = escapeHtml;
   const logoUrl = safeLogoUrl(input.logoUrl);
@@ -171,10 +176,18 @@ ${setupStep(ob.hasScan, "İlk tarama", "Site sayfasındaki Sürekli İzleme çiz
       ? `<p class="badge-warn">E-posta adresiniz doğrulanmadı — <a href="/settings/account">Hesap ayarları</a>ndan doğrulama bağlantısı gönderin.</p>`
       : "";
 
+  const trialBanner =
+    input.trial === "active"
+      ? `<p class="badge-ok">Deneme sürüyor — ${input.trialDaysLeft ?? 0} gün kaldı. <a href="/settings/plan">Plan ve kullanım</a></p>`
+      : input.trial === "expired"
+        ? `<p class="badge-warn">Deneme sona erdi — yeni site eklemek için planınızı etkinleştirin. <a href="/settings/plan">Plan →</a></p>`
+        : "";
+
   return panelPage(
     input.tenantName,
     `<h1>${logo}Veriform Panel · ${e(input.tenantName)}</h1>
 ${verifyNag}
+${trialBanner}
 ${operatorLink}
 ${quotaLine}
 ${demoLink}
@@ -606,12 +619,13 @@ ${verifyBlock}
   );
 }
 
-function operatorNav(active: "contacts" | "tenants"): string {
+function operatorNav(active: "contacts" | "tenants" | "plan-requests"): string {
   const link = (href: string, label: string, key: string) =>
     `<a href="${href}"${key === active ? ' aria-current="page"' : ""}>${label}</a>`;
   return `<nav class="topnav" aria-label="Operatör">
 ${link("/operator/contacts", "Gelen Kutusu", "contacts")}
 ${link("/operator/tenants", "Kiracılar", "tenants")}
+${link("/operator/plan-requests", "Plan Talepleri", "plan-requests")}
 <a href="/clients" class="nav-logout">Panele dön</a>
 </nav>`;
 }
@@ -674,6 +688,145 @@ export function renderOperatorTenantsPage(input: {
 <div class="table-scroll">
 <table>
 <tr><th>Kiracı</th><th>Tür</th><th>Kullanım</th><th>Paket</th></tr>
+${rows}
+</table>
+</div>`,
+  );
+}
+
+export function renderPlanPage(input: {
+  package: ContactPackage;
+  trial: "none" | "active" | "expired";
+  trialDaysLeft: number;
+  used: number;
+  limit: number | null;
+  clients: Array<{ name: string; siteCount: number }>;
+  pendingTo?: ContactPackage | undefined;
+  notice?: "requested" | undefined;
+  errorKind?: "pending" | "same" | undefined;
+  lastDecision?: "approved" | "rejected" | undefined;
+}): string {
+  const e = escapeHtml;
+  const trialBanner =
+    input.trial === "active"
+      ? `<p class="badge-ok">Deneme sürüyor — ${input.trialDaysLeft} gün kaldı.</p>`
+      : input.trial === "expired"
+        ? `<p class="badge-warn">Deneme sona erdi — kota Starter'a düştü. Yeni site için plan geçişi isteyin.</p>`
+        : "";
+  const notice =
+    input.notice === "requested"
+      ? '<p class="badge-ok">Geçiş talebiniz operatöre iletildi.</p>'
+      : "";
+  const error =
+    input.errorKind === "pending"
+      ? '<p class="badge-warn">Zaten bekleyen bir geçiş talebiniz var.</p>'
+      : input.errorKind === "same"
+        ? '<p class="badge-warn">Zaten bu pakettesiniz.</p>'
+        : "";
+  const lastDecision =
+    input.lastDecision === "approved"
+      ? '<p class="badge-ok">Son geçiş talebiniz onaylandı.</p>'
+      : input.lastDecision === "rejected"
+        ? '<p class="badge-warn">Son geçiş talebiniz reddedildi.</p>'
+        : "";
+  const pendingNote = input.pendingTo
+    ? `<p class="empty">Operatör onayı bekleyen talep: <strong>${e(PLAN_LABELS[input.pendingTo])}</strong></p>`
+    : "";
+
+  const usage =
+    input.limit === null
+      ? `${input.used} site (sınırsız)`
+      : `${input.used}/${input.limit} site`;
+
+  const clientRows = input.clients.length
+    ? input.clients
+        .map((c) => `<tr><td>${e(c.name)}</td><td class="num">${c.siteCount}</td></tr>`)
+        .join("\n")
+    : '<tr><td colspan="2" class="empty">Henüz müşteri yok.</td></tr>';
+
+  const planCards = (Object.keys(PLAN_LABELS) as ContactPackage[])
+    .map((p) => {
+      const limitText = PLAN_LIMITS[p] === null ? "sınırsız site" : `${PLAN_LIMITS[p]} site`;
+      if (p === input.package) {
+        return `<li><strong>${e(PLAN_LABELS[p])}</strong> — ${limitText} <span class="badge-ok">Mevcut</span></li>`;
+      }
+      const disabled = input.pendingTo ? " disabled" : "";
+      return `<li><form method="post" action="/settings/plan">
+  <input type="hidden" name="package" value="${p}">
+  <button type="submit"${disabled}>${e(PLAN_LABELS[p])} — ${limitText} · Geçiş iste</button>
+</form></li>`;
+    })
+    .join("\n");
+
+  return panelPage(
+    "Plan ve Kullanım",
+    `<h1>Plan ve Kullanım</h1>
+${trialBanner}
+${notice}
+${error}
+${lastDecision}
+${pendingNote}
+<p>Paket: <strong>${e(PLAN_LABELS[input.package])}</strong> — ${usage}</p>
+<h2>Müşteri kırılımı</h2>
+<div class="table-scroll">
+<table>
+<tr><th>Müşteri</th><th>Site</th></tr>
+${clientRows}
+</table>
+</div>
+<h2>Plan geçişi</h2>
+<p class="empty">Geçiş talebi operatör onayına düşer; ödeme adımı henüz yok.</p>
+<ul class="plan-list">
+${planCards}
+</ul>`,
+    undefined,
+    "plan",
+  );
+}
+
+export function renderOperatorPlanRequestsPage(input: {
+  requests: Array<{
+    id: string;
+    tenantName: string;
+    fromPackage: ContactPackage;
+    toPackage: ContactPackage;
+    status: "pending" | "approved" | "rejected";
+    createdAt: string;
+  }>;
+}): string {
+  const e = escapeHtml;
+  const rows = input.requests.length
+    ? input.requests
+        .map((r) => {
+          const badge =
+            r.status === "approved"
+              ? '<span class="badge-ok">Onaylandı</span>'
+              : r.status === "rejected"
+                ? '<span class="badge-warn">Reddedildi</span>'
+                : '<span class="badge-warn">Bekliyor</span>';
+          const actions =
+            r.status === "pending"
+              ? `<form method="post" action="/operator/plan-requests/${e(r.id)}/decide">
+  <input type="hidden" name="decision" value="approved">
+  <button type="submit">Onayla</button>
+</form>
+<form method="post" action="/operator/plan-requests/${e(r.id)}/decide">
+  <input type="hidden" name="decision" value="rejected">
+  <button type="submit">Reddet</button>
+</form>`
+              : "";
+          return `<tr><td>${e(r.tenantName)}</td><td>${e(PLAN_LABELS[r.fromPackage])} → ${e(PLAN_LABELS[r.toPackage])}</td><td>${e(r.createdAt)}</td><td>${badge}</td><td>${actions}</td></tr>`;
+        })
+        .join("\n")
+    : '<tr><td colspan="5" class="empty">Henüz plan talebi yok.</td></tr>';
+
+  return panelPage(
+    "Operatör — Plan Talepleri",
+    `${operatorNav("plan-requests")}
+<h1>Plan Geçiş Talepleri</h1>
+<div class="table-scroll">
+<table>
+<tr><th>Kiracı</th><th>Geçiş</th><th>Tarih</th><th>Durum</th><th>İşlem</th></tr>
 ${rows}
 </table>
 </div>`,

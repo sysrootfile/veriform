@@ -34,7 +34,9 @@ import {
   renderForgotPasswordPage,
   renderLoginPage,
   renderOperatorContactsPage,
+  renderOperatorPlanRequestsPage,
   renderOperatorTenantsPage,
+  renderPlanPage,
   renderRegisterPage,
   renderResetPasswordPage,
   renderSitePage,
@@ -731,6 +733,44 @@ const server = createServer(async (req, res) => {
         return;
       }
 
+      if (req.method === "GET" && url.pathname === "/operator/plan-requests") {
+        const [requests, tenants] = await Promise.all([
+          store.listPlanChangeRequests(),
+          store.listTenants(),
+        ]);
+        const names = new Map(tenants.map((t) => [t.id, t.name]));
+        const rows = requests.map((r) => ({
+          id: r.id,
+          tenantName: names.get(r.tenantId) ?? "(silinmiş kiracı)",
+          fromPackage: r.fromPackage,
+          toPackage: r.toPackage,
+          status: r.status,
+          createdAt: r.createdAt,
+        }));
+        res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+        res.end(renderOperatorPlanRequestsPage({ requests: rows }));
+        return;
+      }
+
+      if (req.method === "POST" && /^\/operator\/plan-requests\/[^/]+\/decide$/.test(url.pathname)) {
+        const id = url.pathname.split("/")[3]!;
+        const form = new URLSearchParams(await readBody(req));
+        const decision = form.get("decision");
+        if (decision !== "approved" && decision !== "rejected") {
+          res.writeHead(400, { "content-type": "text/plain; charset=utf-8" });
+          res.end("Geçersiz karar");
+          return;
+        }
+        const reqRow = await store.decidePlanChangeRequest(id, decision);
+        await store.recordAudit(reqRow.tenantId, `operator.plan_${decision}`, {
+          requestId: id,
+          toPackage: reqRow.toPackage,
+        });
+        res.writeHead(303, { location: "/operator/plan-requests" });
+        res.end();
+        return;
+      }
+
       res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
       res.end("Sayfa bulunamadı");
       return;
@@ -782,6 +822,66 @@ const server = createServer(async (req, res) => {
       await store.revokeApiKey(tenantId, keyId);
       await store.recordAudit(tenantId, "apikey.revoked", { keyId });
       res.writeHead(302, { location: "/settings/api-keys" });
+      res.end();
+      return;
+    }
+
+    // Plan ve kullanım — deneme durumu, kota kırılımı, self-servis geçiş talebi
+    if (req.method === "GET" && url.pathname === "/settings/plan") {
+      const tenant = await store.getTenant(tenantId);
+      const quota = await service.getSiteQuota();
+      const clients = await store.listClients(tenantId);
+      const breakdown = await Promise.all(
+        clients.map(async (c) => ({ name: c.name, siteCount: (await store.listSites(c.id)).length })),
+      );
+      const requests = await store.listPlanChangeRequests(tenantId);
+      const pending = requests.find((r) => r.status === "pending");
+      const lastDecided = requests.find((r) => r.status !== "pending");
+      const noticeParam = url.searchParams.get("notice");
+      const errorParam = url.searchParams.get("error");
+      res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      res.end(
+        renderPlanPage({
+          package: tenant?.package ?? "starter",
+          trial: quota.trial,
+          trialDaysLeft: quota.trialDaysLeft,
+          used: quota.used,
+          limit: quota.limit,
+          clients: breakdown,
+          pendingTo: pending?.toPackage,
+          notice: noticeParam === "requested" ? "requested" : undefined,
+          errorKind: errorParam === "pending" || errorParam === "same" ? errorParam : undefined,
+          lastDecision:
+            lastDecided?.status === "approved" || lastDecided?.status === "rejected"
+              ? lastDecided.status
+              : undefined,
+        }),
+      );
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/settings/plan") {
+      const form = new URLSearchParams(await readBody(req));
+      const pkg = form.get("package");
+      if (!isContactPackage(pkg)) {
+        res.writeHead(400, { "content-type": "text/plain; charset=utf-8" });
+        res.end("Geçersiz paket");
+        return;
+      }
+      try {
+        await store.createPlanChangeRequest({ tenantId, toPackage: pkg });
+        await store.recordAudit(tenantId, "plan.requested", { toPackage: pkg });
+        res.writeHead(303, { location: "/settings/plan?notice=requested" });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "";
+        if (message.includes("bekleyen")) {
+          res.writeHead(303, { location: "/settings/plan?error=pending" });
+        } else if (message.includes("zaten bu pakettesiniz")) {
+          res.writeHead(303, { location: "/settings/plan?error=same" });
+        } else {
+          throw error;
+        }
+      }
       res.end();
       return;
     }
@@ -866,6 +966,7 @@ const server = createServer(async (req, res) => {
       const user = await store.findUserByTenant(tenantId);
       const clients = await service.getClientList();
       const onboarding = await service.getOnboardingStatus();
+      const quota = await service.getSiteQuota();
       res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
       res.end(
         renderClientsPage({
@@ -875,9 +976,11 @@ const server = createServer(async (req, res) => {
           accent: tenant?.brandColor,
           logoUrl: tenant?.brandLogoUrl,
           onboarding,
-          quota: await service.getSiteQuota(),
+          quota,
           emailVerified: Boolean(user?.emailVerifiedAt),
           operator: isOperator(user?.email ?? "", OPERATOR_EMAILS),
+          trial: quota.trial,
+          trialDaysLeft: quota.trialDaysLeft,
         }),
       );
       return;
