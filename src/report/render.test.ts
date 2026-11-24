@@ -95,3 +95,13 @@ describe("renderReportHtml", () => {
     expect(html).toContain("&lt;script&gt;");
   });
 });
+
+describe("Zincir Defter dünyası", () => {
+  it("rapor scoped dünya stilleri + self-host font taşır", () => {
+    const html = renderReportHtml(sample);
+    expect(html).toContain('<body class="vf-report">');
+    expect(html).toContain(".vf-report h1");
+    expect(html).toContain('@font-face{font-family:"Archivo"');
+    expect(html).toContain("--paper:#f6f7f4");
+  });
+});

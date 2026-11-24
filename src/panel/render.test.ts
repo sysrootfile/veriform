@@ -221,7 +221,7 @@ describe("white-label accent", () => {
       accent: "javascript:alert(1)",
     });
     expect(html).not.toContain("javascript:");
-    expect(html).toContain("--accent: #16161f");
+    expect(html).toContain("--accent: #1e7a46");
   });
 
   it("http(s) logosu img olarak basılır; javascript: şeması engellenir", () => {
@@ -773,5 +773,42 @@ describe("clients deneme afişi", () => {
 
   it("deneme yoksa afiş yok", () => {
     expect(renderClientsPage({ tenantName: "A", clients: [] })).not.toContain("Deneme");
+  });
+});
+
+describe("Zincir Defter dünyası", () => {
+  const pages = [
+    renderClientsPage({ tenantName: "A", clients: [] }),
+    renderLoginPage(),
+    renderRegisterPage(),
+    renderAuditPage({ entries: [] }),
+    renderOperatorContactsPage({ requests: [] }),
+    renderPlanPage({ package: "starter", trial: "none", trialDaysLeft: 0, used: 0, limit: 3, clients: [] }),
+  ];
+
+  it("her yüzey self-host fontları, kağıt yaprağı ve antet taşır", () => {
+    for (const html of pages) {
+      expect(html).toContain('@font-face{font-family:"Archivo"');
+      expect(html).toContain('@font-face{font-family:"Spline Sans Mono"');
+      expect(html).toContain("/assets/fonts/archivo-latin.woff2");
+      expect(html).toContain('class="sheet"');
+      expect(html).toContain('class="antet"');
+      expect(html).toContain("VERİFORM — UYUM DEFTERİ");
+      expect(html).toContain("SAYFA ·");
+      expect((html.match(/class="hole"/g) ?? []).length).toBe(3);
+      expect(html).toContain("--paper:#f6f7f4");
+    }
+  });
+
+  it("tüm tablolar yatay taşmaya karşı sarmallı", () => {
+    expect(renderClientsPage({ tenantName: "A", clients: [] })).toContain('<div class="table-scroll">');
+    expect(renderAuditPage({ entries: [] })).toContain('<div class="table-scroll">');
+    expect(renderApiKeysPage({ keys: [] })).toContain('<div class="table-scroll">');
+    expect(renderClientDetailPage({ clientName: "M", clientHref: "/clients/c1", sites: [] })).toContain('<div class="table-scroll">');
+  });
+
+  it("auth sayfalarında panel nav yok", () => {
+    expect(renderLoginPage()).not.toContain('class="topnav"');
+    expect(renderRegisterPage()).not.toContain('class="topnav"');
   });
 });
