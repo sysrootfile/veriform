@@ -480,7 +480,8 @@ ${options.hasError ? `<p class="badge-warn">${LOGIN_ERROR_TEXT}</p>` : ""}
   <button type="submit">Giriş yap</button>
 </form>
 <p class="empty"><a href="/forgot-password">Şifreni mi unuttun?</a></p>
-<p class="empty">Hesabın yok mu? <a href="/register">Ajansını kaydet</a></p>`,
+<p class="empty">Hesabın yok mu? <a href="/register">Ajansını kaydet</a></p>
+<p class="empty"><a href="/kullanim-sartlari">Kullanım şartları</a> · <a href="/gizlilik">Gizlilik</a> · <a href="/cerez-politikasi">Çerez politikası</a></p>`,
   );
 }
 
@@ -501,7 +502,8 @@ ${errorText ? `<p class="badge-warn">${errorText}</p>` : ""}
   </select>
   <button type="submit">Kaydol</button>
 </form>
-<p class="empty">Zaten hesabın var mı? <a href="/login">Giriş yap</a></p>`,
+<p class="empty">Zaten hesabın var mı? <a href="/login">Giriş yap</a></p>
+<p class="empty"><a href="/kullanim-sartlari">Kullanım şartları</a> · <a href="/gizlilik">Gizlilik</a> · <a href="/cerez-politikasi">Çerez politikası</a></p>`,
   );
 }
 
