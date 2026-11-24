@@ -1,6 +1,7 @@
 import type { ContactPackage, ContactRequest, StoredScan, TenantKind } from "./types.js";
 import { PLAN_LABELS, PLAN_LIMITS } from "./plans.js";
 import { diffScans } from "../scanner/diff.js";
+import { FONT_FACES, WORLD_TOKENS, WORLD_BASE, SHEET_CSS, PANEL_CSS, sheetOpen } from "./design.js";
 
 /**
  * Panel sayfa renderer'ları — servis katmanının verisini HTML'e çevirir.
@@ -18,38 +19,11 @@ function escapeHtml(value: string): string {
     .replaceAll("'", "&#39;");
 }
 
-const STYLE = `
-  body { font-family: system-ui, sans-serif; max-width: 860px; margin: 2rem auto; padding: 0 1rem; color: #16161f; }
-  h1 { font-size: 1.3rem; color: var(--accent); } h2 { font-size: 1.05rem; margin-top: 1.6rem; }
-  table { width: 100%; border-collapse: collapse; margin: .5rem 0 1rem; }
-  .table-scroll { overflow-x: auto; }
-  td, th { border-bottom: 1px solid #eee; padding: .45rem .5rem; text-align: left; font-size: .92rem; }
-  .num { text-align: right; }
-  .badge-ok { color: #127a3d; background: #e8f5ee; padding: .2rem .55rem; border-radius: 999px; font-size: .82rem; font-weight: 600; }
-  .badge-warn { color: #b45309; background: #fdf2e3; padding: .2rem .55rem; border-radius: 999px; font-size: .82rem; font-weight: 600; }
-  .empty { color: #777; }
-  .plan-list { list-style: none; padding: 0; display: flex; flex-direction: column; gap: .6rem; }
-  .plan-list form { display: inline; }
-  .setup { border: 1px solid #e5e5ea; border-radius: 8px; padding: .9rem 1.1rem; margin: 0 0 1.4rem; background: #fafafb; }
-  .setup h2 { margin: 0 0 .5rem; font-size: 1rem; }
-  .setup ol { margin: .3rem 0 .5rem; padding-left: 1.2rem; }
-  .setup li { margin: .35rem 0; font-size: .92rem; }
-  .setup li.setup-done { color: #127a3d; }
-  .setup-hint { color: #777; font-size: .85rem; }
-  form { margin: 1rem 0; display: flex; gap: .5rem; flex-wrap: wrap; }
-  input, button, select { padding: .45rem .7rem; border: 1px solid #ccc; border-radius: 6px; font-size: .92rem; }
-  button { background: var(--accent); color: #fff; border: none; cursor: pointer; }
-  button:hover { filter: brightness(1.15); }
-  button.danger { background: #8b1d1d; }
-  a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  .topnav { display: flex; flex-wrap: wrap; gap: .25rem; align-items: center; border-bottom: 1px solid #e5e5ea; padding-bottom: .6rem; margin-bottom: 1.2rem; }
-  .topnav a { color: #444; text-decoration: none; font-size: .88rem; padding: .35rem .65rem; border-radius: 6px; }
-  .topnav a:hover { background: #f2f2f5; color: #16161f; }
-  .topnav a[aria-current="page"] { background: var(--accent); color: #fff; font-weight: 600; }
-  .topnav .nav-logout { margin-left: auto; color: #8b1d1d; }
-  .topnav .nav-logout:hover { background: #fbeaea; color: #8b1d1d; }
-  footer { color: #888; font-size: .8rem; border-top: 1px solid #eee; margin-top: 2rem; padding-top: .8rem; }
-`;
+const STYLE = `${FONT_FACES}
+${WORLD_TOKENS}
+${WORLD_BASE}
+${SHEET_CSS}
+${PANEL_CSS}`;
 
 /** White-label vurgu rengi — yalnızca #rrggbb; başka her şey (CSS enjeksiyonu dahil) yoksayılır. */
 function safeAccent(color?: string | undefined): string | undefined {
@@ -92,13 +66,15 @@ export const panelPage = (title: string, body: string, accent?: string | undefin
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" href="data:,">
 <title>Veriform Panel — ${escapeHtml(title)}</title>
-<style>:root { --accent: ${safeAccent(accent) ?? "#16161f"}; }
+<style>:root { --accent: ${safeAccent(accent) ?? "#1e7a46"}; --sheet-w: 1080px; }
 ${STYLE}</style>
 </head>
 <body>
 ${navActive ? nav(navActive) : ""}
+${sheetOpen(escapeHtml(title))}
 ${body}
 <footer>Veriform panel — izleyici ham veri saklamaz; kanıtlar kurcalama kanıtlı zincirde.</footer>
+</div>
 </body>
 </html>`;
 
@@ -193,7 +169,9 @@ ${quotaLine}
 ${demoLink}
 ${setupSection}
 <h2>Müşteriler</h2>
+<div class="table-scroll">
 <table>${rows}</table>
+</div>
 <form method="post" action="/clients">
   <input name="name" placeholder="Müşteri adı" required>
   <button type="submit">Müşteri ekle</button>
@@ -298,6 +276,7 @@ export function renderSitePage(input: {
   const reviewSection =
     currScan && currScan.report.review.length
       ? `<h2>İnsan Onayı Bekleyen Sınıflandırmalar</h2>
+<div class="table-scroll">
 <table>
 <tr><th>Form</th><th>Alan</th><th>Mevcut kategori</th><th>Güven</th><th>Düzelt</th></tr>
 ${currScan.report.review
@@ -312,7 +291,8 @@ ${currScan.report.review
 </form></td></tr>`;
   })
   .join("\n")}
-</table>`
+</table>
+</div>`
       : "";
 
   return panelPage(
@@ -325,10 +305,12 @@ ${alertSection}
 ${reviewSection}
 <h2>Taramalar</h2>
 ${paginationNote}
+<div class="table-scroll">
 <table>
 <tr><th>Tarih</th><th class="num">Form</th><th class="num">Risk</th><th class="num">Çerez ihlali</th></tr>
 ${rows}
 </table>
+</div>
 ${bannerForm}`,
     undefined,
     "clients",
@@ -379,10 +361,12 @@ ${quotaWarning}
 <h2>Siteler</h2>
 <p class="empty">Embed scriptini sitenizin <code>&lt;head&gt;</code> bölümüne ekleyin; <code>data-site-token</code> yerine aşağıdaki ingest token'ı yazın:</p>
 <p><code>&lt;script src="${e(input.embedSrc ?? "/embed.js")}" data-site-token="…"&gt;&lt;/script&gt;</code></p>
+<div class="table-scroll">
 <table>
 <tr><th>Site</th><th>Ingest token</th><th class="num">Rapor</th></tr>
 ${rows}
 </table>
+</div>
 <form method="post" action="${e(input.clientHref)}/sites">
   <input name="url" type="url" placeholder="https://musteri-sitesi.com" required>
   <button type="submit">Site ekle</button>
@@ -420,10 +404,12 @@ export function renderAuditPage(input: {
     "Denetim İzi",
     `<h1>Denetim İzi (Audit Log)</h1>
 <p class="empty">Panelde yapılan her mutasyon burada iz bırakır — KVKK m.12 kayıt yükümlülüğü zemin.</p>
+<div class="table-scroll">
 <table>
 <tr><th>Zaman</th><th>Eylem</th><th>Detay</th></tr>
 ${rows}
-</table>`,
+</table>
+</div>`,
     undefined,
     "audit",
   );
@@ -458,10 +444,12 @@ export function renderApiKeysPage(input: {
     `<h1>Headless API Anahtarları</h1>
 ${newKeyBlock}
 <h2>Anahtarlar</h2>
+<div class="table-scroll">
 <table>
 <tr><th>Ad</th><th>Ön ek</th><th>Son kullanım</th><th>İşlem</th></tr>
 ${rows}
 </table>
+</div>
 <form method="post" action="/settings/api-keys">
   <input name="name" placeholder="Anahtar adı (örn. CI, entegrasyon)" required>
   <button type="submit">Anahtar oluştur</button>

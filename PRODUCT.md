@@ -49,7 +49,7 @@ ucundan servis edilir (CDN yok). Kamu uçları: `/tarama` (demo tarama), `/login
 ## Brand Commitments
 
 Ad: Veriform. Dil: Türkçe, kısa düz cümleler, "sen" hitabı. Beyaz-etiket: kiracı vurgu rengi
-(#rrggbb) + logo; panel varsayılan vurgusu #16161f. Logo varlığı yok — uydurma logo/testimonial
+(#rrggbb) + logo; panel varsayılan vurgusu #1e7a46 (mühür yeşili). Logo varlığı yok — uydurma logo/testimonial
 kullanılmaz.
 
 ## Evidence on Hand
