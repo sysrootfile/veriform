@@ -6,7 +6,7 @@ import type { StoredReceiptEntry } from "./chain.js";
 import type { Correction } from "./corrections.js";
 import { effectivePackage, PLAN_LABELS, PLAN_LIMITS, trialDaysLeft } from "./plans.js";
 import type { PanelStore } from "./store.js";
-import type { Client, ScanCookie, SetupProgress, Site, SiteBannerConfig, StoredScan } from "./types.js";
+import type { Client, ScanCookie, ScannedScript, SetupProgress, Site, SiteBannerConfig, StoredScan } from "./types.js";
 
 /**
  * Panel servis katmanı — HTTP handler'ların çağıracağı uygulama sözleşmesi.
@@ -59,6 +59,7 @@ export interface PanelService {
     report: FormInventoryReport;
     cookies: ScanCookie[];
     observedTargets: RequestTarget[];
+    scripts?: ScannedScript[];
   }): Promise<StoredScan>;
   ingestReceipt(siteId: string, receipt: ConsentReceipt): Promise<StoredReceiptEntry>;
   verifySite(siteId: string): Promise<boolean>;

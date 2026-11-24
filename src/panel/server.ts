@@ -1177,11 +1177,47 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === "POST" && /^\/sites\/[^/]+\/scan$/.test(url.pathname)) {
+      const siteId = url.pathname.split("/")[2]!;
+      const site = await service.resolveSite(siteId);
+      const ip = req.socket.remoteAddress ?? "bilinmeyen";
+      if (!scanLimiter.allow(ip)) {
+        res.writeHead(303, { location: `/sites/${siteId}?scan=limited` });
+        res.end();
+        return;
+      }
+      try {
+        // Lazy import: playwright yoksa (prod panel konteyneri) nazik hata bildirimi
+        const { buildEmbedSource, scanSite } = await import("../scanner/scan.js");
+        const result = await scanSite(site.url, {
+          embedSource: await buildEmbedSource(),
+          timeoutMs: 30_000,
+        });
+        await service.ingestScan({
+          siteId,
+          report: result.report,
+          cookies: result.cookies,
+          observedTargets: result.observedTargets,
+          scripts: result.scripts,
+        });
+        await store.recordAudit(tenantId, "scan.manual", { siteId });
+        res.writeHead(303, { location: `/sites/${siteId}?scan=ok` });
+      } catch (error) {
+        console.error("[scan-now] başarısız:", error);
+        res.writeHead(303, { location: `/sites/${siteId}?scan=error` });
+      }
+      res.end();
+      return;
+    }
+
     if (req.method === "GET" && url.pathname.startsWith("/sites/")) {
       const siteId = url.pathname.slice("/sites/".length);
       const site = await service.resolveSite(siteId);
       const scans = await service.getSiteScans(siteId);
       const chainValid = await service.verifySite(siteId);
+      const scanParam = url.searchParams.get("scan");
+      const scanNotice =
+        scanParam === "ok" || scanParam === "error" || scanParam === "limited" ? scanParam : undefined;
       res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
       res.end(
         renderSitePage({
@@ -1199,6 +1235,8 @@ const server = createServer(async (req, res) => {
           evidenceHref: `/sites/${siteId}/evidence.csv`,
           bannerConfig: site.bannerConfig,
           scanIntervalHours: site.scanIntervalHours,
+          embedLastSeenAt: site.embedLastSeenAt,
+          scanNotice,
         }),
       );
       return;

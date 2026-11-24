@@ -96,6 +96,39 @@ describe("renderSitePage", () => {
     expect(html).toContain("Zincir doğrulaması başarısız");
   });
 
+  it("manuel ilk tarama: Şimdi tara düğmesi boş durumda tek birincil eylemdir", () => {
+    const html = renderSitePage({
+      siteId: "s1",
+      siteUrl: "https://musteri1.com",
+      chainValid: true,
+      scans: [],
+    });
+    expect(html).toContain('action="/sites/s1/scan"');
+    expect(html).toContain("Şimdi tara");
+    expect(html).not.toContain("çizelgesini açın; worker");
+  });
+
+  it("tarama bildirimi: ok, error ve limited durumları rozetle basılır", () => {
+    const base = { siteId: "s1", siteUrl: "https://musteri1.com", chainValid: true, scans: [] };
+    expect(renderSitePage({ ...base, scanNotice: "ok" })).toContain("Tarama tamamlandı");
+    expect(renderSitePage({ ...base, scanNotice: "error" })).toContain(
+      "Tarama şu anda gerçekleştirilemedi",
+    );
+    expect(renderSitePage({ ...base, scanNotice: "limited" })).toContain("Çok fazla tarama isteği");
+  });
+
+  it("izleme kodu bağlandığında doğrulama kaşesi ve son görülme basılır", () => {
+    const html = renderSitePage({
+      siteId: "s1",
+      siteUrl: "https://musteri1.com",
+      chainValid: true,
+      scans: [],
+      embedLastSeenAt: "2026-11-24T10:00:00.000Z",
+    });
+    expect(html).toContain("Bağlantı doğrulandı");
+    expect(html).toContain("2026-11-24T10:00:00.000Z");
+  });
+
   it("tarama satırlarında risk ve çerez ihlali sayıları görünür", () => {
     const html = renderSitePage({
       siteId: "s1",
@@ -429,7 +462,7 @@ describe("boş durum yönlendirmeleri", () => {
   it("site sayfası boş taramada CLI komutu değil panel içi yönlendirme gösterir", () => {
     const html = renderSitePage({ siteId: "s1", siteUrl: "https://x.com", chainValid: true, scans: [] });
     expect(html).not.toContain("pnpm demo");
-    expect(html).toContain("Sürekli İzleme çizelgesini açın");
+    expect(html).toContain("ilk taramayı şimdi başlatın");
   });
 
   it("müşteri detayı boş site listesinde ilk tarama yolunu anlatır", () => {

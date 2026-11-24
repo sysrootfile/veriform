@@ -192,11 +192,26 @@ export function renderSitePage(input: {
     | { bannerVersion: string; texts: { title: string; description: string; acceptAll: string; rejectAll: string } }
     | undefined;
   scanIntervalHours?: number | undefined;
+  embedLastSeenAt?: string | undefined;
+  scanNotice?: "ok" | "error" | "limited" | undefined;
 }): string {
   const e = escapeHtml;
   const badge = input.chainValid
     ? '<span class="badge-ok">Kanıt zinciri geçerli ✓</span>'
     : '<span class="badge-warn">⚠ Zincir doğrulaması başarısız — kurcalama şüphesi</span>';
+
+  const embedBadge = input.embedLastSeenAt
+    ? `<p><span class="badge-ok">Bağlantı doğrulandı ✓</span> <span class="empty">İzleme kodu son görülme: ${e(input.embedLastSeenAt)}</span></p>`
+    : "";
+
+  const scanNotice =
+    input.scanNotice === "ok"
+      ? '<p class="badge-ok">Tarama tamamlandı — sonuçlar aşağıda.</p>'
+      : input.scanNotice === "error"
+        ? '<p class="badge-warn">Tarama şu anda gerçekleştirilemedi — lütfen daha sonra tekrar deneyin.</p>'
+        : input.scanNotice === "limited"
+          ? '<p class="badge-warn">Çok fazla tarama isteği — bir dakika bekleyip tekrar deneyin.</p>'
+          : "";
 
   const visible = input.scans.slice(-10);
   const paginationNote =
@@ -234,7 +249,7 @@ export function renderSitePage(input: {
           return `<tr><td>${e(s.scannedAt)}</td><td class="num">${s.report.formCount}</td><td class="num">${s.report.riskFlags.length}</td><td class="num">${violations}</td></tr>`;
         })
         .join("\n")
-    : '<tr><td colspan="4" class="empty">Henüz tarama yok — aşağıdaki Sürekli İzleme çizelgesini açın; worker vakti gelen siteleri tarar ve sonuçlar burada listelenir.</td></tr>';
+    : '<tr><td colspan="4" class="empty">Henüz tarama yok — ilk taramayı şimdi başlatın; sonuçlar burada listelenir.</td></tr>';
 
   const draftLinks = (input.draftLinks ?? [])
     .map((d) => `<a href="${e(d.href)}">${e(d.label)}</a>`)
@@ -299,11 +314,16 @@ ${currScan.report.review
     input.siteUrl,
     `<h1>${e(input.siteUrl)}</h1>
 <p>${badge}</p>
+${embedBadge}
+${scanNotice}
 ${draftSection}
 ${evidenceLink}
 ${alertSection}
 ${reviewSection}
-<h2>Taramalar</h2>
+<h2 id="tarama">Taramalar</h2>
+<form method="post" action="/sites/${e(input.siteId)}/scan">
+  <button type="submit">Şimdi tara</button>
+</form>
 ${paginationNote}
 <div class="table-scroll">
 <table>
