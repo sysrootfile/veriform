@@ -4,7 +4,7 @@ import { computeDeadline, extendDeadline } from "../dsar/deadline.js";
 import type { DsarRequest, DsarStatus, DsarType } from "../dsar/types.js";
 import type { FormInventoryReport } from "../report/types.js";
 import { makeChainEntry, verifyStoredChain, verifyReceiptSelfHash, type StoredReceiptEntry } from "./chain.js";
-import type { Client, ContactPackage, ContactRequest, PanelUser, ScanCookie, ScannedScript, Site, SiteBannerConfig, StoredScan, Tenant, TenantKind } from "./types.js";
+import type { AccountTokenPurpose, Client, ContactPackage, ContactRequest, PanelUser, ScanCookie, ScannedScript, Site, SiteBannerConfig, StoredScan, Tenant, TenantKind } from "./types.js";
 import { deepClone, randomIngestToken } from "./shared.js";
 import type { Correction } from "./corrections.js";
 import type { AuditEntry } from "./types.js";
@@ -64,6 +64,19 @@ export interface PanelStore {
     role?: "owner" | "auditor" | undefined;
   }): Promise<PanelUser>;
   findUserByEmail(email: string): Promise<PanelUser | null>;
+  findUserByTenant(tenantId: string): Promise<PanelUser | null>;
+  setUserEmailVerified(userId: string): Promise<void>;
+  updateUserPassword(userId: string, passwordHash: string): Promise<void>;
+  /** KVKK hesap silme: kiracı ve bağlı tüm veri (FK cascade). */
+  deleteTenant(tenantId: string): Promise<void>;
+  createAccountToken(input: {
+    userId: string;
+    purpose: AccountTokenPurpose;
+    tokenHash: string;
+    expiresAt: string;
+  }): Promise<void>;
+  /** Tek kullanımlık tüketim: yok/süresi dolmuş/kullanılmış/amaç farklı → null. */
+  consumeAccountToken(tokenHash: string, purpose: AccountTokenPurpose): Promise<{ userId: string } | null>;
   setBannerConfig(siteId: string, config: SiteBannerConfig | null): Promise<Site>;
   /** Sürekli izleme aralığı (saat); 0 = kapalı. */
   setScanSchedule(siteId: string, intervalHours: number): Promise<Site>;
@@ -125,6 +138,13 @@ export function createInMemoryPanelStore(): PanelStore {
   const auditLog: Array<AuditEntry & { tenantId: string }> = [];
   const apiKeys: Array<ApiKeyRecord & { tenantId: string; keyHash: string }> = [];
   const contactRequests: ContactRequest[] = [];
+  const accountTokens: Array<{
+    userId: string;
+    purpose: AccountTokenPurpose;
+    tokenHash: string;
+    expiresAt: string;
+    usedAt?: string | undefined;
+  }> = [];
 
   const clone = deepClone;
 
@@ -292,6 +312,62 @@ export function createInMemoryPanelStore(): PanelStore {
     async findUserByEmail(email) {
       const user = users.find((u) => u.email === email);
       return user ? clone(user) : null;
+    },
+
+    async findUserByTenant(tenantId) {
+      const user = users.find((u) => u.tenantId === tenantId);
+      return user ? clone(user) : null;
+    },
+
+    async setUserEmailVerified(userId) {
+      const user = users.find((u) => u.id === userId);
+      if (!user) throw new Error(`kullanıcı bulunamadı: ${userId}`);
+      user.emailVerifiedAt = new Date().toISOString();
+    },
+
+    async updateUserPassword(userId, passwordHash) {
+      const user = users.find((u) => u.id === userId);
+      if (!user) throw new Error(`kullanıcı bulunamadı: ${userId}`);
+      user.passwordHash = passwordHash;
+    },
+
+    async deleteTenant(tenantId) {
+      const idx = tenants.findIndex((t) => t.id === tenantId);
+      if (idx === -1) throw new Error(`tenant bulunamadı: ${tenantId}`);
+      const clientIds = clients.filter((c) => c.tenantId === tenantId).map((c) => c.id);
+      const siteIds = sites.filter((s) => clientIds.includes(s.clientId)).map((s) => s.id);
+      const userIds = users.filter((u) => u.tenantId === tenantId).map((u) => u.id);
+      tenants.splice(idx, 1);
+      const purge = <T>(arr: T[], pred: (x: T) => boolean): void => {
+        for (let i = arr.length - 1; i >= 0; i--) if (pred(arr[i]!)) arr.splice(i, 1);
+      };
+      purge(clients, (c) => c.tenantId === tenantId);
+      purge(sites, (s) => clientIds.includes(s.clientId));
+      purge(scans, (s) => siteIds.includes(s.siteId));
+      purge(receiptEntries, (e) => siteIds.includes(e.siteId));
+      purge(dsars, (d) => siteIds.includes(d.siteId));
+      purge(corrections, (c) => siteIds.includes(c.siteId));
+      purge(users, (u) => u.tenantId === tenantId);
+      purge(auditLog, (a) => a.tenantId === tenantId);
+      purge(apiKeys, (k) => k.tenantId === tenantId);
+      purge(accountTokens, (t) => userIds.includes(t.userId));
+    },
+
+    async createAccountToken(input) {
+      accountTokens.push({ ...input });
+    },
+
+    async consumeAccountToken(tokenHash, purpose) {
+      const token = accountTokens.find(
+        (t) =>
+          t.tokenHash === tokenHash &&
+          t.purpose === purpose &&
+          !t.usedAt &&
+          Date.parse(t.expiresAt) > Date.now(),
+      );
+      if (!token) return null;
+      token.usedAt = new Date().toISOString();
+      return { userId: token.userId };
     },
 
     async setBannerConfig(siteId, config) {

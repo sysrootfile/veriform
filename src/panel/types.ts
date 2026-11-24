@@ -79,8 +79,11 @@ export interface PanelUser {
   email: string;
   passwordHash: string;
   role: "owner" | "auditor";
+  emailVerifiedAt?: string | undefined;
   createdAt: string;
 }
+
+export type AccountTokenPurpose = "verify-email" | "reset-password";
 
 export interface AuditEntry {
   id: string;

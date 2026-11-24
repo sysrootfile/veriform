@@ -15,13 +15,11 @@ export interface EmailSender {
   send(email: OutgoingEmail): Promise<void>;
 }
 
-/** Geliştirme/devre dışı modu: maili loga yazar. */
+/** Geliştirme/devre dışı modu: maili tam metniyle loga yazar (bağlantı token'ları görünür). */
 export function createConsoleEmailSender(): EmailSender {
   return {
     async send(email) {
-      console.log(
-        `[mailer:console] → ${email.to} | ${email.subject} | ${email.text.split("\n")[0] ?? ""}`,
-      );
+      console.log(`[mailer:console] → ${email.to} | ${email.subject}\n${email.text}`);
     },
   };
 }

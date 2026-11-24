@@ -395,3 +395,52 @@ describe("paket ve site sayacı", () => {
     expect(await store.countSitesByTenant(a.id)).toBe(0);
   });
 });
+
+describe("hesap yaşam döngüsü store portları", () => {
+  it("findUserByTenant kiracının kullanıcısını verir; yoksa null", async () => {
+    const store = createInMemoryPanelStore();
+    const t = await store.createTenant({ name: "A", kind: "agency" });
+    expect(await store.findUserByTenant(t.id)).toBeNull();
+    await store.createUser({ tenantId: t.id, email: "u@x.com", passwordHash: "h" });
+    expect((await store.findUserByTenant(t.id))?.email).toBe("u@x.com");
+  });
+
+  it("setUserEmailVerified ve updateUserPassword kullanıcıyı günceller", async () => {
+    const store = createInMemoryPanelStore();
+    const t = await store.createTenant({ name: "A", kind: "agency" });
+    const u = await store.createUser({ tenantId: t.id, email: "u@x.com", passwordHash: "h" });
+    expect(u.emailVerifiedAt).toBeUndefined();
+    await store.setUserEmailVerified(u.id);
+    expect((await store.findUserByEmail("u@x.com"))?.emailVerifiedAt).toBeTruthy();
+    await store.updateUserPassword(u.id, "yeni-hash");
+    expect((await store.findUserByEmail("u@x.com"))?.passwordHash).toBe("yeni-hash");
+  });
+
+  it("consumeAccountToken amaç uyuşmazlığında null döner", async () => {
+    const store = createInMemoryPanelStore();
+    const t = await store.createTenant({ name: "A", kind: "agency" });
+    const u = await store.createUser({ tenantId: t.id, email: "u@x.com", passwordHash: "h" });
+    await store.createAccountToken({
+      userId: u.id,
+      purpose: "verify-email",
+      tokenHash: "c".repeat(64),
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    });
+    expect(await store.consumeAccountToken("c".repeat(64), "reset-password")).toBeNull();
+    expect(await store.consumeAccountToken("c".repeat(64), "verify-email")).toEqual({ userId: u.id });
+    expect(await store.consumeAccountToken("c".repeat(64), "verify-email")).toBeNull();
+  });
+
+  it("deleteTenant kiracıyı ve bağlı veriyi cascade siler", async () => {
+    const store = createInMemoryPanelStore();
+    const t = await store.createTenant({ name: "A", kind: "agency" });
+    const c = await store.createClient({ tenantId: t.id, name: "M" });
+    await store.createSite({ clientId: c.id, url: "https://x.com" });
+    await store.createUser({ tenantId: t.id, email: "u@x.com", passwordHash: "h" });
+    await store.deleteTenant(t.id);
+    expect(await store.getTenant(t.id)).toBeNull();
+    expect(await store.findUserByEmail("u@x.com")).toBeNull();
+    expect(await store.listClients(t.id)).toEqual([]);
+    expect(await store.countSitesByTenant(t.id)).toBe(0);
+  });
+});
