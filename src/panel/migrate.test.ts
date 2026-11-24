@@ -94,7 +94,7 @@ describePg("runMigrations (PG entegrasyon)", () => {
 
   it("boş veritabanına tüm migration'ları uygular ve kaydeder; ikinci koşu no-op", async () => {
     const first = await runMigrations(client);
-    expect(first.applied).toEqual(["001_init.sql", "002_contact_requests.sql", "003_tenant_package.sql", "004_account_lifecycle.sql", "005_contact_handled.sql", "006_subscription.sql"]);
+    expect(first.applied).toEqual(["001_init.sql", "002_contact_requests.sql", "003_tenant_package.sql", "004_account_lifecycle.sql", "005_contact_handled.sql", "006_subscription.sql", "007_embed_seen.sql"]);
     expect(first.baselined).toEqual([]);
 
     const { rows: tables } = await client.query("select to_regclass('tenants') as reg");
@@ -102,7 +102,7 @@ describePg("runMigrations (PG entegrasyon)", () => {
     const { rows: contact } = await client.query("select to_regclass('contact_requests') as reg");
     expect(contact[0].reg).not.toBeNull();
     const { rows: versions } = await client.query("select version from schema_migrations");
-    expect(versions.map((r) => r.version)).toEqual(["001_init.sql", "002_contact_requests.sql", "003_tenant_package.sql", "004_account_lifecycle.sql", "005_contact_handled.sql", "006_subscription.sql"]);
+    expect(versions.map((r) => r.version)).toEqual(["001_init.sql", "002_contact_requests.sql", "003_tenant_package.sql", "004_account_lifecycle.sql", "005_contact_handled.sql", "006_subscription.sql", "007_embed_seen.sql"]);
 
     const second = await runMigrations(client);
     expect(second.applied).toEqual([]);
@@ -115,13 +115,13 @@ describePg("runMigrations (PG entegrasyon)", () => {
     await client.query("insert into tenants (name, kind) values ('Eski Kiracı', 'agency')");
 
     const result = await runMigrations(client);
-    expect(result.applied).toEqual(["002_contact_requests.sql", "003_tenant_package.sql", "004_account_lifecycle.sql", "005_contact_handled.sql", "006_subscription.sql"]);
+    expect(result.applied).toEqual(["002_contact_requests.sql", "003_tenant_package.sql", "004_account_lifecycle.sql", "005_contact_handled.sql", "006_subscription.sql", "007_embed_seen.sql"]);
     expect(result.baselined).toEqual(["001_init.sql"]);
 
     const { rows: tenants } = await client.query("select name from tenants");
     expect(tenants.map((r) => r.name)).toEqual(["Eski Kiracı"]);
     const { rows: versions } = await client.query("select version from schema_migrations");
-    expect(versions.map((r) => r.version)).toEqual(["001_init.sql", "002_contact_requests.sql", "003_tenant_package.sql", "004_account_lifecycle.sql", "005_contact_handled.sql", "006_subscription.sql"]);
+    expect(versions.map((r) => r.version)).toEqual(["001_init.sql", "002_contact_requests.sql", "003_tenant_package.sql", "004_account_lifecycle.sql", "005_contact_handled.sql", "006_subscription.sql", "007_embed_seen.sql"]);
   }, 20_000);
 
   it("bozuk migration rollback olur ve kaydedilmez", async () => {
@@ -147,9 +147,9 @@ describePg("runMigrations (PG entegrasyon)", () => {
     try {
       const results = await Promise.all([runMigrations(client), runMigrations(other)]);
       const appliedTotal = results.flatMap((r) => r.applied);
-      expect(appliedTotal).toEqual(["001_init.sql", "002_contact_requests.sql", "003_tenant_package.sql", "004_account_lifecycle.sql", "005_contact_handled.sql", "006_subscription.sql"]);
+      expect(appliedTotal).toEqual(["001_init.sql", "002_contact_requests.sql", "003_tenant_package.sql", "004_account_lifecycle.sql", "005_contact_handled.sql", "006_subscription.sql", "007_embed_seen.sql"]);
       const { rows } = await client.query("select count(*)::int as n from schema_migrations");
-      expect(rows[0].n).toBe(6);
+      expect(rows[0].n).toBe(7);
     } finally {
       await other.end();
     }
