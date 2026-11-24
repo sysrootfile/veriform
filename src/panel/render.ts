@@ -194,6 +194,7 @@ export function renderSitePage(input: {
   scanIntervalHours?: number | undefined;
   embedLastSeenAt?: string | undefined;
   scanNotice?: "ok" | "error" | "limited" | undefined;
+  emailVerified?: boolean | undefined;
 }): string {
   const e = escapeHtml;
   const badge = input.chainValid
@@ -266,7 +267,14 @@ export function renderSitePage(input: {
     input.scanIntervalHours === undefined || input.scanIntervalHours === 0
       ? "Kapalı"
       : `Her ${input.scanIntervalHours} saatte bir`;
-  const bannerForm = `<h2>Rıza Bannerı Konfigürasyonu</h2>
+  const bannerForm =
+    input.emailVerified === false
+      ? `<h2 id="banner">Rıza Bannerı</h2>
+<p class="badge-warn">Banner yayını için e-posta adresinizi onaylayın.</p>
+<form method="post" action="/settings/account/resend-verification">
+  <button type="submit">Onay bağlantısı gönder</button>
+</form>`
+      : `<h2 id="banner">Rıza Bannerı Konfigürasyonu</h2>
 <p class="empty">Bu ayarlar embed scripte <code>/api/embed/config</code> üzerinden akar; bannerVersion değişirse müşteri yeniden rıza verir.</p>
 <form method="post" action="/sites/${e(input.siteId)}/banner">
   <input name="bannerVersion" placeholder="banner-2026-11" value="${e(bc?.bannerVersion ?? "")}" required>
@@ -275,8 +283,8 @@ export function renderSitePage(input: {
   <input name="acceptAll" placeholder="Kabul butonu" value="${e(bc?.texts.acceptAll ?? "Tümünü Kabul Et")}" required>
   <input name="rejectAll" placeholder="Reddet butonu" value="${e(bc?.texts.rejectAll ?? "Sadece Zorunlu")}" required>
   <button type="submit">Konfigürasyonu kaydet</button>
-</form>
-<h2>Sürekli İzleme</h2>
+</form>`;
+  const scheduleForm = `<h2>Sürekli İzleme</h2>
 <p class="empty">Mevcut aralık: <strong>${e(scheduleLabel)}</strong> — site değişiklikleri sonraki taramada raporlanır.</p>
 <form method="post" action="/sites/${e(input.siteId)}/schedule">
   <select name="intervalHours">
@@ -331,7 +339,8 @@ ${paginationNote}
 ${rows}
 </table>
 </div>
-${bannerForm}`,
+${bannerForm}
+${scheduleForm}`,
     undefined,
     "clients",
   );
@@ -354,6 +363,7 @@ export function renderClientDetailPage(input: {
   embedSrc?: string | undefined;
   /** Paket kotası dolduysa yükseltme uyarısı gösterilir. */
   quotaFull?: boolean | undefined;
+  emailVerified?: boolean | undefined;
 }): string {
   const e = escapeHtml;
   const rows = input.sites.length
@@ -374,13 +384,18 @@ export function renderClientDetailPage(input: {
     ? '<p class="badge-warn">Site kotası doldu — yeni site eklemek için paketinizi yükseltin: <a href="/#paketler">Paketler</a> · <a href="/#iletisim">İletişim</a></p>'
     : "";
 
+  const installSection =
+    input.emailVerified === false
+      ? `<p class="badge-warn">İzleme kodunu kurmak için e-posta adresinizi onaylayın — <a href="/settings/account">Hesap ayarları</a>.</p>`
+      : `<p class="empty">Embed scriptini sitenizin <code>&lt;head&gt;</code> bölümüne ekleyin; <code>data-site-token</code> yerine aşağıdaki ingest token'ı yazın:</p>
+<p><code>&lt;script src="${e(input.embedSrc ?? "/embed.js")}" data-site-token="…"&gt;&lt;/script&gt;</code></p>`;
+
   return panelPage(
     input.clientName,
     `<h1>${logo}${e(input.clientName)}</h1>
 ${quotaWarning}
 <h2>Siteler</h2>
-<p class="empty">Embed scriptini sitenizin <code>&lt;head&gt;</code> bölümüne ekleyin; <code>data-site-token</code> yerine aşağıdaki ingest token'ı yazın:</p>
-<p><code>&lt;script src="${e(input.embedSrc ?? "/embed.js")}" data-site-token="…"&gt;&lt;/script&gt;</code></p>
+${installSection}
 <div class="table-scroll">
 <table>
 <tr><th>Site</th><th>Ingest token</th><th class="num">Rapor</th></tr>

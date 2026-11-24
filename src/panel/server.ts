@@ -998,6 +998,7 @@ const server = createServer(async (req, res) => {
       const clientId = url.pathname.slice("/clients/".length);
       const client = (await service.getClientList()).find((c) => c.id === clientId);
       const sites = await service.getClientSites(clientId);
+      const detailUser = await store.findUserByTenant(tenantId);
       res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
       res.end(
         renderClientDetailPage({
@@ -1008,6 +1009,7 @@ const server = createServer(async (req, res) => {
           logoUrl: client?.brandLogoUrl,
           embedSrc: embedUrl(req),
           quotaFull: url.searchParams.get("quota") === "full",
+          emailVerified: Boolean(detailUser?.emailVerifiedAt),
         }),
       );
       return;
@@ -1099,6 +1101,13 @@ const server = createServer(async (req, res) => {
 
     if (req.method === "POST" && /^\/sites\/[^/]+\/banner$/.test(url.pathname)) {
       const siteId = url.pathname.split("/")[2]!;
+      // Yumuşak kapı: banner yayını üretim işidir — e-posta onayı olmadan yazılmaz.
+      const bannerUser = await store.findUserByTenant(tenantId);
+      if (!bannerUser?.emailVerifiedAt) {
+        res.writeHead(303, { location: `/sites/${siteId}` });
+        res.end();
+        return;
+      }
       const form = new URLSearchParams(await readBody(req));
       const texts = {
         title: form.get("title") ?? "",
@@ -1215,6 +1224,7 @@ const server = createServer(async (req, res) => {
       const site = await service.resolveSite(siteId);
       const scans = await service.getSiteScans(siteId);
       const chainValid = await service.verifySite(siteId);
+      const siteUser = await store.findUserByTenant(tenantId);
       const scanParam = url.searchParams.get("scan");
       const scanNotice =
         scanParam === "ok" || scanParam === "error" || scanParam === "limited" ? scanParam : undefined;
@@ -1237,6 +1247,7 @@ const server = createServer(async (req, res) => {
           scanIntervalHours: site.scanIntervalHours,
           embedLastSeenAt: site.embedLastSeenAt,
           scanNotice,
+          emailVerified: Boolean(siteUser?.emailVerifiedAt),
         }),
       );
       return;

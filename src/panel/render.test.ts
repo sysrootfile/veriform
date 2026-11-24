@@ -129,6 +129,17 @@ describe("renderSitePage", () => {
     expect(html).toContain("2026-11-24T10:00:00.000Z");
   });
 
+  it("yumuşak kapı: e-posta onaysız banner formu yerine onay çağrısı basılır", () => {
+    const base = { siteId: "s1", siteUrl: "https://musteri1.com", chainValid: true, scans: [] };
+    const gated = renderSitePage({ ...base, emailVerified: false });
+    expect(gated).not.toContain('action="/sites/s1/banner"');
+    expect(gated).toContain("e-posta adresinizi onaylayın");
+    expect(gated).toContain('action="/settings/account/resend-verification"');
+    const open = renderSitePage({ ...base, emailVerified: true });
+    expect(open).toContain('action="/sites/s1/banner"');
+    expect(renderSitePage(base)).toContain('action="/sites/s1/banner"');
+  });
+
   it("tarama satırlarında risk ve çerez ihlali sayıları görünür", () => {
     const html = renderSitePage({
       siteId: "s1",
@@ -283,6 +294,17 @@ describe("renderClientDetailPage", () => {
       createdAt: "2026-11-02T10:00:00.000Z",
     },
   ];
+
+  it("yumuşak kapı: e-posta onaysız izleme kodu snippet'i yerine onay çağrısı", () => {
+    const base = { clientName: "M", clientHref: "/clients/c1", sites };
+    const gated = renderClientDetailPage({ ...base, emailVerified: false });
+    expect(gated).not.toContain("data-site-token");
+    expect(gated).toContain("e-posta adresinizi onaylayın");
+    expect(gated).toContain('href="/settings/account"');
+    const open = renderClientDetailPage({ ...base, emailVerified: true });
+    expect(open).toContain("data-site-token");
+    expect(renderClientDetailPage(base)).toContain("data-site-token");
+  });
 
   it("müşteri adını, site satırlarını ve ingest token'ını gösterir", () => {
     const html = renderClientDetailPage({
