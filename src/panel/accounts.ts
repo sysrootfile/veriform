@@ -1,5 +1,5 @@
 import { hashPassword, verifyPassword } from "./auth.js";
-import { isContactPackage } from "./plans.js";
+import { isContactPackage, TRIAL_DAYS } from "./plans.js";
 import type { PanelStore } from "./store.js";
 import type { PanelUser, Tenant, TenantKind } from "./types.js";
 
@@ -19,6 +19,7 @@ export async function registerTenant(
     name: input.name,
     kind: input.kind,
     package: isContactPackage(input.package) ? input.package : "starter",
+    trialEndsAt: new Date(Date.now() + TRIAL_DAYS * 86400000).toISOString(),
   });
   const user = await store.createUser({
     tenantId: tenant.id,

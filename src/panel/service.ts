@@ -4,7 +4,7 @@ import type { DsarRequest, DsarStatus } from "../dsar/types.js";
 import type { FormInventoryReport } from "../report/types.js";
 import type { StoredReceiptEntry } from "./chain.js";
 import type { Correction } from "./corrections.js";
-import { PLAN_LABELS, PLAN_LIMITS } from "./plans.js";
+import { effectivePackage, PLAN_LABELS, PLAN_LIMITS, trialDaysLeft } from "./plans.js";
 import type { PanelStore } from "./store.js";
 import type { Client, ScanCookie, Site, SiteBannerConfig, StoredScan } from "./types.js";
 
@@ -36,7 +36,13 @@ export interface PanelService {
   addClient(name: string): Promise<Client>;
   addSite(clientId: string, url: string): Promise<Site>;
   /** Paket kotası durumu: etiket, kullanılan site sayısı, limit (null = sınırsız). */
-  getSiteQuota(): Promise<{ label: string; used: number; limit: number | null }>;
+  getSiteQuota(): Promise<{
+    label: string;
+    used: number;
+    limit: number | null;
+    trial: "none" | "active" | "expired";
+    trialDaysLeft: number;
+  }>;
   getClientSites(clientId: string): Promise<Site[]>;
   setClientBranding(
     clientId: string,
@@ -118,7 +124,7 @@ export function createPanelService(store: PanelStore, context: PanelContext): Pa
       denyAuditor(role);
       await assertClientOwnership(clientId);
       const tenant = await store.getTenant(context.tenantId);
-      const limit = PLAN_LIMITS[tenant?.package ?? "starter"];
+      const limit = PLAN_LIMITS[effectivePackage(tenant ?? { package: "starter" })];
       if (limit !== null && (await store.countSitesByTenant(context.tenantId)) >= limit) {
         throw new Error("site kotası doldu");
       }
@@ -132,11 +138,15 @@ export function createPanelService(store: PanelStore, context: PanelContext): Pa
 
     async getSiteQuota() {
       const tenant = await store.getTenant(context.tenantId);
-      const pkg = tenant?.package ?? "starter";
+      const base = tenant ?? { package: "starter" as const };
+      const pkg = effectivePackage(base);
+      const daysLeft = trialDaysLeft(tenant?.trialEndsAt);
       return {
         label: PLAN_LABELS[pkg],
         used: await store.countSitesByTenant(context.tenantId),
         limit: PLAN_LIMITS[pkg],
+        trial: daysLeft === null ? ("none" as const) : daysLeft > 0 ? ("active" as const) : ("expired" as const),
+        trialDaysLeft: daysLeft ?? 0,
       };
     },
 

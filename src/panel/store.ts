@@ -4,7 +4,7 @@ import { computeDeadline, extendDeadline } from "../dsar/deadline.js";
 import type { DsarRequest, DsarStatus, DsarType } from "../dsar/types.js";
 import type { FormInventoryReport } from "../report/types.js";
 import { makeChainEntry, verifyStoredChain, verifyReceiptSelfHash, type StoredReceiptEntry } from "./chain.js";
-import type { AccountTokenPurpose, Client, ContactPackage, ContactRequest, PanelUser, ScanCookie, ScannedScript, Site, SiteBannerConfig, StoredScan, Tenant, TenantKind } from "./types.js";
+import type { AccountTokenPurpose, Client, ContactPackage, ContactRequest, PanelUser, PlanChangeRequest, ScanCookie, ScannedScript, Site, SiteBannerConfig, StoredScan, Tenant, TenantKind } from "./types.js";
 import { deepClone, randomIngestToken } from "./shared.js";
 import type { Correction } from "./corrections.js";
 import type { AuditEntry } from "./types.js";
@@ -24,6 +24,7 @@ export interface PanelStore {
     name: string;
     kind: TenantKind;
     package?: ContactPackage | undefined;
+    trialEndsAt?: string | undefined;
     brandColor?: string | undefined;
     brandLogoUrl?: string | undefined;
   }): Promise<Tenant>;
@@ -124,6 +125,10 @@ export interface PanelStore {
   /** Operatör yüzeyi: tüm kiracılar + paket değişimi. */
   listTenants(): Promise<Tenant[]>;
   setTenantPackage(tenantId: string, pkg: ContactPackage): Promise<void>;
+  /** Plan geçiş talepleri: kiracı ister, operatör karara bağlar. */
+  createPlanChangeRequest(input: { tenantId: string; toPackage: ContactPackage }): Promise<PlanChangeRequest>;
+  listPlanChangeRequests(tenantId?: string): Promise<PlanChangeRequest[]>;
+  decidePlanChangeRequest(id: string, decision: "approved" | "rejected"): Promise<PlanChangeRequest>;
   /** Değişiklik uyarısı bağlamı: site → kiracı + sahip e-postası (yoksa null). */
   getSiteAlertContext(
     siteId: string,
@@ -142,6 +147,7 @@ export function createInMemoryPanelStore(): PanelStore {
   const auditLog: Array<AuditEntry & { tenantId: string }> = [];
   const apiKeys: Array<ApiKeyRecord & { tenantId: string; keyHash: string }> = [];
   const contactRequests: ContactRequest[] = [];
+  const planChangeRequests: PlanChangeRequest[] = [];
   const accountTokens: Array<{
     userId: string;
     purpose: AccountTokenPurpose;
@@ -161,6 +167,7 @@ export function createInMemoryPanelStore(): PanelStore {
         name: input.name,
         kind: input.kind,
         package: input.package ?? "starter",
+        ...(input.trialEndsAt ? { trialEndsAt: input.trialEndsAt } : {}),
         ...(input.brandColor ? { brandColor: input.brandColor } : {}),
         ...(input.brandLogoUrl ? { brandLogoUrl: input.brandLogoUrl } : {}),
         createdAt: new Date().toISOString(),
@@ -355,6 +362,7 @@ export function createInMemoryPanelStore(): PanelStore {
       purge(auditLog, (a) => a.tenantId === tenantId);
       purge(apiKeys, (k) => k.tenantId === tenantId);
       purge(accountTokens, (t) => userIds.includes(t.userId));
+      purge(planChangeRequests, (r) => r.tenantId === tenantId);
     },
 
     async createAccountToken(input) {
@@ -546,6 +554,49 @@ export function createInMemoryPanelStore(): PanelStore {
       const tenant = tenants.find((t) => t.id === tenantId);
       if (!tenant) throw new Error(`tenant bulunamadı: ${tenantId}`);
       tenant.package = pkg;
+      delete tenant.trialEndsAt;
+    },
+
+    async createPlanChangeRequest(input) {
+      const tenant = tenants.find((t) => t.id === input.tenantId);
+      if (!tenant) throw new Error(`tenant bulunamadı: ${input.tenantId}`);
+      if (tenant.package === input.toPackage) throw new Error("zaten bu pakettesiniz");
+      if (planChangeRequests.some((r) => r.tenantId === input.tenantId && r.status === "pending")) {
+        throw new Error("zaten bekleyen bir geçiş talebiniz var");
+      }
+      const req: PlanChangeRequest = {
+        id: crypto.randomUUID(),
+        tenantId: input.tenantId,
+        fromPackage: tenant.package,
+        toPackage: input.toPackage,
+        status: "pending",
+        createdAt: new Date().toISOString(),
+      };
+      planChangeRequests.push(req);
+      return clone(req);
+    },
+
+    async listPlanChangeRequests(tenantId) {
+      const rows = tenantId
+        ? planChangeRequests.filter((r) => r.tenantId === tenantId)
+        : planChangeRequests;
+      return clone([...rows].reverse());
+    },
+
+    async decidePlanChangeRequest(id, decision) {
+      const req = planChangeRequests.find((r) => r.id === id);
+      if (!req) throw new Error(`talep bulunamadı: ${id}`);
+      if (req.status !== "pending") throw new Error("talep zaten sonuçlanmış");
+      req.status = decision;
+      req.decidedAt = new Date().toISOString();
+      if (decision === "approved") {
+        const tenant = tenants.find((t) => t.id === req.tenantId);
+        if (tenant) {
+          tenant.package = req.toPackage;
+          delete tenant.trialEndsAt;
+        }
+      }
+      return clone(req);
     },
 
     async getSiteAlertContext(siteId) {

@@ -12,6 +12,8 @@ export interface Tenant {
   kind: TenantKind;
   /** Seçilen paket — site kotasını belirler (bkz. plans.ts). */
   package: ContactPackage;
+  /** Self-servis kayıtta başlayan deneme bitişi; yoksa abonelik etkin (operatör/onay). */
+  trialEndsAt?: string | undefined;
   /** White-label vurgu rengi — yalnızca #rrggbb biçimi kabul edilir. */
   brandColor?: string | undefined;
   /** White-label logosu — yalnızca http(s) URL kabul edilir. */
@@ -105,6 +107,17 @@ export interface ContactRequest {
   message: string;
   handledAt?: string | undefined;
   createdAt: string;
+}
+
+/** Kiracının self-servis plan geçiş talebi — operatör onaylar/reddeder (ödemesiz akış). */
+export interface PlanChangeRequest {
+  id: string;
+  tenantId: string;
+  fromPackage: ContactPackage;
+  toPackage: ContactPackage;
+  status: "pending" | "approved" | "rejected";
+  createdAt: string;
+  decidedAt?: string | undefined;
 }
 
 export type { ConsentReceipt };

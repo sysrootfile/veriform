@@ -15,7 +15,7 @@ import {
   type StoredReceiptEntry,
 } from "./chain.js";
 import type { PanelStore } from "./store.js";
-import type { Client, ContactRequest, PanelUser, ScanCookie, ScannedScript, Site, SiteBannerConfig, StoredScan, Tenant, TenantKind } from "./types.js";
+import type { Client, ContactPackage, ContactRequest, PanelUser, PlanChangeRequest, ScanCookie, ScannedScript, Site, SiteBannerConfig, StoredScan, Tenant, TenantKind } from "./types.js";
 import { deepClone, randomIngestToken } from "./shared.js";
 
 /**
@@ -34,9 +34,22 @@ function mapTenant(row: pg.QueryResultRow): Tenant {
     name: String(row.name),
     kind: row.kind as TenantKind,
     package: row.package as Tenant["package"],
+    ...(row.trial_ends_at ? { trialEndsAt: iso(row.trial_ends_at as Date) } : {}),
     ...(row.brand_color ? { brandColor: String(row.brand_color) } : {}),
     ...(row.brand_logo_url ? { brandLogoUrl: String(row.brand_logo_url) } : {}),
     createdAt: iso(row.created_at as Date),
+  };
+}
+
+function mapPlanChangeRequest(row: pg.QueryResultRow): PlanChangeRequest {
+  return {
+    id: String(row.id),
+    tenantId: String(row.tenant_id),
+    fromPackage: row.from_package as PlanChangeRequest["fromPackage"],
+    toPackage: row.to_package as PlanChangeRequest["toPackage"],
+    status: row.status as PlanChangeRequest["status"],
+    createdAt: iso(row.created_at as Date),
+    ...(row.decided_at ? { decidedAt: iso(row.decided_at as Date) } : {}),
   };
 }
 
@@ -151,8 +164,8 @@ export function createPostgresPanelStore(connectionString: string): PostgresPane
 
     async createTenant(input) {
       const result = await pool.query(
-        "insert into tenants (name, kind, package, brand_color, brand_logo_url) values ($1, $2, $3, $4, $5) returning *",
-        [input.name, input.kind, input.package ?? "starter", input.brandColor ?? null, input.brandLogoUrl ?? null],
+        "insert into tenants (name, kind, package, trial_ends_at, brand_color, brand_logo_url) values ($1, $2, $3, $4, $5, $6) returning *",
+        [input.name, input.kind, input.package ?? "starter", input.trialEndsAt ?? null, input.brandColor ?? null, input.brandLogoUrl ?? null],
       );
       return clone(mapTenant(result.rows[0]!));
     },
@@ -431,8 +444,66 @@ export function createPostgresPanelStore(connectionString: string): PostgresPane
     },
 
     async setTenantPackage(tenantId, pkg) {
-      const result = await pool.query("update tenants set package = $1 where id = $2", [pkg, tenantId]);
+      const result = await pool.query(
+        "update tenants set package = $1, trial_ends_at = null where id = $2",
+        [pkg, tenantId],
+      );
       if (result.rowCount === 0) throw new Error(`tenant bulunamadı: ${tenantId}`);
+    },
+
+    async createPlanChangeRequest(input) {
+      const tenant = await pool.query("select package from tenants where id = $1", [input.tenantId]);
+      if (tenant.rowCount === 0) throw new Error(`tenant bulunamadı: ${input.tenantId}`);
+      const fromPackage = tenant.rows[0]!.package as ContactPackage;
+      if (fromPackage === input.toPackage) throw new Error("zaten bu pakettesiniz");
+      const result = await pool.query(
+        `insert into plan_change_requests (tenant_id, from_package, to_package)
+         values ($1, $2, $3)
+         on conflict (tenant_id) where status = 'pending' do nothing
+         returning *`,
+        [input.tenantId, fromPackage, input.toPackage],
+      );
+      if (result.rowCount === 0) throw new Error("zaten bekleyen bir geçiş talebiniz var");
+      return clone(mapPlanChangeRequest(result.rows[0]!));
+    },
+
+    async listPlanChangeRequests(tenantId) {
+      const result = tenantId
+        ? await pool.query(
+            "select * from plan_change_requests where tenant_id = $1 order by created_at desc, id desc",
+            [tenantId],
+          )
+        : await pool.query("select * from plan_change_requests order by created_at desc, id desc");
+      return clone(result.rows.map(mapPlanChangeRequest));
+    },
+
+    async decidePlanChangeRequest(id, decision) {
+      const client = await pool.connect();
+      try {
+        await client.query("begin");
+        const existing = await client.query("select * from plan_change_requests where id = $1", [id]);
+        if (existing.rowCount === 0) throw new Error(`talep bulunamadı: ${id}`);
+        if (existing.rows[0]!.status !== "pending") throw new Error("talep zaten sonuçlanmış");
+        const updated = await client.query(
+          "update plan_change_requests set status = $1, decided_at = now() where id = $2 and status = 'pending' returning *",
+          [decision, id],
+        );
+        if (updated.rowCount === 0) throw new Error("talep zaten sonuçlanmış");
+        const req = mapPlanChangeRequest(updated.rows[0]!);
+        if (decision === "approved") {
+          await client.query(
+            "update tenants set package = $1, trial_ends_at = null where id = $2",
+            [req.toPackage, req.tenantId],
+          );
+        }
+        await client.query("commit");
+        return clone(req);
+      } catch (error) {
+        await client.query("rollback");
+        throw error;
+      } finally {
+        client.release();
+      }
     },
 
     async saveDsar(input) {

@@ -480,3 +480,76 @@ describe("operatör store portları", () => {
     await expect(store.setContactHandled("yok", true)).rejects.toThrow(/talep bulunamadı/);
   });
 });
+
+describe("deneme + plan geçiş talepleri (in-memory)", () => {
+  it("createTenant trialEndsAt saklar; setTenantPackage denemeyi temizler", async () => {
+    const store = createInMemoryPanelStore();
+    const ends = "2026-12-08T00:00:00.000Z";
+    const t = await store.createTenant({ name: "Denemeli", kind: "agency", package: "pro", trialEndsAt: ends });
+    expect(t.trialEndsAt).toBe(ends);
+    expect((await store.getTenant(t.id))?.trialEndsAt).toBe(ends);
+    await store.setTenantPackage(t.id, "ultimate");
+    const after = await store.getTenant(t.id);
+    expect(after?.package).toBe("ultimate");
+    expect(after?.trialEndsAt).toBeUndefined();
+  });
+
+  it("plan talebi: mevcut paketten hedefe, pending doğar; aynı paket ve ikinci pending reddedilir", async () => {
+    const store = createInMemoryPanelStore();
+    const t = await store.createTenant({ name: "Plan Ajans", kind: "agency", package: "starter" });
+    const req = await store.createPlanChangeRequest({ tenantId: t.id, toPackage: "pro" });
+    expect(req.fromPackage).toBe("starter");
+    expect(req.toPackage).toBe("pro");
+    expect(req.status).toBe("pending");
+    expect(req.decidedAt).toBeUndefined();
+    await expect(
+      store.createPlanChangeRequest({ tenantId: t.id, toPackage: "ultimate" }),
+    ).rejects.toThrow(/bekleyen/);
+    await expect(store.createPlanChangeRequest({ tenantId: "yok", toPackage: "pro" })).rejects.toThrow(
+      /tenant bulunamadı/,
+    );
+    const listed = await store.listPlanChangeRequests(t.id);
+    expect(listed.map((r) => r.id)).toEqual([req.id]);
+    expect((await store.listPlanChangeRequests()).some((r) => r.id === req.id)).toBe(true);
+  });
+
+  it("aynı pakete geçiş talebi reddedilir", async () => {
+    const store = createInMemoryPanelStore();
+    const t = await store.createTenant({ name: "Aynı", kind: "agency", package: "pro" });
+    await expect(store.createPlanChangeRequest({ tenantId: t.id, toPackage: "pro" })).rejects.toThrow(
+      /zaten bu pakettesiniz/,
+    );
+  });
+
+  it("onay paketi uygular ve denemeyi temizler; ret paketi değiştirmez; ikinci karar reddedilir", async () => {
+    const store = createInMemoryPanelStore();
+    const t = await store.createTenant({
+      name: "Onay Ajans",
+      kind: "agency",
+      package: "starter",
+      trialEndsAt: "2026-12-08T00:00:00.000Z",
+    });
+    const req = await store.createPlanChangeRequest({ tenantId: t.id, toPackage: "pro" });
+    const decided = await store.decidePlanChangeRequest(req.id, "approved");
+    expect(decided.status).toBe("approved");
+    expect(decided.decidedAt).toBeTruthy();
+    const after = await store.getTenant(t.id);
+    expect(after?.package).toBe("pro");
+    expect(after?.trialEndsAt).toBeUndefined();
+    await expect(store.decidePlanChangeRequest(req.id, "rejected")).rejects.toThrow(/sonuçlanmış/);
+    await expect(store.decidePlanChangeRequest("yok", "approved")).rejects.toThrow(/talep bulunamadı/);
+
+    const req2 = await store.createPlanChangeRequest({ tenantId: t.id, toPackage: "ultimate" });
+    const rejected = await store.decidePlanChangeRequest(req2.id, "rejected");
+    expect(rejected.status).toBe("rejected");
+    expect((await store.getTenant(t.id))?.package).toBe("pro");
+  });
+
+  it("deleteTenant plan taleplerini de temizler", async () => {
+    const store = createInMemoryPanelStore();
+    const t = await store.createTenant({ name: "Silinecek", kind: "agency" });
+    const req = await store.createPlanChangeRequest({ tenantId: t.id, toPackage: "pro" });
+    await store.deleteTenant(t.id);
+    expect((await store.listPlanChangeRequests()).some((r) => r.id === req.id)).toBe(false);
+  });
+});
