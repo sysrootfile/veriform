@@ -125,6 +125,7 @@ function mapContact(row: pg.QueryResultRow): ContactRequest {
     ...(row.company ? { company: String(row.company) } : {}),
     ...(row.package ? { package: row.package as ContactRequest["package"] } : {}),
     message: String(row.message),
+    ...(row.handled_at ? { handledAt: iso(row.handled_at as Date) } : {}),
     createdAt: iso(row.created_at as Date),
   };
 }
@@ -414,6 +415,24 @@ export function createPostgresPanelStore(connectionString: string): PostgresPane
     async listContactRequests() {
       const result = await pool.query("select * from contact_requests order by created_at, id");
       return clone(result.rows.map(mapContact));
+    },
+
+    async setContactHandled(id, handled) {
+      const result = await pool.query(
+        "update contact_requests set handled_at = $1 where id = $2",
+        [handled ? new Date() : null, id],
+      );
+      if (result.rowCount === 0) throw new Error(`talep bulunamadı: ${id}`);
+    },
+
+    async listTenants() {
+      const result = await pool.query("select * from tenants order by created_at, id");
+      return clone(result.rows.map(mapTenant));
+    },
+
+    async setTenantPackage(tenantId, pkg) {
+      const result = await pool.query("update tenants set package = $1 where id = $2", [pkg, tenantId]);
+      if (result.rowCount === 0) throw new Error(`tenant bulunamadı: ${tenantId}`);
     },
 
     async saveDsar(input) {

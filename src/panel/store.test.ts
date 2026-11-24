@@ -444,3 +444,39 @@ describe("hesap yaşam döngüsü store portları", () => {
     expect(await store.countSitesByTenant(t.id)).toBe(0);
   });
 });
+
+describe("operatör store portları", () => {
+  it("listTenants tüm kiracıları döner", async () => {
+    const store = createInMemoryPanelStore();
+    const a = await store.createTenant({ name: "Op A", kind: "agency" });
+    const b = await store.createTenant({ name: "Op B", kind: "direct", package: "pro" });
+    const listed = await store.listTenants();
+    expect(listed.map((t) => t.id).sort()).toEqual([a.id, b.id].sort());
+  });
+
+  it("setTenantPackage paketi değiştirir; bilinmeyen kiracı reddedilir", async () => {
+    const store = createInMemoryPanelStore();
+    const t = await store.createTenant({ name: "Op P", kind: "agency" });
+    expect(t.package).toBe("starter");
+    await store.setTenantPackage(t.id, "ultimate");
+    expect((await store.getTenant(t.id))?.package).toBe("ultimate");
+    await expect(store.setTenantPackage("yok", "pro")).rejects.toThrow(/tenant bulunamadı/);
+  });
+
+  it("setContactHandled talebi işaretler/kaldırır; bilinmeyen id reddedilir", async () => {
+    const store = createInMemoryPanelStore();
+    const req = await store.createContactRequest({
+      name: "Op",
+      email: "op@x.com",
+      message: "merhaba",
+    });
+    expect(req.handledAt).toBeUndefined();
+    await store.setContactHandled(req.id, true);
+    const marked = (await store.listContactRequests()).find((r) => r.id === req.id);
+    expect(marked?.handledAt).toBeTruthy();
+    await store.setContactHandled(req.id, false);
+    const unmarked = (await store.listContactRequests()).find((r) => r.id === req.id);
+    expect(unmarked?.handledAt).toBeUndefined();
+    await expect(store.setContactHandled("yok", true)).rejects.toThrow(/talep bulunamadı/);
+  });
+});

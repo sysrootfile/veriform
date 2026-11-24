@@ -1,4 +1,5 @@
-import type { StoredScan } from "./types.js";
+import type { ContactPackage, ContactRequest, StoredScan, TenantKind } from "./types.js";
+import { PLAN_LABELS } from "./plans.js";
 import { diffScans } from "../scanner/diff.js";
 
 /**
@@ -21,6 +22,7 @@ const STYLE = `
   body { font-family: system-ui, sans-serif; max-width: 860px; margin: 2rem auto; padding: 0 1rem; color: #16161f; }
   h1 { font-size: 1.3rem; color: var(--accent); } h2 { font-size: 1.05rem; margin-top: 1.6rem; }
   table { width: 100%; border-collapse: collapse; margin: .5rem 0 1rem; }
+  .table-scroll { overflow-x: auto; }
   td, th { border-bottom: 1px solid #eee; padding: .45rem .5rem; text-align: left; font-size: .92rem; }
   .num { text-align: right; }
   .badge-ok { color: #127a3d; background: #e8f5ee; padding: .2rem .55rem; border-radius: 999px; font-size: .82rem; font-weight: 600; }
@@ -121,6 +123,7 @@ export function renderClientsPage(input: {
   onboarding?: OnboardingStatus | undefined;
   quota?: { label: string; used: number; limit: number | null } | undefined;
   emailVerified?: boolean | undefined;
+  operator?: boolean | undefined;
 }): string {
   const e = escapeHtml;
   const logoUrl = safeLogoUrl(input.logoUrl);
@@ -159,6 +162,10 @@ ${setupStep(ob.hasScan, "İlk tarama", "Site sayfasındaki Sürekli İzleme çiz
     ? `<p class="empty">Paket: ${e(q.label)} — ${q.limit === null ? `${q.used} site (sınırsız)` : `${q.used}/${q.limit} site kullanıldı`}</p>`
     : "";
 
+  const operatorLink = input.operator
+    ? '<p class="empty"><a href="/operator/contacts">Operatör konsolu →</a></p>'
+    : "";
+
   const verifyNag =
     input.emailVerified === false
       ? `<p class="badge-warn">E-posta adresiniz doğrulanmadı — <a href="/settings/account">Hesap ayarları</a>ndan doğrulama bağlantısı gönderin.</p>`
@@ -168,6 +175,7 @@ ${setupStep(ob.hasScan, "İlk tarama", "Site sayfasındaki Sürekli İzleme çiz
     input.tenantName,
     `<h1>${logo}Veriform Panel · ${e(input.tenantName)}</h1>
 ${verifyNag}
+${operatorLink}
 ${quotaLine}
 ${demoLink}
 ${setupSection}
@@ -593,5 +601,79 @@ ${verifyBlock}
 </form>`,
     undefined,
     "account",
+  );
+}
+
+function operatorNav(active: "contacts" | "tenants"): string {
+  const link = (href: string, label: string, key: string) =>
+    `<a href="${href}"${key === active ? ' aria-current="page"' : ""}>${label}</a>`;
+  return `<nav class="topnav" aria-label="Operatör">
+${link("/operator/contacts", "Gelen Kutusu", "contacts")}
+${link("/operator/tenants", "Kiracılar", "tenants")}
+<a href="/clients" class="nav-logout">Panele dön</a>
+</nav>`;
+}
+
+export function renderOperatorContactsPage(input: { requests: ContactRequest[] }): string {
+  const e = escapeHtml;
+  const rows = input.requests.length
+    ? input.requests
+        .map((r) => {
+          const status = r.handledAt
+            ? '<span class="badge-ok">İşlendi</span>'
+            : '<span class="badge-warn">Bekliyor</span>';
+          const toggle = `<form method="post" action="/operator/contacts/${e(r.id)}/handled">
+  <input type="hidden" name="handled" value="${r.handledAt ? "false" : "true"}">
+  <button type="submit">${r.handledAt ? "Bekleyene al" : "İşlendi işaretle"}</button>
+</form>`;
+          return `<tr><td>${e(r.name)}<br><span class="empty">${e(r.email)}</span></td><td>${e(r.company ?? "—")}</td><td>${e(r.package ?? "—")}</td><td>${e(r.message)}</td><td>${e(r.createdAt)}</td><td>${status}<br>${toggle}</td></tr>`;
+        })
+        .join("\n")
+    : '<tr><td colspan="6" class="empty">Henüz iletişim talebi yok.</td></tr>';
+
+  return panelPage(
+    "Operatör — Gelen Kutusu",
+    `${operatorNav("contacts")}
+<h1>İletişim Gelen Kutusu</h1>
+<div class="table-scroll">
+<table>
+<tr><th>Ad / E-posta</th><th>Şirket</th><th>Paket</th><th>Mesaj</th><th>Tarih</th><th>Durum</th></tr>
+${rows}
+</table>
+</div>`,
+  );
+}
+
+export function renderOperatorTenantsPage(input: {
+  tenants: Array<{ id: string; name: string; kind: TenantKind; package: ContactPackage; siteCount: number }>;
+}): string {
+  const e = escapeHtml;
+  const rows = input.tenants.length
+    ? input.tenants
+        .map((t) => {
+          const options = (Object.keys(PLAN_LABELS) as ContactPackage[])
+            .map(
+              (p) =>
+                `<option value="${p}"${p === t.package ? " selected" : ""}>${e(PLAN_LABELS[p])}</option>`,
+            )
+            .join("");
+          return `<tr><td>${e(t.name)}</td><td>${t.kind === "agency" ? "Ajans" : "Doğrudan"}</td><td class="num">${t.siteCount} site</td><td><form method="post" action="/operator/tenants/${e(t.id)}/package">
+  <select name="package" aria-label="Paket">${options}</select>
+  <button type="submit">Güncelle</button>
+</form></td></tr>`;
+        })
+        .join("\n")
+    : '<tr><td colspan="4" class="empty">Henüz kiracı yok.</td></tr>';
+
+  return panelPage(
+    "Operatör — Kiracılar",
+    `${operatorNav("tenants")}
+<h1>Kiracılar ve Paketler</h1>
+<div class="table-scroll">
+<table>
+<tr><th>Kiracı</th><th>Tür</th><th>Kullanım</th><th>Paket</th></tr>
+${rows}
+</table>
+</div>`,
   );
 }

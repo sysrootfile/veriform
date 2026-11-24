@@ -271,3 +271,33 @@ d("createPostgresPanelStore (GERÇEK Postgres — docker veriform-pg)", () => {
     await expect(store.deleteTenant(tenant.id)).rejects.toThrow(/tenant bulunamadı/);
   });
 });
+
+d("operatör portları (gerçek PG)", () => {
+  it("setContactHandled gerçek DB'de kalıcı; listTenants ve setTenantPackage çalışır", async () => {
+    const store = createPostgresPanelStore(PG_URL);
+    try {
+      const req = await store.createContactRequest({
+        name: "PG Op",
+        email: `pg-op-${randomUUID()}@x.com`,
+        message: "operatör testi",
+      });
+      expect(req.handledAt).toBeUndefined();
+      await store.setContactHandled(req.id, true);
+      const marked = (await store.listContactRequests()).find((r) => r.id === req.id);
+      expect(marked?.handledAt).toBeTruthy();
+      await store.setContactHandled(req.id, false);
+      const unmarked = (await store.listContactRequests()).find((r) => r.id === req.id);
+      expect(unmarked?.handledAt).toBeUndefined();
+      await expect(store.setContactHandled(randomUUID(), true)).rejects.toThrow(/talep bulunamadı/);
+
+      const t = await store.createTenant({ name: `PG Op ${randomUUID()}`, kind: "agency" });
+      const listed = await store.listTenants();
+      expect(listed.some((x) => x.id === t.id)).toBe(true);
+      await store.setTenantPackage(t.id, "pro");
+      expect((await store.getTenant(t.id))?.package).toBe("pro");
+      await expect(store.setTenantPackage(randomUUID(), "pro")).rejects.toThrow(/tenant bulunamadı/);
+    } finally {
+      await store.close();
+    }
+  });
+});

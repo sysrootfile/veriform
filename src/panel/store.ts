@@ -120,6 +120,10 @@ export interface PanelStore {
     message: string;
   }): Promise<ContactRequest>;
   listContactRequests(): Promise<ContactRequest[]>;
+  setContactHandled(id: string, handled: boolean): Promise<void>;
+  /** Operatör yüzeyi: tüm kiracılar + paket değişimi. */
+  listTenants(): Promise<Tenant[]>;
+  setTenantPackage(tenantId: string, pkg: ContactPackage): Promise<void>;
   /** Değişiklik uyarısı bağlamı: site → kiracı + sahip e-postası (yoksa null). */
   getSiteAlertContext(
     siteId: string,
@@ -525,6 +529,23 @@ export function createInMemoryPanelStore(): PanelStore {
 
     async listContactRequests() {
       return clone(contactRequests);
+    },
+
+    async setContactHandled(id, handled) {
+      const req = contactRequests.find((r) => r.id === id);
+      if (!req) throw new Error(`talep bulunamadı: ${id}`);
+      if (handled) req.handledAt = new Date().toISOString();
+      else delete req.handledAt;
+    },
+
+    async listTenants() {
+      return clone(tenants);
+    },
+
+    async setTenantPackage(tenantId, pkg) {
+      const tenant = tenants.find((t) => t.id === tenantId);
+      if (!tenant) throw new Error(`tenant bulunamadı: ${tenantId}`);
+      tenant.package = pkg;
     },
 
     async getSiteAlertContext(siteId) {

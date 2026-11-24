@@ -8,6 +8,8 @@ import {
   renderClientsPage,
   renderForgotPasswordPage,
   renderLoginPage,
+  renderOperatorContactsPage,
+  renderOperatorTenantsPage,
   renderRegisterPage,
   renderResetPasswordPage,
   renderSitePage,
@@ -585,5 +587,67 @@ describe("doğrulanmamış e-posta uyarısı (clients)", () => {
   it("emailVerified true veya verilmezse uyarı yok", () => {
     expect(renderClientsPage({ tenantName: "A", clients: [], emailVerified: true })).not.toContain("doğrulanmadı");
     expect(renderClientsPage({ tenantName: "A", clients: [] })).not.toContain("doğrulanmadı");
+  });
+});
+
+describe("operatör konsolu", () => {
+  const req = (over: Partial<{ id: string; name: string; email: string; company: string; package: "pro"; message: string; handledAt: string }> = {}) => ({
+    id: "r1",
+    name: "Ajans X",
+    email: "x@ajans.com",
+    message: "kurulum talebi",
+    createdAt: "2026-11-24T10:00:00.000Z",
+    ...over,
+  });
+
+  it("gelen kutusu talepleri basar; bekleyen/işlendi ayrımı ve toggle formu var", () => {
+    const html = renderOperatorContactsPage({ requests: [req(), req({ id: "r2", handledAt: "2026-11-24T11:00:00.000Z" })] });
+    expect(html).toContain("Ajans X");
+    expect(html).toContain("x@ajans.com");
+    expect(html).toContain("kurulum talebi");
+    expect(html).toContain("Bekliyor");
+    expect(html).toContain("İşlendi");
+    expect(html).toContain('action="/operator/contacts/r1/handled"');
+    expect(html).toContain('action="/operator/contacts/r2/handled"');
+    expect(html).toContain('href="/operator/tenants"');
+    expect(html).toContain('href="/clients"');
+  });
+
+  it("geniş tablolar yatay kaydırma sarmalayıcısında (mobil taşma yok)", () => {
+    expect(renderOperatorContactsPage({ requests: [] })).toContain('class="table-scroll"');
+    expect(renderOperatorTenantsPage({ tenants: [] })).toContain('class="table-scroll"');
+  });
+
+  it("boş gelen kutusu boş durum basar", () => {
+    expect(renderOperatorContactsPage({ requests: [] })).toContain("Henüz iletişim talebi yok");
+  });
+
+  it("talep içeriği HTML'e kaçırılır", () => {
+    const html = renderOperatorContactsPage({ requests: [req({ name: '<script>a()</script>' })] });
+    expect(html).not.toContain("<script>a()");
+  });
+
+  it("kiracı sayfası paket seçimi formu ve site kullanımı basar", () => {
+    const html = renderOperatorTenantsPage({
+      tenants: [{ id: "t1", name: "Ajans Y", kind: "agency", package: "starter", siteCount: 2 }],
+    });
+    expect(html).toContain("Ajans Y");
+    expect(html).toContain('action="/operator/tenants/t1/package"');
+    expect(html).toContain('name="package"');
+    expect(html).toContain('<option value="starter" selected>');
+    expect(html).toContain("2 site");
+    expect(html).toContain('href="/operator/contacts"');
+  });
+
+  it("kiracı adı HTML'e kaçırılır", () => {
+    const html = renderOperatorTenantsPage({
+      tenants: [{ id: "t1", name: '"><script>a()</script>', kind: "agency", package: "pro", siteCount: 0 }],
+    });
+    expect(html).not.toContain("<script>a()");
+  });
+
+  it("clients sayfası operatöre konsol linki gösterir, normal kiracıya göstermez", () => {
+    expect(renderClientsPage({ tenantName: "A", clients: [], operator: true })).toContain('href="/operator/contacts"');
+    expect(renderClientsPage({ tenantName: "A", clients: [] })).not.toContain('href="/operator/contacts"');
   });
 });

@@ -103,6 +103,7 @@ export interface ContactRequest {
   company?: string | undefined;
   package?: ContactPackage | undefined;
   message: string;
+  handledAt?: string | undefined;
   createdAt: string;
 }
 

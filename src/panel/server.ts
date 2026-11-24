@@ -33,6 +33,8 @@ import {
   renderClientsPage,
   renderForgotPasswordPage,
   renderLoginPage,
+  renderOperatorContactsPage,
+  renderOperatorTenantsPage,
   renderRegisterPage,
   renderResetPasswordPage,
   renderSitePage,
@@ -49,6 +51,8 @@ import { handleFontAsset } from "./assets.js";
 import { renderLandingPage } from "./landing.js";
 import { renderGuidePage } from "./guide.js";
 import { handleContactSubmit } from "./contact.js";
+import { isOperator } from "./operator.js";
+import { isContactPackage } from "./plans.js";
 import { buildDsarNotificationEmail } from "../dsar/notifications.js";
 import { renderDraftPageHtml } from "../draft/render.js";
 import { CATEGORY_LABELS, COOKIE_LABELS } from "../report/render.js";
@@ -124,6 +128,8 @@ const resetLimiter = createRateLimiter({ max: 3, windowMs: 60_000 });
 // Landing iletişim formu: IP başına 3 talep / dakika
 const contactLimiter = createRateLimiter({ max: 3, windowMs: 60_000 });
 const OPERATOR_EMAIL = process.env.CONTACT_OPERATOR_EMAIL ?? "iletisim@veriform.io";
+// Operatör konsolu yetkisi: owner e-postası bu listede olan kiracılar /operator/* görebilir.
+const OPERATOR_EMAILS = process.env.OPERATOR_EMAILS;
 // TLS sonlandıran proxy arkasında SESSION_COOKIE_SECURE=1 ver; düz HTTP'de Secure çerezi düşürür
 const COOKIE_SECURE = process.env.SESSION_COOKIE_SECURE === "1";
 
@@ -646,6 +652,68 @@ const server = createServer(async (req, res) => {
     }
     const service = createPanelService(store, { tenantId });
 
+    // Operatör konsolu — yetkisiz kiracıya varlık sızdırılmaz (404).
+    if (url.pathname === "/operator" || url.pathname.startsWith("/operator/")) {
+      const opUser = await store.findUserByTenant(tenantId);
+      if (!isOperator(opUser?.email ?? "", OPERATOR_EMAILS)) {
+        res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
+        res.end("Sayfa bulunamadı");
+        return;
+      }
+
+      if (req.method === "GET" && (url.pathname === "/operator" || url.pathname === "/operator/contacts")) {
+        const requests = await store.listContactRequests();
+        res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+        res.end(renderOperatorContactsPage({ requests }));
+        return;
+      }
+
+      if (req.method === "POST" && /^\/operator\/contacts\/[^/]+\/handled$/.test(url.pathname)) {
+        const id = url.pathname.split("/")[3]!;
+        const form = new URLSearchParams(await readBody(req));
+        await store.setContactHandled(id, form.get("handled") === "true");
+        res.writeHead(303, { location: "/operator/contacts" });
+        res.end();
+        return;
+      }
+
+      if (req.method === "GET" && url.pathname === "/operator/tenants") {
+        const tenants = await store.listTenants();
+        const rows = await Promise.all(
+          tenants.map(async (t) => ({
+            id: t.id,
+            name: t.name,
+            kind: t.kind,
+            package: t.package,
+            siteCount: await store.countSitesByTenant(t.id),
+          })),
+        );
+        res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+        res.end(renderOperatorTenantsPage({ tenants: rows }));
+        return;
+      }
+
+      if (req.method === "POST" && /^\/operator\/tenants\/[^/]+\/package$/.test(url.pathname)) {
+        const id = url.pathname.split("/")[3]!;
+        const form = new URLSearchParams(await readBody(req));
+        const pkg = form.get("package");
+        if (!isContactPackage(pkg)) {
+          res.writeHead(400, { "content-type": "text/plain; charset=utf-8" });
+          res.end("Geçersiz paket");
+          return;
+        }
+        await store.setTenantPackage(id, pkg);
+        await store.recordAudit(id, "operator.package_changed", { package: pkg });
+        res.writeHead(303, { location: "/operator/tenants" });
+        res.end();
+        return;
+      }
+
+      res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
+      res.end("Sayfa bulunamadı");
+      return;
+    }
+
     if (req.method === "POST" && url.pathname.startsWith("/clients/") && url.pathname.endsWith("/delete")) {
       const clientId = url.pathname.slice("/clients/".length, -"/delete".length);
       await service.deleteClient(clientId);
@@ -787,6 +855,7 @@ const server = createServer(async (req, res) => {
           onboarding,
           quota: await service.getSiteQuota(),
           emailVerified: Boolean(user?.emailVerifiedAt),
+          operator: isOperator(user?.email ?? "", OPERATOR_EMAILS),
         }),
       );
       return;

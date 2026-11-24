@@ -28,6 +28,8 @@ services:
       # Rotasyon penceresinde eski anahtarı taşır; boşsa eski çerezler düşer
       SESSION_SECRET_PREVIOUS: ${SESSION_SECRET_PREVIOUS:-}
       WORKER_TOKEN: ${WORKER_TOKEN:-}
+      # Operatör konsolu: owner e-postası bu virgül-listesinde olan kiracılar /operator/* görür
+      OPERATOR_EMAILS: ${OPERATOR_EMAILS:-}
       ENABLE_SCAN_SCHEDULER: "1"
       SCAN_CHECK_INTERVAL_MS: "300000"
       CHROMIUM_EXECUTABLE_PATH: /usr/bin/chromium-browser
