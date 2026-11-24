@@ -84,6 +84,7 @@ function mapUser(row: pg.QueryResultRow): PanelUser {
     email: String(row.email),
     passwordHash: String(row.password_hash),
     role: row.role as PanelUser["role"],
+    ...(row.email_verified_at ? { emailVerifiedAt: iso(row.email_verified_at as Date) } : {}),
     createdAt: iso(row.created_at as Date),
   };
 }
@@ -358,6 +359,48 @@ export function createPostgresPanelStore(connectionString: string): PostgresPane
     async findUserByEmail(email) {
       const result = await pool.query("select * from users where email = $1", [email]);
       return result.rows[0] ? clone(mapUser(result.rows[0])) : null;
+    },
+
+    async findUserByTenant(tenantId) {
+      const result = await pool.query(
+        "select * from users where tenant_id = $1 order by created_at, id limit 1",
+        [tenantId],
+      );
+      return result.rows[0] ? clone(mapUser(result.rows[0])) : null;
+    },
+
+    async setUserEmailVerified(userId) {
+      const result = await pool.query("update users set email_verified_at = now() where id = $1", [userId]);
+      if (result.rowCount === 0) throw new Error(`kullanıcı bulunamadı: ${userId}`);
+    },
+
+    async updateUserPassword(userId, passwordHash) {
+      const result = await pool.query("update users set password_hash = $1 where id = $2", [
+        passwordHash,
+        userId,
+      ]);
+      if (result.rowCount === 0) throw new Error(`kullanıcı bulunamadı: ${userId}`);
+    },
+
+    async deleteTenant(tenantId) {
+      const result = await pool.query("delete from tenants where id = $1", [tenantId]);
+      if (result.rowCount === 0) throw new Error(`tenant bulunamadı: ${tenantId}`);
+    },
+
+    async createAccountToken(input) {
+      await pool.query(
+        "insert into account_tokens (user_id, purpose, token_hash, expires_at) values ($1, $2, $3, $4)",
+        [input.userId, input.purpose, input.tokenHash, input.expiresAt],
+      );
+    },
+
+    async consumeAccountToken(tokenHash, purpose) {
+      // Tek atomik update: eşzamanlı iki istekten yalnız biri tüketebilir.
+      const result = await pool.query(
+        "update account_tokens set used_at = now() where token_hash = $1 and purpose = $2 and used_at is null and expires_at > now() returning user_id",
+        [tokenHash, purpose],
+      );
+      return result.rows[0] ? { userId: String(result.rows[0].user_id) } : null;
     },
 
     async createContactRequest(input) {

@@ -199,4 +199,71 @@ d("createPostgresPanelStore (GERÇEK Postgres — docker veriform-pg)", () => {
     await store.deleteClient(c1.id);
     expect(await store.countSitesByTenant(tenant.id)).toBe(1);
   });
+
+  it("kullanıcı doğrulama + şifre güncelleme gerçek DB'de kalıcı", async () => {
+    const tenant = await store.createTenant({ name: "PG Hesap", kind: "agency" });
+    const user = await store.createUser({
+      tenantId: tenant.id,
+      email: "pg-hesap@ajans.com",
+      passwordHash: "hash-1",
+    });
+    expect(user.emailVerifiedAt).toBeUndefined();
+    const byTenant = await store.findUserByTenant(tenant.id);
+    expect(byTenant?.email).toBe("pg-hesap@ajans.com");
+    await store.setUserEmailVerified(user.id);
+    await store.updateUserPassword(user.id, "hash-2");
+    const found = await store.findUserByEmail("pg-hesap@ajans.com");
+    expect(found?.emailVerifiedAt).toBeTruthy();
+    expect(found?.passwordHash).toBe("hash-2");
+  });
+
+  it("hesap token'ı tek kullanımlık, amaç-izoleli ve süreli; eşzamanlı tüketim tek kazanır", async () => {
+    const tenant = await store.createTenant({ name: "PG Token", kind: "agency" });
+    const user = await store.createUser({
+      tenantId: tenant.id,
+      email: "pg-token@ajans.com",
+      passwordHash: "hash-t",
+    });
+    const expiresAt = new Date(Date.now() + 60_000).toISOString();
+    await store.createAccountToken({ userId: user.id, purpose: "verify-email", tokenHash: "t".repeat(64), expiresAt });
+    expect(await store.consumeAccountToken("t".repeat(64), "reset-password")).toBeNull();
+    const [a, b] = await Promise.all([
+      store.consumeAccountToken("t".repeat(64), "verify-email"),
+      store.consumeAccountToken("t".repeat(64), "verify-email"),
+    ]);
+    expect([a, b].filter((r) => r !== null)).toHaveLength(1);
+    expect((a ?? b)?.userId).toBe(user.id);
+    expect(await store.consumeAccountToken("t".repeat(64), "verify-email")).toBeNull();
+
+    await store.createAccountToken({
+      userId: user.id,
+      purpose: "reset-password",
+      tokenHash: "e".repeat(64),
+      expiresAt: new Date(Date.now() - 1000).toISOString(),
+    });
+    expect(await store.consumeAccountToken("e".repeat(64), "reset-password")).toBeNull();
+  });
+
+  it("deleteTenant gerçek DB'de cascade eder: kullanıcı, müşteri, site, token gider", async () => {
+    const tenant = await store.createTenant({ name: "PG Sil", kind: "agency" });
+    const user = await store.createUser({
+      tenantId: tenant.id,
+      email: "pg-sil@ajans.com",
+      passwordHash: "hash-s",
+    });
+    const client = await store.createClient({ tenantId: tenant.id, name: "Silinecek" });
+    await store.createSite({ clientId: client.id, url: "https://sil-pg.com" });
+    await store.createAccountToken({
+      userId: user.id,
+      purpose: "verify-email",
+      tokenHash: "s".repeat(64),
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    });
+    await store.deleteTenant(tenant.id);
+    expect(await store.getTenant(tenant.id)).toBeNull();
+    expect(await store.findUserByEmail("pg-sil@ajans.com")).toBeNull();
+    expect(await store.listClients(tenant.id)).toEqual([]);
+    expect(await store.consumeAccountToken("s".repeat(64), "verify-email")).toBeNull();
+    await expect(store.deleteTenant(tenant.id)).rejects.toThrow(/tenant bulunamadı/);
+  });
 });

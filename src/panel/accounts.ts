@@ -1,7 +1,7 @@
 import { hashPassword, verifyPassword } from "./auth.js";
 import { isContactPackage } from "./plans.js";
 import type { PanelStore } from "./store.js";
-import type { Tenant, TenantKind } from "./types.js";
+import type { PanelUser, Tenant, TenantKind } from "./types.js";
 
 /**
  * Kiracı kaydı ve giriş akışı — HTTP handler'ların çağıracağı uygulama sözleşmesi.
@@ -11,7 +11,7 @@ import type { Tenant, TenantKind } from "./types.js";
 export async function registerTenant(
   store: PanelStore,
   input: { name: string; kind: TenantKind; email: string; password: string; package?: unknown },
-): Promise<{ tenant: Tenant }> {
+): Promise<{ tenant: Tenant; user: PanelUser }> {
   if (await store.findUserByEmail(input.email)) {
     throw new Error("e-posta zaten kayıtlı");
   }
@@ -20,12 +20,12 @@ export async function registerTenant(
     kind: input.kind,
     package: isContactPackage(input.package) ? input.package : "starter",
   });
-  await store.createUser({
+  const user = await store.createUser({
     tenantId: tenant.id,
     email: input.email,
     passwordHash: await hashPassword(input.password),
   });
-  return { tenant };
+  return { tenant, user };
 }
 
 export async function login(store: PanelStore, input: { email: string; password: string }): Promise<string> {
