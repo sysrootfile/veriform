@@ -65,6 +65,9 @@ jobs:
       - name: migration'ları uygula (psql varsayımı yok)
         run: pnpm migrate
       - name: entegrasyon testini koş
+        # shell: bash → -o pipefail; varsayılan -e tek başına tee'nin 0'ını
+        # vitest'in başarısız çıkış kodunun üstüne örtüyordu (sahte yeşil).
+        shell: bash
         run: pnpm exec vitest run src/panel/store.pg.test.ts src/panel/migrate.test.ts | tee pg-integration.log
       - name: atlama işaretliyse kırmızı ol
         run: |
