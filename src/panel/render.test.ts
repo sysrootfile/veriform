@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { StoredScan } from "./types.js";
+import type { SetupProgress, StoredScan } from "./types.js";
 import {
   renderAccountSettingsPage,
   renderApiKeysPage,
@@ -439,44 +439,103 @@ describe("renderLoginPage / renderRegisterPage", () => {
   });
 });
 
-describe("kurulum checklist'i (onboarding)", () => {
-  const status = (over: Partial<{ hasClient: boolean; hasSite: boolean; hasScan: boolean }> = {}) => ({
+describe("kalıcı kurulum şeridi", () => {
+  const progress = (over: Partial<SetupProgress> = {}): SetupProgress => ({
     hasClient: false,
     hasSite: false,
     hasScan: false,
+    emailVerified: false,
+    hasEmbed: false,
+    hasBanner: false,
     ...over,
   });
 
-  it("kiracı yeniyken üç adımı ve rehber linkini basar", () => {
-    const html = renderClientsPage({ tenantName: "A", clients: [], onboarding: status() });
+  it("altı adımı ve rehber linkini basar; sıradaki iş tek CTA'dır", () => {
+    const html = renderClientsPage({ tenantName: "A", clients: [], setup: progress() });
     expect(html).toContain("Kurulum");
-    expect(html).toContain("Müşteri ekle");
-    expect(html).toContain("Site ekle");
-    expect(html).toContain("İlk tarama");
+    for (const title of [
+      "Müşteri ekle",
+      "Site ekle",
+      "İlk tarama",
+      "E-postanı onayla",
+      "İzleme kodunu kur",
+      "Banner'ı yayınla",
+    ]) {
+      expect(html).toContain(title);
+    }
     expect(html).toContain('href="/rehber"');
+    expect((html.match(/class="setup-cta"/g) ?? []).length).toBe(1);
+    expect(html).toContain('href="/clients#yeni-musteri"');
   });
 
-  it("tamamlanan adım işaretlenir, bekleyen adım işaretlenmez", () => {
+  it("tamamlanan adım işaretlenir; kilitli adımlar e-posta onayı bekler", () => {
     const html = renderClientsPage({
       tenantName: "A",
       clients: [{ id: "c1", name: "M" }],
-      onboarding: status({ hasClient: true }),
+      setup: progress({ hasClient: true, hasSite: true, firstClientId: "c1", firstSiteId: "s1" }),
     });
-    expect((html.match(/class="setup-done"/g) ?? []).length).toBe(1);
+    expect((html.match(/class="setup-done"/g) ?? []).length).toBe(2);
+    expect(html).toContain("e-posta onayı bekliyor");
+    expect(html).toContain('href="/sites/s1#tarama"');
   });
 
-  it("üç adım da tamamsa checklist tamamen gizlenir", () => {
+  it("altı adım da tamamsa şerit Kurulum tamam kaşesine küçülür", () => {
     const html = renderClientsPage({
       tenantName: "A",
       clients: [{ id: "c1", name: "M" }],
-      onboarding: status({ hasClient: true, hasSite: true, hasScan: true }),
+      setup: progress({
+        hasClient: true,
+        hasSite: true,
+        hasScan: true,
+        emailVerified: true,
+        hasEmbed: true,
+        hasBanner: true,
+      }),
     });
-    expect(html).not.toContain("Kurulum");
+    expect(html).toContain("Kurulum tamam");
+    expect(html).not.toContain("<ol>");
   });
 
-  it("onboarding girdisi yoksa checklist basılmaz (eski çağrılar bozulmaz)", () => {
+  it("şerit tüm oturumlu sayfalarda basılır", () => {
+    const p = progress();
+    const pages = [
+      renderClientsPage({ tenantName: "A", clients: [], setup: p }),
+      renderClientDetailPage({ clientName: "M", clientHref: "/clients/c1", sites: [], setup: p }),
+      renderSitePage({ siteId: "s1", siteUrl: "https://x.com", chainValid: true, scans: [], setup: p }),
+      renderAuditPage({ entries: [], setup: p }),
+      renderApiKeysPage({ keys: [], setup: p }),
+      renderAccountSettingsPage({ email: "a@b.c", emailVerified: false, setup: p }),
+      renderPlanPage({ package: "starter", trial: "active", trialDaysLeft: 10, used: 0, limit: 3, clients: [], setup: p }),
+    ];
+    for (const html of pages) expect(html).toContain('aria-label="Kurulum"');
+  });
+
+  it("setup girdisi yoksa şerit basılmaz (eski çağrılar bozulmaz)", () => {
     const html = renderClientsPage({ tenantName: "A", clients: [] });
     expect(html).not.toContain("Kurulum");
+  });
+});
+
+describe("boş durum CTA'ları ve aşamalı açılım", () => {
+  it("müşteri listesi boşken tek birincil eylem forma bağlanır", () => {
+    const html = renderClientsPage({ tenantName: "A", clients: [] });
+    expect(html).toContain('id="yeni-musteri"');
+    expect(html).toContain('href="#yeni-musteri"');
+  });
+
+  it("site listesi boşken tek birincil eylem forma bağlanır", () => {
+    const html = renderClientDetailPage({ clientName: "M", clientHref: "/clients/c1", sites: [] });
+    expect(html).toContain('id="yeni-site"');
+    expect(html).toContain('href="#yeni-site"');
+  });
+
+  it("sürekli izleme ve marka gelişmiş bölüm olarak katlanır", () => {
+    const site = renderSitePage({ siteId: "s1", siteUrl: "https://x.com", chainValid: true, scans: [] });
+    expect(site).toContain('<details class="advanced"');
+    expect(site).toContain("Sürekli İzleme (gelişmiş)");
+    const detail = renderClientDetailPage({ clientName: "M", clientHref: "/clients/c1", sites: [] });
+    expect(detail).toContain('<details class="advanced"');
+    expect(detail).toContain("beyaz etiket");
   });
 });
 

@@ -109,7 +109,13 @@ td button{padding:6px 12px;font-size:.7rem}
 .setup ol{margin:.3rem 0 .5rem;padding-left:1.2rem}
 .setup li{margin:.35rem 0;font-size:.92rem}
 .setup li.setup-done{color:var(--green)}
+.setup li.setup-current{border-left:3px solid var(--blue);padding-left:10px;margin-left:-13px}
+.setup-cta{font-weight:700;white-space:nowrap}
+.setup-complete{margin:0 0 1.2rem}
 .setup-hint{color:var(--ink-soft);font-size:.85rem}
+.advanced{margin:1.4rem 0;border:1px solid var(--rule);border-radius:8px;padding:10px 14px;background:var(--paper)}
+.advanced summary{cursor:pointer;font-weight:700;font-size:.9rem;color:var(--ink-soft)}
+.advanced[open] summary{margin-bottom:.6rem;color:var(--ink)}
 .plan-list{list-style:none;padding:0;margin:.6rem 0;display:flex;flex-direction:column}
 .plan-list li{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 0;border-bottom:1px solid var(--rule);margin:0}
 .plan-list form{display:inline;margin:0}

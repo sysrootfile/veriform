@@ -1,10 +1,11 @@
 import { panelPage } from "./render.js";
+import type { SetupProgress } from "./types.js";
 
 /**
  * Panel içi rehber — ürünün ne yaptığını ve kurulum akışını anlatır.
  * Operate modu: panelin mevcut sade düzeni korunur, içerik statiktir.
  */
-export function renderGuidePage(): string {
+export function renderGuidePage(setup?: SetupProgress | undefined): string {
   return panelPage(
     "Rehber",
     `<h1>Rehber — Veriform nasıl çalışır?</h1>
@@ -43,5 +44,6 @@ export function renderGuidePage(): string {
 </ul>`,
     undefined,
     "guide",
+    setup,
   );
 }

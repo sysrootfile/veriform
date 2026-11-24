@@ -786,22 +786,27 @@ const server = createServer(async (req, res) => {
 
     if (req.method === "GET" && url.pathname === "/audit") {
       const entries = await store.listAudit(tenantId);
+      const setup = await service.getOnboardingStatus();
       res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
-      res.end(renderAuditPage({ entries }));
+      res.end(renderAuditPage({ entries, setup }));
       return;
     }
 
     if (req.method === "GET" && url.pathname === "/rehber") {
+      const setup = await service.getOnboardingStatus();
       res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
-      res.end(renderGuidePage());
+      res.end(renderGuidePage(setup));
       return;
     }
 
     // API anahtar yönetimi (panel)
     if (req.method === "GET" && url.pathname === "/settings/api-keys") {
       const keys = await store.listApiKeys(tenantId);
+      const setup = await service.getOnboardingStatus();
       res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
-      res.end(renderApiKeysPage({ keys, newKey: url.searchParams.get("created") ?? undefined }));
+      res.end(
+        renderApiKeysPage({ keys, newKey: url.searchParams.get("created") ?? undefined, setup }),
+      );
       return;
     }
 
@@ -855,6 +860,7 @@ const server = createServer(async (req, res) => {
             lastDecided?.status === "approved" || lastDecided?.status === "rejected"
               ? lastDecided.status
               : undefined,
+          setup: await service.getOnboardingStatus(),
         }),
       );
       return;
@@ -901,6 +907,7 @@ const server = createServer(async (req, res) => {
           emailVerified: Boolean(user?.emailVerifiedAt),
           notice,
           errorKind,
+          setup: await service.getOnboardingStatus(),
         }),
       );
       return;
@@ -965,7 +972,7 @@ const server = createServer(async (req, res) => {
       const tenant = await store.getTenant(tenantId);
       const user = await store.findUserByTenant(tenantId);
       const clients = await service.getClientList();
-      const onboarding = await service.getOnboardingStatus();
+      const setup = await service.getOnboardingStatus();
       const quota = await service.getSiteQuota();
       res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
       res.end(
@@ -975,7 +982,7 @@ const server = createServer(async (req, res) => {
           demoSiteHref: demoSiteId ? `/sites/${demoSiteId}` : undefined,
           accent: tenant?.brandColor,
           logoUrl: tenant?.brandLogoUrl,
-          onboarding,
+          setup,
           quota,
           emailVerified: Boolean(user?.emailVerifiedAt),
           operator: isOperator(user?.email ?? "", OPERATOR_EMAILS),
@@ -1010,6 +1017,7 @@ const server = createServer(async (req, res) => {
           embedSrc: embedUrl(req),
           quotaFull: url.searchParams.get("quota") === "full",
           emailVerified: Boolean(detailUser?.emailVerifiedAt),
+          setup: await service.getOnboardingStatus(),
         }),
       );
       return;
@@ -1248,6 +1256,7 @@ const server = createServer(async (req, res) => {
           embedLastSeenAt: site.embedLastSeenAt,
           scanNotice,
           emailVerified: Boolean(siteUser?.emailVerifiedAt),
+          setup: await service.getOnboardingStatus(),
         }),
       );
       return;
