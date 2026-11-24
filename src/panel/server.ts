@@ -635,18 +635,21 @@ const server = createServer(async (req, res) => {
     }
 
     if (req.method === "GET" && url.pathname === "/api/embed/config") {
+      // Embed müşteri sitesinde (farklı origin) çalışır; config çerezsiz,
+      // token-kapsamlı salt-okunur bir uç olduğundan ACAO * güvenli.
+      const cors = { "access-control-allow-origin": "*" };
       try {
         const config = await ingest.embedConfig({
           token: url.searchParams.get("token") ?? "",
         });
-        res.writeHead(200, { "content-type": "application/json" });
+        res.writeHead(200, { "content-type": "application/json", ...cors });
         res.end(JSON.stringify({ bannerConfig: config }));
       } catch (error) {
         if (error instanceof IngestError) {
-          res.writeHead(error.status, { "content-type": "application/json" });
+          res.writeHead(error.status, { "content-type": "application/json", ...cors });
           res.end(JSON.stringify({ error: error.message }));
         } else {
-          res.writeHead(400, { "content-type": "application/json" });
+          res.writeHead(400, { "content-type": "application/json", ...cors });
           res.end(JSON.stringify({ error: "geçersiz istek" }));
         }
       }
@@ -786,22 +789,27 @@ const server = createServer(async (req, res) => {
 
     if (req.method === "GET" && url.pathname === "/audit") {
       const entries = await store.listAudit(tenantId);
+      const setup = await service.getOnboardingStatus();
       res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
-      res.end(renderAuditPage({ entries }));
+      res.end(renderAuditPage({ entries, setup }));
       return;
     }
 
     if (req.method === "GET" && url.pathname === "/rehber") {
+      const setup = await service.getOnboardingStatus();
       res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
-      res.end(renderGuidePage());
+      res.end(renderGuidePage(setup));
       return;
     }
 
     // API anahtar yönetimi (panel)
     if (req.method === "GET" && url.pathname === "/settings/api-keys") {
       const keys = await store.listApiKeys(tenantId);
+      const setup = await service.getOnboardingStatus();
       res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
-      res.end(renderApiKeysPage({ keys, newKey: url.searchParams.get("created") ?? undefined }));
+      res.end(
+        renderApiKeysPage({ keys, newKey: url.searchParams.get("created") ?? undefined, setup }),
+      );
       return;
     }
 
@@ -855,6 +863,7 @@ const server = createServer(async (req, res) => {
             lastDecided?.status === "approved" || lastDecided?.status === "rejected"
               ? lastDecided.status
               : undefined,
+          setup: await service.getOnboardingStatus(),
         }),
       );
       return;
@@ -901,6 +910,7 @@ const server = createServer(async (req, res) => {
           emailVerified: Boolean(user?.emailVerifiedAt),
           notice,
           errorKind,
+          setup: await service.getOnboardingStatus(),
         }),
       );
       return;
@@ -965,7 +975,7 @@ const server = createServer(async (req, res) => {
       const tenant = await store.getTenant(tenantId);
       const user = await store.findUserByTenant(tenantId);
       const clients = await service.getClientList();
-      const onboarding = await service.getOnboardingStatus();
+      const setup = await service.getOnboardingStatus();
       const quota = await service.getSiteQuota();
       res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
       res.end(
@@ -975,7 +985,7 @@ const server = createServer(async (req, res) => {
           demoSiteHref: demoSiteId ? `/sites/${demoSiteId}` : undefined,
           accent: tenant?.brandColor,
           logoUrl: tenant?.brandLogoUrl,
-          onboarding,
+          setup,
           quota,
           emailVerified: Boolean(user?.emailVerifiedAt),
           operator: isOperator(user?.email ?? "", OPERATOR_EMAILS),
@@ -998,6 +1008,7 @@ const server = createServer(async (req, res) => {
       const clientId = url.pathname.slice("/clients/".length);
       const client = (await service.getClientList()).find((c) => c.id === clientId);
       const sites = await service.getClientSites(clientId);
+      const detailUser = await store.findUserByTenant(tenantId);
       res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
       res.end(
         renderClientDetailPage({
@@ -1008,6 +1019,8 @@ const server = createServer(async (req, res) => {
           logoUrl: client?.brandLogoUrl,
           embedSrc: embedUrl(req),
           quotaFull: url.searchParams.get("quota") === "full",
+          emailVerified: Boolean(detailUser?.emailVerifiedAt),
+          setup: await service.getOnboardingStatus(),
         }),
       );
       return;
@@ -1099,6 +1112,13 @@ const server = createServer(async (req, res) => {
 
     if (req.method === "POST" && /^\/sites\/[^/]+\/banner$/.test(url.pathname)) {
       const siteId = url.pathname.split("/")[2]!;
+      // Yumuşak kapı: banner yayını üretim işidir — e-posta onayı olmadan yazılmaz.
+      const bannerUser = await store.findUserByTenant(tenantId);
+      if (!bannerUser?.emailVerifiedAt) {
+        res.writeHead(303, { location: `/sites/${siteId}` });
+        res.end();
+        return;
+      }
       const form = new URLSearchParams(await readBody(req));
       const texts = {
         title: form.get("title") ?? "",
@@ -1177,11 +1197,48 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === "POST" && /^\/sites\/[^/]+\/scan$/.test(url.pathname)) {
+      const siteId = url.pathname.split("/")[2]!;
+      const site = await service.resolveSite(siteId);
+      const ip = req.socket.remoteAddress ?? "bilinmeyen";
+      if (!scanLimiter.allow(ip)) {
+        res.writeHead(303, { location: `/sites/${siteId}?scan=limited` });
+        res.end();
+        return;
+      }
+      try {
+        // Lazy import: playwright yoksa (prod panel konteyneri) nazik hata bildirimi
+        const { buildEmbedSource, scanSite } = await import("../scanner/scan.js");
+        const result = await scanSite(site.url, {
+          embedSource: await buildEmbedSource(),
+          timeoutMs: 30_000,
+        });
+        await service.ingestScan({
+          siteId,
+          report: result.report,
+          cookies: result.cookies,
+          observedTargets: result.observedTargets,
+          scripts: result.scripts,
+        });
+        await store.recordAudit(tenantId, "scan.manual", { siteId });
+        res.writeHead(303, { location: `/sites/${siteId}?scan=ok` });
+      } catch (error) {
+        console.error("[scan-now] başarısız:", error);
+        res.writeHead(303, { location: `/sites/${siteId}?scan=error` });
+      }
+      res.end();
+      return;
+    }
+
     if (req.method === "GET" && url.pathname.startsWith("/sites/")) {
       const siteId = url.pathname.slice("/sites/".length);
       const site = await service.resolveSite(siteId);
       const scans = await service.getSiteScans(siteId);
       const chainValid = await service.verifySite(siteId);
+      const siteUser = await store.findUserByTenant(tenantId);
+      const scanParam = url.searchParams.get("scan");
+      const scanNotice =
+        scanParam === "ok" || scanParam === "error" || scanParam === "limited" ? scanParam : undefined;
       res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
       res.end(
         renderSitePage({
@@ -1199,6 +1256,10 @@ const server = createServer(async (req, res) => {
           evidenceHref: `/sites/${siteId}/evidence.csv`,
           bannerConfig: site.bannerConfig,
           scanIntervalHours: site.scanIntervalHours,
+          embedLastSeenAt: site.embedLastSeenAt,
+          scanNotice,
+          emailVerified: Boolean(siteUser?.emailVerifiedAt),
+          setup: await service.getOnboardingStatus(),
         }),
       );
       return;

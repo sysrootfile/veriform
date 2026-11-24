@@ -6,7 +6,7 @@ import type { StoredReceiptEntry } from "./chain.js";
 import type { Correction } from "./corrections.js";
 import { effectivePackage, PLAN_LABELS, PLAN_LIMITS, trialDaysLeft } from "./plans.js";
 import type { PanelStore } from "./store.js";
-import type { Client, ScanCookie, Site, SiteBannerConfig, StoredScan } from "./types.js";
+import type { Client, ScanCookie, ScannedScript, SetupProgress, Site, SiteBannerConfig, StoredScan } from "./types.js";
 
 /**
  * Panel servis katmanı — HTTP handler'ların çağıracağı uygulama sözleşmesi.
@@ -31,8 +31,8 @@ function denyAuditor(role: PanelContext["role"]): void {
 
 export interface PanelService {
   getClientList(): Promise<Client[]>;
-  /** Kurulum checklist'i: kiracının kendi verisinden türetilir (müşteri → site → ilk tarama). */
-  getOnboardingStatus(): Promise<{ hasClient: boolean; hasSite: boolean; hasScan: boolean }>;
+  /** Kurulum şeridi: kiracının kendi verisinden türetilen altı adımın durumu. */
+  getOnboardingStatus(): Promise<SetupProgress>;
   addClient(name: string): Promise<Client>;
   addSite(clientId: string, url: string): Promise<Site>;
   /** Paket kotası durumu: etiket, kullanılan site sayısı, limit (null = sınırsız). */
@@ -59,6 +59,7 @@ export interface PanelService {
     report: FormInventoryReport;
     cookies: ScanCookie[];
     observedTargets: RequestTarget[];
+    scripts?: ScannedScript[];
   }): Promise<StoredScan>;
   ingestReceipt(siteId: string, receipt: ConsentReceipt): Promise<StoredReceiptEntry>;
   verifySite(siteId: string): Promise<boolean>;
@@ -95,22 +96,36 @@ export function createPanelService(store: PanelStore, context: PanelContext): Pa
     },
 
     async getOnboardingStatus() {
+      const user = await store.findUserByTenant(context.tenantId);
+      const status: SetupProgress = {
+        hasClient: false,
+        hasSite: false,
+        hasScan: false,
+        emailVerified: Boolean(user?.emailVerifiedAt),
+        hasEmbed: false,
+        hasBanner: false,
+      };
       const clients = await store.listClients(context.tenantId);
-      if (!clients.length) return { hasClient: false, hasSite: false, hasScan: false };
-      let hasSite = false;
-      let hasScan = false;
+      if (!clients.length) return status;
+      status.hasClient = true;
+      let firstSiteId: string | undefined;
       for (const client of clients) {
         const sites = await store.listSites(client.id);
-        if (sites.length) hasSite = true;
-        for (const site of sites) {
-          if ((await store.listScans(site.id)).length) {
-            hasScan = true;
-            break;
-          }
+        if (sites.length) {
+          status.hasSite = true;
+          firstSiteId ??= sites[0]!.id;
         }
-        if (hasScan) break;
+        for (const site of sites) {
+          if (site.bannerConfig) status.hasBanner = true;
+          if (site.embedLastSeenAt) status.hasEmbed = true;
+          if (!status.hasScan && (await store.listScans(site.id)).length) status.hasScan = true;
+        }
       }
-      return { hasClient: true, hasSite, hasScan };
+      return {
+        ...status,
+        firstClientId: clients[0]!.id,
+        ...(firstSiteId ? { firstSiteId } : {}),
+      };
     },
 
     async addClient(name) {

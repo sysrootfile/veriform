@@ -48,6 +48,19 @@ describe("createInMemoryPanelStore", () => {
     );
   });
 
+  it("markEmbedSeen: siteye ISO bağlantı damgası yazar; bilinmeyen site sessizdir", async () => {
+    const store = createInMemoryPanelStore();
+    const tenant = await store.createTenant({ name: "A", kind: "agency" });
+    const client = await store.createClient({ tenantId: tenant.id, name: "M" });
+    const site = await store.createSite({ clientId: client.id, url: "https://musteri1.com" });
+    expect(site.embedLastSeenAt).toBeUndefined();
+    await store.markEmbedSeen(site.id);
+    const seen = (await store.getSite(site.id))?.embedLastSeenAt;
+    expect(seen).toBeDefined();
+    expect(Number.isNaN(Date.parse(seen!))).toBe(false);
+    await expect(store.markEmbedSeen("yok")).resolves.toBeUndefined();
+  });
+
   it("deleteClient: client + siteleri gider, zincir kanıtlarıyla birlikte silinir", async () => {
     const store = createInMemoryPanelStore();
     const tenant = await store.createTenant({ name: "A", kind: "agency" });

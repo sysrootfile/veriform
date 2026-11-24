@@ -51,6 +51,8 @@ export interface Site {
   bannerConfig?: SiteBannerConfig | undefined;
   /** Sürekli izleme aralığı (saat) — null/undefined = kapalı. */
   scanIntervalHours?: number | undefined;
+  /** İzleme kodunun sunucuya son bağlandığı an (config çekimi = bağlantı sinyali). */
+  embedLastSeenAt?: string | undefined;
   createdAt: string;
 }
 
@@ -86,6 +88,18 @@ export interface PanelUser {
 }
 
 export type AccountTokenPurpose = "verify-email" | "reset-password";
+
+/** Kurulum ilerlemesi — sunucudan türetilir, panelin her sayfasındaki şeritte gösterilir. */
+export interface SetupProgress {
+  hasClient: boolean;
+  hasSite: boolean;
+  hasScan: boolean;
+  emailVerified: boolean;
+  hasEmbed: boolean;
+  hasBanner: boolean;
+  firstClientId?: string | undefined;
+  firstSiteId?: string | undefined;
+}
 
 export interface AuditEntry {
   id: string;

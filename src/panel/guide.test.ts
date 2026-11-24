@@ -11,8 +11,28 @@ describe("renderGuidePage", () => {
     expect(html).toContain("Değişiklik uyarıları");
     expect(html).toContain("Müşteri ekle");
     expect(html).toContain("Site ekle");
-    expect(html).toContain("embed");
+    expect(html).toContain("İzleme kodu");
     expect(html).toContain("Sürekli İzleme");
+  });
+
+  it("kurulum akışı şeritle aynı altı adımı aynı sırayla anlatır", () => {
+    const html = renderGuidePage();
+    const steps = [
+      "Müşteri ekle",
+      "Site ekle",
+      "İlk tarama",
+      "E-postanı onayla",
+      "İzleme kodunu kur",
+      "Banner'ı yayınla",
+    ];
+    let last = -1;
+    for (const step of steps) {
+      const i = html.indexOf(step);
+      expect(i).toBeGreaterThan(last);
+      last = i;
+    }
+    expect(html).toContain("Şimdi tara");
+    expect(html).toContain("site anahtarı");
   });
 
   it("ham veri saklanmadığı ilkesini belirtir", () => {
