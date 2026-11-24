@@ -4,17 +4,13 @@
  * kullanıcı tarafından doldurulur (LICENSE ile aynı karar). Hukuki yeterlilik ayrı inceleme ister.
  */
 
-const LEGAL_STYLE = `
-  body { font-family: system-ui, sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; color: #16161f; line-height: 1.65; }
-  h1 { font-size: 1.4rem; } h2 { font-size: 1.05rem; margin-top: 1.8rem; }
-  a { color: #1d4ed8; }
-  .legal-nav { font-size: .85rem; border-bottom: 1px solid #e5e5ea; padding-bottom: .8rem; margin-bottom: 1.6rem; }
-  .legal-footer { margin-top: 2.5rem; border-top: 1px solid #e5e5ea; padding-top: 1rem; font-size: .85rem; color: #555; display: flex; gap: 1.2rem; flex-wrap: wrap; }
-  .muted { color: #555; font-size: .9rem; }
-  table { width: 100%; border-collapse: collapse; margin: .8rem 0; }
-  td, th { border-bottom: 1px solid #eee; padding: .45rem .5rem; text-align: left; font-size: .92rem; }
-  .table-scroll { overflow-x: auto; }
-`;
+import { FONT_FACES, WORLD_TOKENS, WORLD_BASE, SHEET_CSS, LEGAL_CSS, sheetOpen } from "./design.js";
+
+const LEGAL_STYLE = `${FONT_FACES}
+${WORLD_TOKENS}
+${WORLD_BASE}
+${SHEET_CSS}
+${LEGAL_CSS}`;
 
 function legalPage(title: string, body: string): string {
   return `<!doctype html>
@@ -23,10 +19,12 @@ function legalPage(title: string, body: string): string {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${title} — Veriform</title>
-<style>${LEGAL_STYLE}</style>
+<style>:root { --sheet-w: 860px; }
+${LEGAL_STYLE}</style>
 </head>
 <body>
 <nav class="legal-nav"><a href="/">← Veriform ana sayfa</a></nav>
+${sheetOpen(title)}
 ${body}
 <footer class="legal-footer">
   <a href="/kullanim-sartlari">Kullanım Şartları</a>
@@ -34,6 +32,7 @@ ${body}
   <a href="/cerez-politikasi">Çerez Politikası</a>
   <a href="/#iletisim">İletişim</a>
 </footer>
+</div>
 </body>
 </html>`;
 }

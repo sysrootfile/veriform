@@ -27,3 +27,14 @@ describe("renderScanRequestPage", () => {
     expect(html).toContain("<h1>Rapor</h1>");
   });
 });
+
+describe("Zincir Defter dünyası", () => {
+  it("tarama sayfası kağıt yaprağı + antet + self-host font taşır", () => {
+    const html = renderScanRequestPage({ formAction: "/tarama" });
+    expect(html).toContain('class="sheet"');
+    expect(html).toContain('class="antet"');
+    expect(html).toContain("SAYFA ·");
+    expect(html).toContain('@font-face{font-family:"Archivo"');
+    expect(html).toContain("--paper:#f6f7f4");
+  });
+});

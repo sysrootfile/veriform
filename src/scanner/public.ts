@@ -5,6 +5,16 @@
  * hız sınırı ile çalıştırılmalı (bkz. rota yorumu).
  */
 
+import {
+  FONT_FACES,
+  WORLD_TOKENS,
+  WORLD_BASE,
+  SHEET_CSS,
+  TABLE_CSS,
+  REPORT_COMPONENTS,
+  sheetOpen,
+} from "../panel/design.js";
+
 function escapeHtml(value: string): string {
   return value
     .replaceAll("&", "&amp;")
@@ -34,17 +44,31 @@ export function renderScanRequestPage(input: {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Ücretsiz Form Taraması — Veriform</title>
-<style>
-  body { font-family: system-ui, sans-serif; max-width: 780px; margin: 2rem auto; padding: 0 1rem; }
-  .warn { color: #b45309; background: #fdf2e3; padding: .4rem .8rem; border-radius: 6px; }
-  form { display: flex; gap: .5rem; margin: 1rem 0 2rem; }
-  input, button { padding: .55rem .8rem; border: 1px solid #ccc; border-radius: 6px; font-size: 1rem; }
-  input { flex: 1; }
-  button { background: #16161f; color: #fff; border: none; cursor: pointer; }
-  .report { border: 1px solid #ddd; border-radius: 8px; padding: 1rem; }
-</style>
+<style>:root { --accent: #1e7a46; --sheet-w: 860px; }
+${FONT_FACES}
+${WORLD_TOKENS}
+${WORLD_BASE}
+${SHEET_CSS}
+${TABLE_CSS}
+${REPORT_COMPONENTS}
+h1{font-size:1.5rem;font-weight:800;letter-spacing:-.01em;line-height:1.2;margin:0 0 14px}
+h2{font-size:1.02rem;font-weight:800;margin:1.9rem 0 .6rem}
+form{display:flex;gap:12px;align-items:center;margin:1.2rem 0 2rem}
+input{flex:1;font-family:"Archivo",system-ui,sans-serif;font-size:1rem;color:var(--ink);background:transparent;border:none;border-bottom:2px solid var(--rule);padding:10px 2px;transition:border-color 160ms var(--ease)}
+input:focus{outline:none;border-bottom-color:var(--blue)}
+input::placeholder{color:var(--ink-faint)}
+button{background:var(--accent);color:#fff;font-family:"Archivo",system-ui,sans-serif;font-weight:700;font-size:.82rem;letter-spacing:.05em;text-transform:uppercase;padding:10px 20px;border:none;border-radius:6px;cursor:pointer;box-shadow:0 4px 12px color-mix(in srgb,var(--accent) 25%,transparent);transition:transform 160ms var(--ease),box-shadow 160ms var(--ease)}
+button:active{transform:scale(.97)}
+@media (hover:hover) and (pointer:fine){button:hover{transform:translateY(-1px);box-shadow:0 7px 18px color-mix(in srgb,var(--accent) 32%,transparent)}}
+hr{border:none;border-top:2px solid var(--ink);margin:2rem 0}
+code{font-family:"Spline Sans Mono",ui-monospace,monospace;font-size:.8rem;background:var(--desk);padding:.1rem .35rem;border-radius:4px;word-break:break-all}
+ul{margin:.5rem 0;padding-left:1.3rem}
+li{margin:.35rem 0}
+footer{color:var(--ink-soft);font-size:.72rem;font-family:"Spline Sans Mono",ui-monospace,monospace;letter-spacing:.04em;border-top:2px solid var(--ink);margin-top:2.2rem;padding-top:14px}
+@media (prefers-reduced-motion:reduce){button,input{transition:none}button:hover{transform:none}}</style>
 </head>
 <body>
+${sheetOpen("ÜCRETSİZ TARAMA")}
 <h1>Ücretsiz Form Taraması</h1>
 <p>Sitenizdeki formların hangi kişisel verileri topladığını, nereye gönderdiğini ve
 rıza öncesi çerez ihlallerini saniyeler içinde görün.</p>
@@ -54,6 +78,7 @@ ${errorBlock}
   <button type="submit">Tara</button>
 </form>
 ${resultBlock}
+</div>
 </body>
 </html>`;
 }

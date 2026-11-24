@@ -44,3 +44,14 @@ describe("yasal sayfalar", () => {
     }
   });
 });
+describe("Zincir Defter dünyası", () => {
+  it("yasal sayfalar kağıt yaprağı + antet + self-host font taşır", () => {
+    for (const html of [renderTermsPage(), renderPrivacyPage(), renderCookiePolicyPage()]) {
+      expect(html).toContain('class="sheet"');
+      expect(html).toContain('class="antet"');
+      expect(html).toContain("SAYFA ·");
+      expect(html).toContain('@font-face{font-family:"Archivo"');
+      expect(html).toContain("--paper:#f6f7f4");
+    }
+  });
+});

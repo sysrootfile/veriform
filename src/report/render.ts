@@ -1,4 +1,5 @@
 import type { FormInventoryReport } from "./types.js";
+import { FONT_FACES, WORLD_TOKENS, WORLD_BASE, REPORT_DOC_CSS } from "../panel/design.js";
 
 /**
  * PII haritası raporunu bağımsız HTML sayfasına render eder.
@@ -60,9 +61,7 @@ export function renderReportHtml(
   options: RenderOptions = {},
 ): string {
   const e = escapeHtml;
-  const scannedAt = options.scannedAt
-    ? `<p class="meta">Tarama zamanı: ${e(options.scannedAt)}</p>`
-    : "";
+  const scannedAt = options.scannedAt ? ` · Tarama zamanı: ${e(options.scannedAt)}` : "";
 
   const categories = report.categoryCounts
     .map(
@@ -124,23 +123,14 @@ export function renderReportHtml(
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Veriform Raporu — ${e(report.siteOrigin)}</title>
-<style>
-  body { font-family: system-ui, sans-serif; max-width: 780px; margin: 2rem auto; padding: 0 1rem; color: #1a1a2e; }
-  h1 { font-size: 1.4rem; } .meta { color: #666; font-size: .85rem; }
-  .cards { display: flex; gap: 1rem; margin: 1rem 0; }
-  .card { flex: 1; border: 1px solid #ddd; border-radius: 8px; padding: .8rem 1rem; }
-  .card b { display: block; font-size: 1.6rem; }
-  table { width: 100%; border-collapse: collapse; margin: .5rem 0 1.5rem; }
-  td, th { border-bottom: 1px solid #eee; padding: .45rem .5rem; text-align: left; font-size: .92rem; }
-  .num { text-align: right; }
-  .ok { color: #127a3d; } .warn { color: #b45309; font-weight: 600; }
-  code { background: #f4f4f5; padding: .1rem .35rem; border-radius: 4px; font-size: .8rem; }
-  footer { color: #888; font-size: .8rem; border-top: 1px solid #eee; padding-top: .8rem; }
-</style>
+<style>${FONT_FACES}
+${WORLD_TOKENS}
+${WORLD_BASE}
+${REPORT_DOC_CSS}</style>
 </head>
-<body>
+<body class="vf-report">
 <h1>Veriform · Form Veri Envanteri</h1>
-<p class="meta">${e(report.siteOrigin)}${scannedAt.slice(3)}</p>
+<p class="meta">${e(report.siteOrigin)}${scannedAt}</p>
 <div class="cards">
   <div class="card"><b>${report.formCount}</b> form</div>
   <div class="card"><b>${report.fieldCount}</b> alan</div>

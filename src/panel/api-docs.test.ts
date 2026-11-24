@@ -17,3 +17,14 @@ describe("renderApiDocsPage", () => {
     expect(typeof html).toBe("string");
   });
 });
+
+describe("Zincir Defter dünyası", () => {
+  it("API docs kağıt yaprağı + antet + self-host font taşır", () => {
+    const html = renderApiDocsPage();
+    expect(html).toContain('class="sheet"');
+    expect(html).toContain('class="antet"');
+    expect(html).toContain("SAYFA ·");
+    expect(html).toContain('@font-face{font-family:"Archivo"');
+    expect(html).toContain("--paper:#f6f7f4");
+  });
+});
