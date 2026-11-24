@@ -33,6 +33,7 @@ function mapTenant(row: pg.QueryResultRow): Tenant {
     id: String(row.id),
     name: String(row.name),
     kind: row.kind as TenantKind,
+    package: row.package as Tenant["package"],
     ...(row.brand_color ? { brandColor: String(row.brand_color) } : {}),
     ...(row.brand_logo_url ? { brandLogoUrl: String(row.brand_logo_url) } : {}),
     createdAt: iso(row.created_at as Date),
@@ -148,8 +149,8 @@ export function createPostgresPanelStore(connectionString: string): PostgresPane
 
     async createTenant(input) {
       const result = await pool.query(
-        "insert into tenants (name, kind, brand_color, brand_logo_url) values ($1, $2, $3, $4) returning *",
-        [input.name, input.kind, input.brandColor ?? null, input.brandLogoUrl ?? null],
+        "insert into tenants (name, kind, package, brand_color, brand_logo_url) values ($1, $2, $3, $4, $5) returning *",
+        [input.name, input.kind, input.package ?? "starter", input.brandColor ?? null, input.brandLogoUrl ?? null],
       );
       return clone(mapTenant(result.rows[0]!));
     },
@@ -157,6 +158,16 @@ export function createPostgresPanelStore(connectionString: string): PostgresPane
     async getTenant(tenantId) {
       const result = await pool.query("select * from tenants where id = $1", [tenantId]);
       return result.rows[0] ? clone(mapTenant(result.rows[0])) : null;
+    },
+
+    async countSitesByTenant(tenantId) {
+      const result = await pool.query(
+        `select count(*)::int as n
+         from sites s join clients c on c.id = s.client_id
+         where c.tenant_id = $1`,
+        [tenantId],
+      );
+      return Number(result.rows[0]!.n);
     },
 
     async createClient(input) {

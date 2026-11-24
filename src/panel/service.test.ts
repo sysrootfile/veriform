@@ -246,3 +246,68 @@ describe("getOnboardingStatus", () => {
     });
   });
 });
+
+describe("site kotası (paket zorlaması)", () => {
+  async function tenantWithPackage(pkg: "starter" | "pro" | "ultimate") {
+    const store = createInMemoryPanelStore();
+    const tenant = await store.createTenant({ name: "Kota Ajans", kind: "agency", package: pkg });
+    const service = createPanelService(store, { tenantId: tenant.id });
+    const client = await service.addClient("Müşteri");
+    return { store, service, client };
+  }
+
+  it("starter üç siteye izin verir, dördüncüyü reddeder", async () => {
+    const { service, client } = await tenantWithPackage("starter");
+    for (let i = 1; i <= 3; i++) await service.addSite(client.id, `https://s${i}.com`);
+    await expect(service.addSite(client.id, "https://s4.com")).rejects.toThrow(/site kotası doldu/);
+  });
+
+  it("kota müşteriler arası toplamadır — ikinci müşteride de dolar", async () => {
+    const { service, client } = await tenantWithPackage("starter");
+    for (let i = 1; i <= 3; i++) await service.addSite(client.id, `https://s${i}.com`);
+    const client2 = await service.addClient("Müşteri 2");
+    await expect(service.addSite(client2.id, "https://s4.com")).rejects.toThrow(/site kotası doldu/);
+  });
+
+  it("pro 15 siteye izin verir, 16.'yı reddeder", async () => {
+    const { service, client } = await tenantWithPackage("pro");
+    for (let i = 1; i <= 15; i++) await service.addSite(client.id, `https://s${i}.com`);
+    await expect(service.addSite(client.id, "https://s16.com")).rejects.toThrow(/site kotası doldu/);
+  });
+
+  it("ultimate sınırsızdır", async () => {
+    const { service, client } = await tenantWithPackage("ultimate");
+    for (let i = 1; i <= 20; i++) await service.addSite(client.id, `https://s${i}.com`);
+    expect((await service.getClientSites(client.id)).length).toBe(20);
+  });
+
+  it("site silinince kota yeniden yer açar", async () => {
+    const { store, service, client } = await tenantWithPackage("starter");
+    const sites = [];
+    for (let i = 1; i <= 3; i++) sites.push(await service.addSite(client.id, `https://s${i}.com`));
+    await store.deleteClient(client.id);
+    const client2 = await service.addClient("Yeni Müşteri");
+    await expect(service.addSite(client2.id, "https://yeniden.com")).resolves.toBeTruthy();
+    expect(sites.length).toBe(3);
+  });
+
+  it("getSiteQuota paket etiketi, kullanım ve limiti döner", async () => {
+    const { service, client } = await tenantWithPackage("pro");
+    await service.addSite(client.id, "https://bir.com");
+    expect(await service.getSiteQuota()).toEqual({ label: "Pro", used: 1, limit: 15 });
+  });
+
+  it("ultimate quota limiti null döner", async () => {
+    const { service } = await tenantWithPackage("ultimate");
+    expect(await service.getSiteQuota()).toEqual({ label: "Ultimate", used: 0, limit: null });
+  });
+
+  it("auditor kota doluyken de mutasyon yapamaz (önce rol denetimi)", async () => {
+    const store = createInMemoryPanelStore();
+    const tenant = await store.createTenant({ name: "A", kind: "agency", package: "starter" });
+    const owner = createPanelService(store, { tenantId: tenant.id });
+    const auditor = createPanelService(store, { tenantId: tenant.id, role: "auditor" });
+    const client = await owner.addClient("M");
+    await expect(auditor.addSite(client.id, "https://x.com")).rejects.toThrow(/erişim reddedildi/);
+  });
+});

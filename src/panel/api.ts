@@ -111,6 +111,9 @@ export async function handleApiRequest(
       // varlık sızdırmaz: yok/başkasının kaydı aynı yanıt
       return json(403, { error: "erişim reddedildi" });
     }
+    if (message.includes("site kotası doldu")) {
+      return json(403, { error: "site kotası doldu — paket yükseltme gerekir" });
+    }
     return json(400, { error: message });
   }
 }

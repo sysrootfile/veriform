@@ -54,3 +54,40 @@ describe("registerTenant / login", () => {
     expect(user?.passwordHash).not.toContain(PW_B);
   });
 });
+
+describe("kayıtta paket seçimi", () => {
+  it("seçilen paket kiracıya yazılır", async () => {
+    const store = emptyStore();
+    const { tenant } = await registerTenant(store, {
+      name: "Pro Ajans",
+      kind: "agency",
+      email: "pro@ajans.com",
+      password: PW_A,
+      package: "pro",
+    });
+    expect(tenant.package).toBe("pro");
+  });
+
+  it("paket verilmezse starter varsayar", async () => {
+    const store = emptyStore();
+    const { tenant } = await registerTenant(store, {
+      name: "A",
+      kind: "agency",
+      email: "a@ajans.com",
+      password: PW_A,
+    });
+    expect(tenant.package).toBe("starter");
+  });
+
+  it("geçersiz paket değeri starter'a düşer (sınır doğrulaması)", async () => {
+    const store = emptyStore();
+    const { tenant } = await registerTenant(store, {
+      name: "A",
+      kind: "agency",
+      email: "a2@ajans.com",
+      password: PW_A,
+      package: "enterprise",
+    });
+    expect(tenant.package).toBe("starter");
+  });
+});

@@ -1,4 +1,5 @@
 import { hashPassword, verifyPassword } from "./auth.js";
+import { isContactPackage } from "./plans.js";
 import type { PanelStore } from "./store.js";
 import type { Tenant, TenantKind } from "./types.js";
 
@@ -9,12 +10,16 @@ import type { Tenant, TenantKind } from "./types.js";
 
 export async function registerTenant(
   store: PanelStore,
-  input: { name: string; kind: TenantKind; email: string; password: string },
+  input: { name: string; kind: TenantKind; email: string; password: string; package?: unknown },
 ): Promise<{ tenant: Tenant }> {
   if (await store.findUserByEmail(input.email)) {
     throw new Error("e-posta zaten kayıtlı");
   }
-  const tenant = await store.createTenant({ name: input.name, kind: input.kind });
+  const tenant = await store.createTenant({
+    name: input.name,
+    kind: input.kind,
+    package: isContactPackage(input.package) ? input.package : "starter",
+  });
   await store.createUser({
     tenantId: tenant.id,
     email: input.email,

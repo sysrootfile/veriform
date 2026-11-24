@@ -357,3 +357,41 @@ describe("createInMemoryPanelStore", () => {
     expect((await store.listContactRequests())[0]!.message).toBe("15 site izlemek istiyoruz");
   });
 });
+
+describe("paket ve site sayacı", () => {
+  it("createTenant paketsiz starter varsayar", async () => {
+    const store = createInMemoryPanelStore();
+    const tenant = await store.createTenant({ name: "A", kind: "agency" });
+    expect(tenant.package).toBe("starter");
+    expect((await store.getTenant(tenant.id))?.package).toBe("starter");
+  });
+
+  it("createTenant açık paketi saklar", async () => {
+    const store = createInMemoryPanelStore();
+    const tenant = await store.createTenant({ name: "A", kind: "agency", package: "pro" });
+    expect(tenant.package).toBe("pro");
+  });
+
+  it("countSitesByTenant kiracının tüm müşterilerindeki siteleri sayar", async () => {
+    const store = createInMemoryPanelStore();
+    const a = await store.createTenant({ name: "A", kind: "agency" });
+    const b = await store.createTenant({ name: "B", kind: "agency" });
+    const c1 = await store.createClient({ tenantId: a.id, name: "M1" });
+    const c2 = await store.createClient({ tenantId: a.id, name: "M2" });
+    const cb = await store.createClient({ tenantId: b.id, name: "MB" });
+    await store.createSite({ clientId: c1.id, url: "https://bir.com" });
+    await store.createSite({ clientId: c2.id, url: "https://iki.com" });
+    await store.createSite({ clientId: cb.id, url: "https://uc.com" });
+    expect(await store.countSitesByTenant(a.id)).toBe(2);
+    expect(await store.countSitesByTenant(b.id)).toBe(1);
+  });
+
+  it("müşteri silinince sayaç düşer", async () => {
+    const store = createInMemoryPanelStore();
+    const a = await store.createTenant({ name: "A", kind: "agency" });
+    const c1 = await store.createClient({ tenantId: a.id, name: "M1" });
+    await store.createSite({ clientId: c1.id, url: "https://bir.com" });
+    await store.deleteClient(c1.id);
+    expect(await store.countSitesByTenant(a.id)).toBe(0);
+  });
+});

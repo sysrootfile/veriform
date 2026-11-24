@@ -299,6 +299,7 @@ const server = createServer(async (req, res) => {
           kind: "agency",
           email: form.get("email") ?? "",
           password: form.get("password") ?? "",
+          package: form.get("package"),
         });
         setSessionHeader(res, createSessionToken(tenant.id, SESSION_SECRET));
         res.writeHead(302, { location: "/clients" });
@@ -613,6 +614,7 @@ const server = createServer(async (req, res) => {
           accent: tenant?.brandColor,
           logoUrl: tenant?.brandLogoUrl,
           onboarding,
+          quota: await service.getSiteQuota(),
         }),
       );
       return;
@@ -639,6 +641,7 @@ const server = createServer(async (req, res) => {
           accent: client?.brandColor,
           logoUrl: client?.brandLogoUrl,
           embedSrc: embedUrl(req),
+          quotaFull: url.searchParams.get("quota") === "full",
         }),
       );
       return;
@@ -666,7 +669,16 @@ const server = createServer(async (req, res) => {
       }
       const clientId = rest.slice(0, -"/sites".length);
       const form = new URLSearchParams(await readBody(req));
-      await service.addSite(clientId, form.get("url") ?? "");
+      try {
+        await service.addSite(clientId, form.get("url") ?? "");
+      } catch (error) {
+        if (error instanceof Error && /site kotası doldu/.test(error.message)) {
+          res.writeHead(302, { location: `/clients/${clientId}?quota=full` });
+          res.end();
+          return;
+        }
+        throw error;
+      }
       res.writeHead(302, { location: `/clients/${clientId}` });
       res.end();
       return;

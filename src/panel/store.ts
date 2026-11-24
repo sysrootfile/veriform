@@ -4,7 +4,7 @@ import { computeDeadline, extendDeadline } from "../dsar/deadline.js";
 import type { DsarRequest, DsarStatus, DsarType } from "../dsar/types.js";
 import type { FormInventoryReport } from "../report/types.js";
 import { makeChainEntry, verifyStoredChain, verifyReceiptSelfHash, type StoredReceiptEntry } from "./chain.js";
-import type { Client, ContactRequest, PanelUser, ScanCookie, ScannedScript, Site, SiteBannerConfig, StoredScan, Tenant, TenantKind } from "./types.js";
+import type { Client, ContactPackage, ContactRequest, PanelUser, ScanCookie, ScannedScript, Site, SiteBannerConfig, StoredScan, Tenant, TenantKind } from "./types.js";
 import { deepClone, randomIngestToken } from "./shared.js";
 import type { Correction } from "./corrections.js";
 import type { AuditEntry } from "./types.js";
@@ -23,10 +23,13 @@ export interface PanelStore {
   createTenant(input: {
     name: string;
     kind: TenantKind;
+    package?: ContactPackage | undefined;
     brandColor?: string | undefined;
     brandLogoUrl?: string | undefined;
   }): Promise<Tenant>;
   getTenant(tenantId: string): Promise<Tenant | null>;
+  /** Kota denetimi: kiracının tüm müşterilerindeki site toplamı. */
+  countSitesByTenant(tenantId: string): Promise<number>;
   createClient(input: { tenantId: string; name: string }): Promise<Client>;
   /** Per-client white-label — boş input marka alanlarını temizler. */
   setClientBranding(
@@ -133,6 +136,7 @@ export function createInMemoryPanelStore(): PanelStore {
         id: crypto.randomUUID(),
         name: input.name,
         kind: input.kind,
+        package: input.package ?? "starter",
         ...(input.brandColor ? { brandColor: input.brandColor } : {}),
         ...(input.brandLogoUrl ? { brandLogoUrl: input.brandLogoUrl } : {}),
         createdAt: new Date().toISOString(),
@@ -144,6 +148,11 @@ export function createInMemoryPanelStore(): PanelStore {
     async getTenant(tenantId) {
       const tenant = tenants.find((t) => t.id === tenantId);
       return tenant ? clone(tenant) : null;
+    },
+
+    async countSitesByTenant(tenantId) {
+      const clientIds = new Set(clients.filter((c) => c.tenantId === tenantId).map((c) => c.id));
+      return sites.filter((s) => clientIds.has(s.clientId)).length;
     },
 
     async createClient(input) {

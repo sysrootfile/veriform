@@ -118,6 +118,7 @@ export function renderClientsPage(input: {
   accent?: string | undefined;
   logoUrl?: string | undefined;
   onboarding?: OnboardingStatus | undefined;
+  quota?: { label: string; used: number; limit: number | null } | undefined;
 }): string {
   const e = escapeHtml;
   const logoUrl = safeLogoUrl(input.logoUrl);
@@ -151,9 +152,15 @@ ${setupStep(ob.hasScan, "İlk tarama", "Site sayfasındaki Sürekli İzleme çiz
 </section>`
       : "";
 
+  const q = input.quota;
+  const quotaLine = q
+    ? `<p class="empty">Paket: ${e(q.label)} — ${q.limit === null ? `${q.used} site (sınırsız)` : `${q.used}/${q.limit} site kullanıldı`}</p>`
+    : "";
+
   return panelPage(
     input.tenantName,
     `<h1>${logo}Veriform Panel · ${e(input.tenantName)}</h1>
+${quotaLine}
 ${demoLink}
 ${setupSection}
 <h2>Müşteriler</h2>
@@ -314,6 +321,8 @@ export function renderClientDetailPage(input: {
   logoUrl?: string | undefined;
   /** Panelin kendi embed adresi — snippet'te gösterilir (varsayılan göreli yol). */
   embedSrc?: string | undefined;
+  /** Paket kotası dolduysa yükseltme uyarısı gösterilir. */
+  quotaFull?: boolean | undefined;
 }): string {
   const e = escapeHtml;
   const rows = input.sites.length
@@ -330,9 +339,14 @@ export function renderClientDetailPage(input: {
     ? `<img src="${e(logoUrl)}" alt="${e(input.clientName)}" style="height:30px;vertical-align:middle;margin-right:.5rem">`
     : "";
 
+  const quotaWarning = input.quotaFull
+    ? '<p class="badge-warn">Site kotası doldu — yeni site eklemek için paketinizi yükseltin: <a href="/#paketler">Paketler</a> · <a href="/#iletisim">İletişim</a></p>'
+    : "";
+
   return panelPage(
     input.clientName,
     `<h1>${logo}${e(input.clientName)}</h1>
+${quotaWarning}
 <h2>Siteler</h2>
 <p class="empty">Embed scriptini sitenizin <code>&lt;head&gt;</code> bölümüne ekleyin; <code>data-site-token</code> yerine aşağıdaki ingest token'ı yazın:</p>
 <p><code>&lt;script src="${e(input.embedSrc ?? "/embed.js")}" data-site-token="…"&gt;&lt;/script&gt;</code></p>
@@ -454,6 +468,11 @@ ${errorText ? `<p class="badge-warn">${errorText}</p>` : ""}
   <input name="name" placeholder="Ajans adı" required>
   <input name="email" type="email" placeholder="E-posta" required>
   <input name="password" type="password" placeholder="Şifre" minlength="8" required>
+  <select name="package" aria-label="Paket">
+    <option value="starter" selected>Starter — 3 site</option>
+    <option value="pro">Pro — 15 site</option>
+    <option value="ultimate">Ultimate — sınırsız site</option>
+  </select>
   <button type="submit">Kaydol</button>
 </form>
 <p class="empty">Zaten hesabın var mı? <a href="/login">Giriş yap</a></p>`,

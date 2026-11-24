@@ -10,6 +10,8 @@ export interface Tenant {
   id: string;
   name: string;
   kind: TenantKind;
+  /** Seçilen paket — site kotasını belirler (bkz. plans.ts). */
+  package: ContactPackage;
   /** White-label vurgu rengi — yalnızca #rrggbb biçimi kabul edilir. */
   brandColor?: string | undefined;
   /** White-label logosu — yalnızca http(s) URL kabul edilir. */

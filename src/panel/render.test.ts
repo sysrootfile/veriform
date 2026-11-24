@@ -427,3 +427,56 @@ describe("boş durum yönlendirmeleri", () => {
     for (const html of pages) expect(html).toContain('href="/rehber"');
   });
 });
+
+describe("paket kotası (panel yüzeyi)", () => {
+  it("kayıt formu paket seçimi sunar — üç seçenek, varsayılan starter", () => {
+    const html = renderRegisterPage();
+    expect(html).toContain('name="package"');
+    expect(html).toContain('<option value="starter" selected>');
+    expect(html).toContain('<option value="pro">');
+    expect(html).toContain('<option value="ultimate">');
+  });
+
+  it("müşteri listesi paket etiketini ve kullanımı gösterir", () => {
+    const html = renderClientsPage({
+      tenantName: "A",
+      clients: [],
+      quota: { label: "Starter", used: 2, limit: 3 },
+    });
+    expect(html).toContain("Starter");
+    expect(html).toContain("2/3 site");
+  });
+
+  it("sınırsız pakette limit yerine sınırsız yazar", () => {
+    const html = renderClientsPage({
+      tenantName: "A",
+      clients: [],
+      quota: { label: "Ultimate", used: 5, limit: null },
+    });
+    expect(html).toContain("Ultimate");
+    expect(html).toContain("sınırsız");
+    expect(html).not.toContain("/null");
+  });
+
+  it("quota girdisi yoksa kota satırı basılmaz", () => {
+    const html = renderClientsPage({ tenantName: "A", clients: [] });
+    expect(html).not.toContain("Paket:");
+  });
+
+  it("kota dolunca müşteri detayında uyarı ve yükseltme bağlantıları çıkar", () => {
+    const html = renderClientDetailPage({
+      clientName: "M",
+      clientHref: "/clients/c1",
+      sites: [],
+      quotaFull: true,
+    });
+    expect(html).toContain("Site kotası doldu");
+    expect(html).toContain('href="/#paketler"');
+    expect(html).toContain('href="/#iletisim"');
+  });
+
+  it("quotaFull yokken uyarı çıkmaz", () => {
+    const html = renderClientDetailPage({ clientName: "M", clientHref: "/clients/c1", sites: [] });
+    expect(html).not.toContain("Site kotası doldu");
+  });
+});

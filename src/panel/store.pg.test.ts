@@ -175,4 +175,28 @@ d("createPostgresPanelStore (GERÇEK Postgres — docker veriform-pg)", () => {
     expect(found?.package).toBe("ultimate");
     expect(found?.message).toBe("özel kurulum talebi");
   });
+
+  it("tenant paketi gerçek DB'de saklanır; verilmezse starter", async () => {
+    const explicit = await store.createTenant({ name: "PG Pro", kind: "agency", package: "pro" });
+    expect(explicit.package).toBe("pro");
+    expect((await store.getTenant(explicit.id))?.package).toBe("pro");
+    const fallback = await store.createTenant({ name: "PG Varsayılan", kind: "agency" });
+    expect(fallback.package).toBe("starter");
+  });
+
+  it("countSitesByTenant müşteriler arası toplar ve kiracıya izoledir", async () => {
+    const tenant = await store.createTenant({ name: "PG Kota", kind: "agency" });
+    const other = await store.createTenant({ name: "PG Başka", kind: "agency" });
+    const c1 = await store.createClient({ tenantId: tenant.id, name: "M1" });
+    const c2 = await store.createClient({ tenantId: tenant.id, name: "M2" });
+    const oc = await store.createClient({ tenantId: other.id, name: "Yabancı" });
+    expect(await store.countSitesByTenant(tenant.id)).toBe(0);
+    await store.createSite({ clientId: c1.id, url: "https://kota1.com" });
+    await store.createSite({ clientId: c2.id, url: "https://kota2.com" });
+    await store.createSite({ clientId: oc.id, url: "https://yabanci.com" });
+    expect(await store.countSitesByTenant(tenant.id)).toBe(2);
+    expect(await store.countSitesByTenant(other.id)).toBe(1);
+    await store.deleteClient(c1.id);
+    expect(await store.countSitesByTenant(tenant.id)).toBe(1);
+  });
 });
