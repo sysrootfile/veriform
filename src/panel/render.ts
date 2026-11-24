@@ -287,7 +287,7 @@ export function renderSitePage(input: {
   <button type="submit">Onay bağlantısı gönder</button>
 </form>`
       : `<h2 id="banner">Rıza Bannerı Konfigürasyonu</h2>
-<p class="empty">Bu ayarlar embed scripte <code>/api/embed/config</code> üzerinden akar; bannerVersion değişirse müşteri yeniden rıza verir.</p>
+<p class="empty">Bu ayarlar izleme koduna <code>/api/embed/config</code> üzerinden akar; bannerVersion değişirse müşteri yeniden rıza verir.</p>
 <form method="post" action="/sites/${e(input.siteId)}/banner">
   <input name="bannerVersion" placeholder="banner-2026-11" value="${e(bc?.bannerVersion ?? "")}" required>
   <input name="title" placeholder="Başlık" value="${e(bc?.texts.title ?? "Çerez Tercihleriniz")}" required>
@@ -403,7 +403,7 @@ export function renderClientDetailPage(input: {
   const installSection =
     input.emailVerified === false
       ? `<p class="badge-warn">İzleme kodunu kurmak için e-posta adresinizi onaylayın — <a href="/settings/account">Hesap ayarları</a>.</p>`
-      : `<p class="empty">Embed scriptini sitenizin <code>&lt;head&gt;</code> bölümüne ekleyin; <code>data-site-token</code> yerine aşağıdaki ingest token'ı yazın:</p>
+      : `<p class="empty">İzleme kodunu sitenizin <code>&lt;head&gt;</code> bölümüne ekleyin; <code>data-site-token</code> yerine aşağıdaki site anahtarını yazın:</p>
 <p><code>&lt;script src="${e(input.embedSrc ?? "/embed.js")}" data-site-token="…"&gt;&lt;/script&gt;</code></p>`;
 
   return panelPage(
@@ -414,7 +414,7 @@ ${quotaWarning}
 ${installSection}
 <div class="table-scroll">
 <table>
-<tr><th>Site</th><th>Ingest token</th><th class="num">Rapor</th></tr>
+<tr><th>Site</th><th>Site anahtarı</th><th class="num">Rapor</th></tr>
 ${rows}
 </table>
 </div>
