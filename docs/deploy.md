@@ -222,6 +222,13 @@ istemeyen yol.
 **ÖLÇÜLMEDİ:** TLS sonlandırması sonrası oturum akışı (çerezin `Secure` bayrağısızlığı proxy
 arkasında pratikte nasıl davranır) — proxy'li gerçek deneme bu turda yapılmadı.
 
+**Güvenlik başlıkları (2026-11-24):** her yanıt CSP (`script-src 'self' + landing gömülü
+script sha256 hash'leri`, `frame-ancestors 'none'`), `X-Frame-Options: DENY`, `nosniff` ve
+`referrer-policy` taşır (`security-headers.ts`). HSTS (`max-age=15552000; includeSubDomains`)
+yalnız `X-Forwarded-Proto: https` gelen istekte eklenir — ters proxy bu başlığı iletmeli,
+yoksa tarayıcı HSTS görmez. Landing script'i değişirse hash listesi otomatik güncellenir
+(`LANDING_SCRIPT_HASHES`); elle CSP yazma.
+
 ## 7. Güncelleme ve rotasyon
 
 ```bash
@@ -296,6 +303,8 @@ exists` alır — bu yüzden hedef hep boş olsun, sonra `ALTER DATABASE … REN
 - [ ] SMTP: test bildirimi gerçekten kutuya düştü mü
 - [ ] Yedek komutu cron'landı ve **geri yükleme de denendi** (denenmemiş yedek yedek değildir)
 - [ ] `LICENSE` dosyasındaki `Licensor` placeholder'ı hukuki ünvanla dolduruldu
+- [ ] Yasal sayfalardaki (`/kullanim-sartlari`, `/gizlilik`, `/cerez-politikasi`) `[Ünvan]`
+  placeholder'ı dolduruldu ve metinler hukuki incelemeden geçti
 - [x] Repoya public kararında: iş geliştirme notları history'den çıkarıldı (2026-11-24);
   yayın temiz history'li yeni repoda yapıldı
 

@@ -348,6 +348,16 @@ describe("embed snippet", () => {
   });
 });
 
+describe("yasal sayfa bağlantıları", () => {
+  it("login ve register sayfaları yasal sayfalara bağlanır", () => {
+    for (const html of [renderLoginPage(), renderRegisterPage()]) {
+      expect(html).toContain('href="/kullanim-sartlari"');
+      expect(html).toContain('href="/gizlilik"');
+      expect(html).toContain('href="/cerez-politikasi"');
+    }
+  });
+});
+
 describe("renderLoginPage / renderRegisterPage", () => {
   it("giriş formu POST /login'e e-posta+şifre alanlarıyla çizilir", () => {
     const html = renderLoginPage();

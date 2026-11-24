@@ -5,6 +5,8 @@
  * seed satırların hash'leri sunucuda önceden hesaplanmıştır — JS'siz de görünür.
  */
 
+import { createHash } from "node:crypto";
+
 export interface LandingOptions {
   contactStatus?: "ok" | "invalid" | undefined;
 }
@@ -506,12 +508,21 @@ function jsonForScript(value: unknown): string {
   return JSON.stringify(value).replaceAll("<", "\\u003c");
 }
 
+function buildDemoJs(): string {
+  return DEMO_JS.replace("__SEEDS__", jsonForScript(SEED_ROWS))
+    .replace("__POOL__", jsonForScript(SAMPLE_POOL))
+    .replace("__LINK_ICON__", JSON.stringify(icon("link", 13)));
+}
+
+/** CSP script-src hash'leri — gömülü script içeriği değişirse bu liste de değişir. */
+export const LANDING_SCRIPT_HASHES: string[] = [buildDemoJs(), NAV_JS].map((s) =>
+  createHash("sha256").update(s).digest("base64"),
+);
+
 export function renderLandingPage(options: LandingOptions = {}): string {
   const status = options.contactStatus;
   const stamp = status ? CONTACT_STAMPS[status] : null;
-  const demoJs = DEMO_JS.replace("__SEEDS__", jsonForScript(SEED_ROWS))
-    .replace("__POOL__", jsonForScript(SAMPLE_POOL))
-    .replace("__LINK_ICON__", JSON.stringify(icon("link", 13)));
+  const demoJs = buildDemoJs();
 
   const stampBlock = stamp
     ? `<div class="form-stamp ${stamp.cls}" role="status">
@@ -728,6 +739,9 @@ ${SEED_ROWS.map(renderSeedRow).join("\n")}
     <a href="/tarama">Örnek tarama</a>
     <a href="/login">Giriş</a>
     <a href="/register">Kayıt</a>
+    <a href="/kullanim-sartlari">Şartlar</a>
+    <a href="/gizlilik">Gizlilik</a>
+    <a href="/cerez-politikasi">Çerezler</a>
     <a href="#defter">Başa dön</a>
   </nav>
 </footer>

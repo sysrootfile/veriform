@@ -1,5 +1,6 @@
+import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { renderLandingPage } from "./landing.js";
+import { LANDING_SCRIPT_HASHES, renderLandingPage } from "./landing.js";
 
 describe("renderLandingPage — içerik sözleşmesi", () => {
   it("üç paket de ad ve fiyatıyla görünür", () => {
@@ -55,5 +56,22 @@ describe("renderLandingPage — içerik sözleşmesi", () => {
     expect(html).toContain('lang="tr"');
     expect(html).toContain('name="viewport"');
     expect(html).not.toContain("cdn.veriform.io");
+  });
+});
+
+describe("landing — CSP hash sözleşmesi ve yasal bağlantılar", () => {
+  it("gömülü script'lerin sha256 hash'leri LANDING_SCRIPT_HASHES ile birebir", () => {
+    const html = renderLandingPage();
+    const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]!);
+    expect(scripts.length).toBe(2);
+    const hashes = scripts.map((s) => createHash("sha256").update(s).digest("base64"));
+    expect(hashes).toEqual(LANDING_SCRIPT_HASHES);
+  });
+
+  it("footer yasal sayfalara bağlanır", () => {
+    const html = renderLandingPage();
+    expect(html).toContain('href="/kullanim-sartlari"');
+    expect(html).toContain('href="/gizlilik"');
+    expect(html).toContain('href="/cerez-politikasi"');
   });
 });

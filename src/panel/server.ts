@@ -48,7 +48,9 @@ import { resolvePanelSecrets } from "./secrets.js";
 import { handleWorkerRun } from "./worker.js";
 import { handleEmbedJs } from "./embed.js";
 import { handleFontAsset } from "./assets.js";
-import { renderLandingPage } from "./landing.js";
+import { LANDING_SCRIPT_HASHES, renderLandingPage } from "./landing.js";
+import { renderCookiePolicyPage, renderPrivacyPage, renderTermsPage } from "./legal.js";
+import { buildSecurityHeaders } from "./security-headers.js";
 import { renderGuidePage } from "./guide.js";
 import { handleContactSubmit } from "./contact.js";
 import { isOperator } from "./operator.js";
@@ -207,9 +209,29 @@ function jsonRes(
   res.end(JSON.stringify(data));
 }
 
+const LEGAL_PAGES: Record<string, () => string> = {
+  "/kullanim-sartlari": renderTermsPage,
+  "/gizlilik": renderPrivacyPage,
+  "/cerez-politikasi": renderCookiePolicyPage,
+};
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", `http://127.0.0.1:${PORT}`);
+  const forwardedProto = req.headers["x-forwarded-proto"];
+  const isHttps =
+    (typeof forwardedProto === "string" ? forwardedProto.split(",")[0]!.trim() : "") === "https";
+  for (const [name, value] of Object.entries(
+    buildSecurityHeaders({ https: isHttps, scriptHashes: LANDING_SCRIPT_HASHES }),
+  )) {
+    res.setHeader(name, value);
+  }
   try {
+    if (req.method === "GET" && url.pathname in LEGAL_PAGES) {
+      res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      res.end(LEGAL_PAGES[url.pathname]!());
+      return;
+    }
+
     if (req.method === "GET" && url.pathname === "/healthz") {
       const health = await checkHealth(store, process.env.DATABASE_URL ? "postgres" : "memory");
       res.writeHead(health.ok ? 200 : 503, { "content-type": "application/json" });
