@@ -293,6 +293,25 @@ d("createPostgresPanelStore (GERÇEK Postgres — docker veriform-pg)", () => {
     expect(await store.consumeAccountToken(tokenE, "reset-password")).toBeNull();
   });
 
+  it("kullanılan token aynı amaçtaki diğer bekleyen tokenları da iptal eder (gerçek PG)", async () => {
+    const tenant = await store.createTenant({ name: "PG Token Kardeş", kind: "agency" });
+    const user = await store.createUser({
+      tenantId: tenant.id,
+      email: `pg-token-kardes-${randomUUID()}@ajans.com`,
+      passwordHash: "hash-k",
+    });
+    const ilk = randomUUID().replaceAll("-", "").padEnd(64, "k");
+    const ikinci = randomUUID().replaceAll("-", "").padEnd(64, "j");
+    const reset = randomUUID().replaceAll("-", "").padEnd(64, "r");
+    const expiresAt = new Date(Date.now() + 60_000).toISOString();
+    await store.createAccountToken({ userId: user.id, purpose: "verify-email", tokenHash: ilk, expiresAt });
+    await store.createAccountToken({ userId: user.id, purpose: "verify-email", tokenHash: ikinci, expiresAt });
+    await store.createAccountToken({ userId: user.id, purpose: "reset-password", tokenHash: reset, expiresAt });
+    expect(await store.consumeAccountToken(ilk, "verify-email")).toEqual({ userId: user.id });
+    expect(await store.consumeAccountToken(ikinci, "verify-email")).toBeNull();
+    expect(await store.consumeAccountToken(reset, "reset-password")).toEqual({ userId: user.id });
+  });
+
   it("deleteTenant gerçek DB'de cascade eder: kullanıcı, müşteri, site, token gider", async () => {
     const tenant = await store.createTenant({ name: "PG Sil", kind: "agency" });
     const user = await store.createUser({

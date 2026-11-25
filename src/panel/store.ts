@@ -90,7 +90,7 @@ export interface PanelStore {
     tokenHash: string;
     expiresAt: string;
   }): Promise<void>;
-  /** Tek kullanımlık tüketim: yok/süresi dolmuş/kullanılmış/amaç farklı → null. */
+  /** Tek kullanımlık tüketim: yok/süresi dolmuş/kullanılmış/amaç farklı → null. Tüketim aynı kullanıcı+amaçtaki diğer bekleyen tokenları da iptal eder. */
   consumeAccountToken(tokenHash: string, purpose: AccountTokenPurpose): Promise<{ userId: string } | null>;
   setBannerConfig(tenantId: string, siteId: string, config: SiteBannerConfig | null): Promise<Site>;
   /** Sürekli izleme aralığı (saat); 0 = kapalı. */
@@ -430,7 +430,13 @@ export function createInMemoryPanelStore(): PanelStore {
           Date.parse(t.expiresAt) > Date.now(),
       );
       if (!token) return null;
-      token.usedAt = new Date().toISOString();
+      const now = new Date().toISOString();
+      token.usedAt = now;
+      for (const sibling of accountTokens) {
+        if (sibling.userId === token.userId && sibling.purpose === purpose && !sibling.usedAt) {
+          sibling.usedAt = now;
+        }
+      }
       return { userId: token.userId };
     },
 
