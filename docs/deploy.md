@@ -41,8 +41,9 @@ Kapılar konteyner içinde ölçüldü (imajı `node dist/panel.mjs` ile doğrud
 | `ENABLE_SCAN_SCHEDULER` | hayır | `1` ise panel süreci içinde `setInterval` tarama döngüsü açılır | — |
 | `SCAN_CHECK_INTERVAL_MS` | hayır | döngü aralığı, varsayılan `300000` (5 dk) | — |
 | `CHROMIUM_EXECUTABLE_PATH` | scanner imajında | compose `/usr/bin/chromium-browser` veriyor | — |
-| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | hayır | `SMTP_HOST` yoksa mail gönderilmez, console'a log düşer | SMTP sağlayıcın |
-| `PANEL_URL` | hayır | bildirim e-postalarındaki panel linkleri | `https://panel.ajans.com` |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | `PANEL_URL` https ise evet | `SMTP_HOST` yoksa ve panel http ise mail console'a log düşer. Panel https ise `SMTP_HOST` zorunlu, boot durur. İstisna: `ALLOW_CONSOLE_MAIL=1` | SMTP sağlayıcın |
+| `PANEL_URL` | `DATABASE_URL` doluysa evet | Hesap maillerindeki ve embed snippet'indeki mutlak adreslerin kökü. İstek `Host` başlığından türetilmez. compose bunu zorunlu kılar | `https://panel.ajans.com`; yerel compose `http://localhost:4620` |
+| `ALLOW_CONSOLE_MAIL` | hayır | `1` ise https panelde bile SMTP'siz açılır (yalnız yerel deneme). Mail kaybolur | — |
 
 `.env` dosyası asla repoya girmez (`.gitignore`); `cp .env.example .env` ile başla.
 
@@ -187,7 +188,8 @@ Her iki yolda da SMTP tanımsızsa mail log'a düşer — bildirim bekliyorsan `
 Aynı turda konteynerin kendi chromium'u (`/usr/bin/chromium-browser`) ile gerçek sayfa yüklendi:
 `https://example.com/` kaydı `formCount 0 / fieldCount 0` üretti (o sayfada form yok), host'a
 kurduğum fixture sayfası (`http://host.docker.internal:8099/`) ise `formCount 1 / fieldCount 2 /
-categoryCounts [email, tckn] / destinations 1` üretti. Yani embed enjeksiyonu + form keşfi + PII
+categoryCounts [email, tckn] / destinations 1` üretti. (Bu kayıt tarama kalkanından önceye ait;
+bugün bu adres özel ağ adresi sayıldığı için taranmaz, bkz. §10.) Yani embed enjeksiyonu + form keşfi + PII
 sınıflandırması + canlı hedef yakalama imaj içinde çalışıyor; daha önce **ÖLÇÜLMEDİ** olan
 `src/scanner/browser.ts` inject yolu böylece kapandı.
 `failed` sayacı tek sitenin hatasında turu düşürmüyor — dead site probe'unda `{scanned:N, failed:1}`
@@ -316,6 +318,19 @@ exists` alır — bu yüzden hedef hep boş olsun, sonra `ALTER DATABASE … REN
 - Rate limiter bellek içi ve anahtarı `req.socket.remoteAddress`: panel yeniden başladığında sayaçlar
   sıfırlanır, çok kopyada paylaşılır değil, ters proxy arkasında tek balta haline gelir (§6).
 - Compose `build` kullanıyor, `image:` satırı yok → etiketli rollback kurulu değil (§8).
+- RLS politikaları şemada tanımlı ama **etkin değil**: uygulama `postgres` süper kullanıcısıyla
+  bağlanıyor ve `app.current_tenant` hiç ayarlanmıyor. Kiracı ayrımı uygulama sorgularındaki
+  `tenant_id` / `site_id` filtrelerinde. Gerçek RLS zorlaması ayrı bir iş.
+- IP anahtarlı limiterler (giriş, kayıt, sıfırlama, `/tarama`) proxy arkasında tek adrese iner
+  (yukarıdaki madde). DSAR ve ingest limiterleri token doğrulandıktan sonra site kimliğiyle sayar,
+  proxy arkasında da doğru çalışır.
+- Site ekleme yalnız adres söz dizimini denetler (şema, kullanıcı bilgisi, yerel/adres aralıkları).
+  `http://db:5432/` gibi söz dizimi kurallı bir ana bilgisayar adı eklenir; engelleme noktası
+  tarama anındaki DNS çözümlemesi. Tarama sırasında sayfanın yaptığı her istek de aynı denetimden
+  geçer.
+- `host.docker.internal` gibi yerel fixture adresleri tarama kalkanına takılır. Scanner testleri
+  bu yüzden yalnız `targetPolicy: "any"` seçeneğiyle yerel hedef kullanır; bu seçenek üretim
+  kodundan geçmez.
 
 ## 11. Canlı ölçüm kaydı — 2026-11-07
 
@@ -454,3 +469,39 @@ Kullanıcının `veriform_pgdata` volume'üne dokunulmadı.
 | Çıkış (browser) | Çıkış → `/login`; sonrasında `/clients` → `302 /login` |
 | `pnpm typecheck` | 0 hata |
 | `vitest run` (lokal, PG_URL'siz) | 318 passed / 10 skipped (49 dosya passed, 1 skipped) |
+
+## 17. Canlı ölçüm kaydı — 2026-11-24 (Blok 15: güvenlik kapanları)
+
+Ortam: izole `vf-ux-probe` projesi, db `15433` / panel `14621`, `WITH_SCANNER=1` imaj,
+migration `001`–`008` uygulanmış. `PANEL_URL=http://127.0.0.1:4620`, SMTP tanımsız (console
+sender). Kullanıcının `veriform_pgdata` volume'üne dokunulmadı.
+
+| Senaryo | Ölçülen |
+|---|---|
+| Kayıt: kısa şifre, tek karakter ajans adı, geçersiz e-posta | üçü de `400`; veritabanında kayıt yok |
+| Kayıt: geçerli | `302` |
+| `GET /verify-email?token=…` | `200`, POST formu; veritabanında `email_verified_at` hâlâ boş |
+| `POST /verify-email` (aynı token) | birinci `200` "doğrulandı", ikinci "geçersiz veya süresi dolmuş" |
+| Site ekleme: `file:///etc/passwd`, `http://127.0.0.1:4620/`, `http://169.254.169.254/…` | üçü de `302 /clients/<id>?site=invalid`, sayfada uyarı |
+| Site ekleme: `https://example.com` | `302 /clients/<id>` |
+| `/tarama`: `http://db:5432/` | `400` "taranamıyor" (DNS özel ağ adresine çözülüyor) |
+| `/tarama`: `http://localhost/`, `http://169.254.169.254/` | `400` (söz dizim denetimi) |
+| `/tarama`: `https://example.com` | `200`, rapor üretildi |
+| DSAR güncelleme, başka kiracı | `403`; başvuru durumu `new` kaldı |
+| DSAR güncelleme, site sahibi | `302`; durum `completed` |
+| API anahtarı üretimi | `200`, `Location` başlığı yok; anahtar yalnız bu yanıtın gövdesinde (47 karakter), sonraki `GET` sayfasında yok |
+| Şifre değişikliği | `303`; eski çerezle `/clients` → `302 /login`; yeni çerezle `200` |
+| `POST /forgot-password` + `Host: evil.test` | `303`; logdaki bağlantı kökü `http://127.0.0.1:4620` (`PANEL_URL`), `evil.test` yok |
+| 6 MB gövde | `413` |
+| `POST /api/ingest/scan` 61 kez | `400` × 60, sonra `429` |
+| `POST /dsar/<token>` 21 kez | `400` × 20, sonra `429` |
+| Boot: `DATABASE_URL` + `PANEL_URL` yok | çıkış `1`, "PANEL_URL zorunlu" |
+| Boot: https `PANEL_URL` + `SMTP_HOST` yok | çıkış `1`, "SMTP_HOST zorunlu" |
+| Boot: https + `ALLOW_CONSOLE_MAIL=1`, http + SMTP yok | mail kapısı geçildi; DB bağlantı hatasıyla durdu (beklenen) |
+| `pnpm typecheck` | 0 hata |
+| `vitest run` (PG_URL'siz) | 547 passed / 23 skipped (63 dosya passed, 1 skipped) |
+| `vitest run` (probe PG dahil) | 570 passed / 0 skipped (64 dosya) |
+
+**ÖLÇÜLMEDİ:** gerçek SMTP kutu teslimatı, ters proxy arkasında `x-forwarded-proto` ile oturum
+akışı (§6), tarama sırasında sayfanın özel ağ isteği yapıp yapmadığı (rota denetimi birim
+testiyle kapalı, konteynerde gözlemlenmedi).
