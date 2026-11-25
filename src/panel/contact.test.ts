@@ -163,3 +163,46 @@ describe("handleContactSubmit", () => {
     expect(spy).toHaveBeenCalledTimes(1);
   });
 });
+describe("iletişim maili görünürlüğü", () => {
+  function base(sender: EmailSender) {
+    return {
+      form: form(),
+      store: createInMemoryPanelStore(),
+      mailSender: sender,
+      operatorEmail: "op@ajans.com",
+      limiter: createRateLimiter({ max: 10, windowMs: 60_000 }),
+      ip: "198.51.100.7",
+    };
+  }
+
+  it("başarılı gönderim operatör adresiyle loglanır", async () => {
+    const spy = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      const result = await handleContactSubmit(base(okSender()));
+      expect(result.status).toBe(303);
+      expect(
+        spy.mock.calls.some((c) => String(c[0]).includes("[contact]") && String(c[0]).includes("op@ajans.com")),
+      ).toBe(true);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("mail hatası sessizce yutulmaz: loglanır, talep DB'de kalır", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const store = createInMemoryPanelStore();
+      const sender: EmailSender = {
+        async send() {
+          throw new Error("smtp kapalı");
+        },
+      };
+      const result = await handleContactSubmit({ ...base(sender), store });
+      expect(result.status).toBe(303);
+      expect(spy.mock.calls.some((c) => String(c[0]).includes("[contact]"))).toBe(true);
+      expect(await store.listContactRequests()).toHaveLength(1);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+});

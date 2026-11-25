@@ -158,6 +158,8 @@ export interface PostgresPanelStore extends PanelStore {
 
 export function createPostgresPanelStore(connectionString: string): PostgresPanelStore {
   const pool = new pg.Pool({ connectionString });
+  // "VFSC" — tarama turları arası tekilleştirme anahtarı (migration kilitlerinden ayrı).
+  const SCHEDULER_LOCK_KEY = 0x56465343;
 
   const clone = deepClone;
 
@@ -186,6 +188,28 @@ export function createPostgresPanelStore(connectionString: string): PostgresPane
   return {
     async ping() {
       await pool.query("select 1");
+    },
+
+    async withSchedulerLock(work) {
+      // Oturum düzeyi advisory lock: kilidi tutan bağlantı work boyunca elde kalır.
+      const client = await pool.connect();
+      let acquired = false;
+      let broken = false;
+      try {
+        const lock = await client.query("select pg_try_advisory_lock($1)", [SCHEDULER_LOCK_KEY]);
+        acquired = lock.rows[0]!.pg_try_advisory_lock === true;
+        if (!acquired) return null;
+        return await work();
+      } finally {
+        if (acquired) {
+          try {
+            await client.query("select pg_advisory_unlock($1)", [SCHEDULER_LOCK_KEY]);
+          } catch {
+            broken = true;
+          }
+        }
+        client.release(broken);
+      }
     },
 
     async createTenant(input) {

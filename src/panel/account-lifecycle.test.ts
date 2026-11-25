@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   changePassword,
   deleteAccount,
@@ -6,6 +6,7 @@ import {
   issueEmailVerification,
   requestPasswordReset,
   resetPassword,
+  sendVerificationInBackground,
   verifyEmail,
 } from "./account-lifecycle.js";
 import { hashPassword } from "./auth.js";
@@ -185,5 +186,66 @@ describe("oturum düşürme", () => {
     await changePassword(store, tenant.id, "yeni-sifre-123", "daha-yeni-sifre-456");
     const afterChange = (await store.findUserByTenant(tenant.id))!.sessionsValidAfter;
     expect(Date.parse(afterChange)).toBeGreaterThanOrEqual(Date.parse(afterReset));
+  });
+});
+
+describe("arka plan doğrulama maili", () => {
+  it("çağıranı bekletmez: gönderim bitmeden döner, mail sonra gider", async () => {
+    const { store, user } = await setup();
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const sent: OutgoingEmail[] = [];
+    const sender: EmailSender = {
+      async send(email) {
+        await gate;
+        sent.push(email);
+      },
+    };
+
+    sendVerificationInBackground(store, sender, user, "https://panel.test");
+    expect(sent).toHaveLength(0);
+
+    release();
+    await vi.waitFor(() => expect(sent).toHaveLength(1));
+    expect(sent[0]!.to).toBe("hesap@probe.test");
+  });
+
+  it("geçici SMTP hatasında yeniden dener; sonunda mail gider", async () => {
+    const { store, user } = await setup();
+    let calls = 0;
+    const sent: OutgoingEmail[] = [];
+    const sender: EmailSender = {
+      async send(email) {
+        calls += 1;
+        if (calls < 3) throw new Error("smtp geçici hata");
+        sent.push(email);
+      },
+    };
+
+    sendVerificationInBackground(store, sender, user, "https://panel.test", { retryDelayMs: 1 });
+
+    await vi.waitFor(() => expect(sent).toHaveLength(1));
+    expect(calls).toBe(3);
+  });
+
+  it("tüm denemeler tükenirse hata loglanır; istek çoktan dönmüştür", async () => {
+    const { store, user } = await setup();
+    const logged: string[] = [];
+    const sender: EmailSender = {
+      async send() {
+        throw new Error("smtp kapalı");
+      },
+    };
+
+    sendVerificationInBackground(store, sender, user, "https://panel.test", {
+      attempts: 2,
+      retryDelayMs: 1,
+      log: (message) => logged.push(message),
+    });
+
+    await vi.waitFor(() => expect(logged).toHaveLength(1));
+    expect(logged[0]).toContain("arka planda");
   });
 });

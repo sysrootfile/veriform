@@ -27,6 +27,9 @@ services:
       SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET zorunlu — openssl rand -hex 32 ile üret}
       # TLS sonlandıran proxy arkasında 1 yap; düz HTTP'de Secure çerez oturumu düşürür
       SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-0}
+      # Tünel/proxy arkasında limiter ziyaretçi IP'sini X-Forwarded-For'dan okur;
+      # güven yalnızca soket adresi özel ağ/loopback ise verilir (spoofing kapısı)
+      TRUST_PROXY: ${TRUST_PROXY:-1}
       # Rotasyon penceresinde eski anahtarı taşır; boşsa eski çerezler düşer
       SESSION_SECRET_PREVIOUS: ${SESSION_SECRET_PREVIOUS:-}
       WORKER_TOKEN: ${WORKER_TOKEN:-}

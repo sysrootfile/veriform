@@ -58,3 +58,9 @@ describe("compose panel ortamı — e-posta aktarımı", () => {
     });
   });
 });
+
+describe("compose panel ortamı — proxy güveni", () => {
+  it("TRUST_PROXY aktarılır ve varsayılanı açık (dağıtım tünel arkasında)", () => {
+    expect(panelEnvironment().get("TRUST_PROXY")).toBe("${TRUST_PROXY:-1}");
+  });
+});

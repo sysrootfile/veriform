@@ -27,6 +27,8 @@ import { hashApiKey } from "./api-keys.js";
 export interface PanelStore {
   /** Canlılık probu: depo erişilemezse reject eder (/healthz bunu kullanır). */
   ping(): Promise<void>;
+  /** Çok kopyalı dağıtımda tarama turu tekilleştirme: kilit başka süreçteyse null döner. */
+  withSchedulerLock<T>(work: () => Promise<T>): Promise<T | null>;
   createTenant(input: {
     name: string;
     kind: TenantKind;
@@ -197,6 +199,10 @@ export function createInMemoryPanelStore(): PanelStore {
 
   return {
     async ping() {},
+
+    async withSchedulerLock(work) {
+      return work();
+    },
 
     async createTenant(input) {
       const tenant: Tenant = {

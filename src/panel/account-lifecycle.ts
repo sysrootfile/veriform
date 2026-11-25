@@ -72,6 +72,42 @@ export async function issueEmailVerification(
   });
 }
 
+export interface BackgroundVerificationOptions {
+  attempts?: number;
+  retryDelayMs?: number;
+  log?: (message: string, error: unknown) => void;
+}
+
+/**
+ * Kayıt isteği SMTP'yi beklemez: mail arka planda denenir, istek hemen döner.
+ * Süreç ölürse mail kaybolur — kullanıcı panelden yeniden isteyebilir (yumuşak kapı).
+ */
+export function sendVerificationInBackground(
+  store: PanelStore,
+  mailer: EmailSender,
+  user: Pick<PanelUser, "id" | "email">,
+  baseUrl: string,
+  options: BackgroundVerificationOptions = {},
+): void {
+  const attempts = options.attempts ?? 3;
+  const retryDelayMs = options.retryDelayMs ?? 2_000;
+  const log = options.log ?? ((message: string, error: unknown) => console.error(message, error));
+  void (async () => {
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      try {
+        await issueEmailVerification(store, mailer, user, baseUrl);
+        return;
+      } catch (error) {
+        if (attempt === attempts) {
+          log("[account] doğrulama maili arka planda gönderilemedi:", error);
+          return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+      }
+    }
+  })();
+}
+
 export async function verifyEmail(store: PanelStore, token: string): Promise<void> {
   const consumed = await store.consumeAccountToken(hashAccountToken(token), "verify-email");
   if (!consumed) throw new Error(INVALID_LINK);
