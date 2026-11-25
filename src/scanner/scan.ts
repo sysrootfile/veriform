@@ -1,3 +1,4 @@
+import { assertPublicHttpUrl, assertPublicTarget } from "./url-guard.js";
 import { build } from "esbuild";
 import { readFile } from "node:fs/promises";
 import { classifyCookie, type CookieCategory } from "../cookies/classify.js";
@@ -18,6 +19,8 @@ export interface ScanOptions {
   /** Yükleme sonrası gözlem bekleme süresi (ms). */
   settleMs?: number;
   timeoutMs?: number;
+  /** Varsayılan "public": yalnızca genel internet. "any" yalnızca yerel test fixture içindir. */
+  targetPolicy?: "public" | "any";
 }
 
 export interface ScannedCookie {
@@ -63,8 +66,23 @@ export function buildEmbedSource(): Promise<string> {
 }
 
 export async function scanSite(url: string, options: ScanOptions): Promise<ScanResult> {
+  if (options.targetPolicy !== "any") await assertPublicTarget(assertPublicHttpUrl(url));
   const browser = await getSharedBrowser();
   const context = await browser.newContext();
+  // Yönlendirme ve alt kaynaklar da kapıdan geçer: sayfa iç ağdaki bir adrese yönlenemez.
+  if (options.targetPolicy !== "any") {
+    await context.route("**/*", async (route) => {
+      const requestUrl = new URL(route.request().url());
+      const isHttp = requestUrl.protocol === "http:" || requestUrl.protocol === "https:";
+      if (!isHttp) return route.continue();
+      try {
+        await assertPublicTarget(requestUrl);
+      } catch {
+        return route.abort();
+      }
+      return route.continue();
+    });
+  }
   try {
     const page = await context.newPage();
     await page.addInitScript(options.embedSource);

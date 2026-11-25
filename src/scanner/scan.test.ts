@@ -51,7 +51,7 @@ describe("scanSite (gerçek headless tarayıcı + yerel fixture)", () => {
   it(
     "embed'i enjekte eder; keşif, sınıflandırma ve canlı fetch hedefini toplar",
     async () => {
-      const result = await scanSite(baseUrl, { embedSource: await buildEmbedSource() });
+      const result = await scanSite(baseUrl, { embedSource: await buildEmbedSource(), targetPolicy: "any" });
 
       expect(result.report.formCount).toBe(2);
       expect(result.report.fieldCount).toBe(4);
