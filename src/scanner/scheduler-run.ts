@@ -18,6 +18,8 @@ export interface ScheduledScanOutcome {
   failed: Array<{ siteId: string; error: string }>;
   /** Değişiklik tespit edilip e-posta gönderilen siteler. */
   notified: Array<{ siteId: string; to: string }>;
+  /** Tur kilidi başka kopyadaydı — bu süreç hiçbir site taramadı. */
+  skipped?: boolean;
 }
 
 /** Tarama işinin yüzeyi — testlerde tarayıcısız sahte sürümle değiştirilir. */
@@ -38,6 +40,15 @@ export interface SchedulerRunOptions {
 export async function runScheduledScans(
   store: PanelStore,
   options: SchedulerRunOptions = {},
+): Promise<ScheduledScanOutcome> {
+  // Çok kopyalı dağıtımda aynı tur iki kez koşmasın: kilit tek kazanır, diğeri atlar.
+  const outcome = await store.withSchedulerLock(() => runDueScans(store, options));
+  return outcome ?? { scanned: [], failed: [], notified: [], skipped: true };
+}
+
+async function runDueScans(
+  store: PanelStore,
+  options: SchedulerRunOptions,
 ): Promise<ScheduledScanOutcome> {
   // Embed kaynağı yalnızca gerçek tarayıcı yolu kullanıldığında üretilir.
   const scan: SiteScanner =

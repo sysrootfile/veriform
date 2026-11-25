@@ -613,3 +613,11 @@ describe("invalidateSessions", () => {
     expect(Date.parse(found!.sessionsValidAfter)).toBeGreaterThan(Date.now() - 60_000);
   });
 });
+
+describe("withSchedulerLock (in-memory)", () => {
+  it("tek süreçte kilit her zaman alınır ve işin sonucu döner", async () => {
+    const store = createInMemoryPanelStore();
+    expect(await store.withSchedulerLock(async () => "tur")).toBe("tur");
+    expect(await store.withSchedulerLock(async () => 42)).toBe(42);
+  });
+});

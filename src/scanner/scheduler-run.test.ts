@@ -166,3 +166,27 @@ describe("runScheduledScans (worker döngüsü)", () => {
     expect(await store.listAllScans(siteId)).toHaveLength(2);
   });
 });
+
+describe("çok kopyalı tur tekilleştirme", () => {
+  it("kilit başka kopyadaysa tur atlanır ve tarayıcı hiç çağrılmaz", async () => {
+    const { store } = await seededStore(24);
+    const locked: PanelStore = { ...store, withSchedulerLock: async () => null };
+    const { scan, urls } = recorder((url) => scanResult(url, EMAIL_FORM));
+
+    const outcome = await runScheduledScans(locked, { scan });
+
+    expect(outcome.skipped).toBe(true);
+    expect(outcome.scanned).toEqual([]);
+    expect(urls).toEqual([]);
+  });
+
+  it("kilit bu kopyadaysa tur normal çalışır", async () => {
+    const { store } = await seededStore(24);
+    const { scan } = recorder((url) => scanResult(url, EMAIL_FORM));
+
+    const outcome = await runScheduledScans(store, { scan });
+
+    expect(outcome.skipped ?? false).toBe(false);
+    expect(outcome.scanned).toHaveLength(1);
+  });
+});

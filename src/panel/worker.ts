@@ -44,6 +44,7 @@ export async function handleWorkerRun(
         scanned: outcome.scanned.length,
         failed: outcome.failed.length,
         notified: outcome.notified.length,
+        ...(outcome.skipped ? { skipped: true } : {}),
       },
     };
   } catch (error) {

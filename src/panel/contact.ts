@@ -99,8 +99,10 @@ export async function handleContactSubmit(deps: {
   const req = await deps.store.createContactRequest(parsed.value);
   try {
     await deps.mailSender.send({ to: deps.operatorEmail, ...buildContactEmail(req) });
-  } catch {
-    // Mail hatası talebi düşürmez — kayıt DB'de durur.
+    console.log(`[contact] operatör maili gönderildi: ${deps.operatorEmail}`);
+  } catch (error) {
+    // Mail hatası talebi düşürmez — kayıt DB'de durur; ama sessizce kaybolmaz.
+    console.error("[contact] operatör maili gönderilemedi:", error);
   }
   return { status: 303, location: "/?contact=ok#iletisim" };
 }

@@ -246,3 +246,112 @@ describe("açılış kapıları", () => {
     ).rejects.toThrow(/SMTP_HOST zorunlu/);
   });
 });
+
+describe("proxy arkası limiter kovası", () => {
+  async function bootProxy(port: number, trustProxy: boolean): Promise<Server> {
+    for (const key of ["DATABASE_URL", "SMTP_HOST", "TRUST_PROXY"]) delete process.env[key];
+    Object.assign(process.env, {
+      SESSION_SECRET: "test-sirri-".repeat(4),
+      PORT: String(port),
+      PANEL_URL: PANEL,
+      ALLOW_CONSOLE_MAIL: "1",
+      ...(trustProxy ? { TRUST_PROXY: "1" } : {}),
+    });
+    vi.resetModules();
+    const mod = (await import("./server.js")) as { server: Server };
+    if (!mod.server.listening) await once(mod.server, "listening");
+    return mod.server;
+  }
+
+  async function contactStatus(port: number, forwardedFor: string): Promise<number> {
+    const res = await fetch(`http://127.0.0.1:${port}/contact`, {
+      method: "POST",
+      redirect: "manual",
+      headers: { "content-type": "application/x-www-form-urlencoded", "x-forwarded-for": forwardedFor },
+      body: form({ name: "", email: "" }),
+    });
+    await res.text();
+    return res.status;
+  }
+
+  it("TRUST_PROXY=1: her ziyaretçi IP'si kendi kovasını kullanır", async () => {
+    const port = PORT + 1;
+    const srv = await bootProxy(port, true);
+    try {
+      const a = [await contactStatus(port, "198.51.100.1"), await contactStatus(port, "198.51.100.1"), await contactStatus(port, "198.51.100.1"), await contactStatus(port, "198.51.100.1")];
+      expect(a.filter((s) => s === 429)).toHaveLength(1);
+      // Başka ziyaretçi aynı tünel IP'sinden gelse de kendi kovası boş
+      expect(await contactStatus(port, "198.51.100.2")).toBe(303);
+      expect(await contactStatus(port, "203.0.113.9")).toBe(303);
+    } finally {
+      await new Promise<void>((resolve) => srv.close(() => resolve()));
+    }
+  }, 30_000);
+
+  it("TRUST_PROXY kapalı: XFF spoofing kovayı bölmez, soket adresi tek kova kalır", async () => {
+    const port = PORT + 2;
+    const srv = await bootProxy(port, false);
+    try {
+      const statuses = [
+        await contactStatus(port, "198.51.100.1"),
+        await contactStatus(port, "198.51.100.2"),
+        await contactStatus(port, "198.51.100.3"),
+        await contactStatus(port, "198.51.100.4"),
+      ];
+      expect(statuses.filter((s) => s === 429)).toHaveLength(1);
+    } finally {
+      await new Promise<void>((resolve) => srv.close(() => resolve()));
+    }
+  }, 30_000);
+});
+
+describe("kayıt maili arka planda", () => {
+  it("SMTP erişilemezken kayıt hemen döner; mail hatası yeniden denemelerden sonra loglanır", async () => {
+    const port = PORT + 3;
+    for (const key of ["DATABASE_URL", "ALLOW_CONSOLE_MAIL", "TRUST_PROXY"]) delete process.env[key];
+    Object.assign(process.env, {
+      SESSION_SECRET: "test-sirri-".repeat(4),
+      PORT: String(port),
+      PANEL_URL: PANEL,
+      SMTP_HOST: "127.0.0.1",
+      SMTP_PORT: "1",
+    });
+    vi.resetModules();
+    const mod = (await import("./server.js")) as { server: Server };
+    if (!mod.server.listening) await once(mod.server, "listening");
+    const errors: string[] = [];
+    const spy = vi.spyOn(console, "error").mockImplementation((...parts: unknown[]) => {
+      errors.push(parts.map(String).join(" "));
+    });
+    const started = Date.now();
+    try {
+      const res = await fetch(`http://127.0.0.1:${port}/register`, {
+        method: "POST",
+        redirect: "manual",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: form({
+          name: "Arka Plan Ajans",
+          email: `arka-plan-${randomUUID()}@probe.test`,
+          password: PASSWORD,
+          package: "starter",
+        }),
+      });
+      await res.text();
+      const registerMs = Date.now() - started;
+      expect(res.status).toBe(302);
+      expect(registerMs).toBeLessThan(1500);
+
+      await vi.waitFor(
+        () => expect(errors.some((line) => line.includes("arka planda"))).toBe(true),
+        { timeout: 15_000 },
+      );
+      // Mail hatası kayıttan sonra geldi: istek maili beklemedi
+      expect(Date.now() - started).toBeGreaterThan(1500);
+    } finally {
+      spy.mockRestore();
+      delete process.env.SMTP_HOST;
+      delete process.env.SMTP_PORT;
+      await new Promise<void>((resolve) => mod.server.close(() => resolve()));
+    }
+  }, 30_000);
+});

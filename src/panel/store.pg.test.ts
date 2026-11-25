@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildConsentReceipt } from "../consent/receipt.js";
 import type { FormInventoryReport } from "../report/types.js";
 import { createPostgresPanelStore, type PostgresPanelStore } from "./store.pg.js";
+import { runScheduledScans } from "../scanner/scheduler-run.js";
 
 const PG_URL = process.env.PG_URL ?? "";
 const d = PG_URL ? describe : describe.skip;
@@ -429,5 +430,45 @@ d("deneme + plan geçiş talepleri (gerçek PG)", () => {
     const req2 = await store.createPlanChangeRequest({ tenantId: t2.id, toPackage: "pro" });
     await store.deleteTenant(t2.id);
     expect((await store.listPlanChangeRequests()).some((r) => r.id === req2.id)).toBe(false);
+  });
+});
+
+d("scheduler kilidi (gerçek PG)", () => {
+  it("eşzamanlı iki tur tek kazanır; kilit tur sonunda bırakılır", async () => {
+    const store = createPostgresPanelStore(PG_URL);
+    try {
+      const tenant = await store.createTenant({ name: `PG Sched ${randomUUID()}`, kind: "direct" });
+      const client = await store.createClient({ tenantId: tenant.id, name: "Sched M" });
+      const site = await store.createSite({ tenantId: tenant.id, clientId: client.id, url: "https://pg-sched.com" });
+      await store.setScanSchedule(tenant.id, site.id, 1);
+
+      let calls = 0;
+      const scan = async (url: string) => {
+        calls += 1;
+        await new Promise((resolve) => setTimeout(resolve, 150));
+        return {
+          url,
+          finalUrl: url,
+          report: { ...emptyReport(), siteOrigin: url },
+          observedTargets: [],
+          cookies: [],
+          scripts: [],
+        };
+      };
+      const [r1, r2] = await Promise.all([
+        runScheduledScans(store, { scan }),
+        runScheduledScans(store, { scan }),
+      ]);
+      expect(calls).toBe(1);
+      expect([r1, r2].filter((r) => r.skipped)).toHaveLength(1);
+      expect(r1.scanned.length + r2.scanned.length).toBe(1);
+
+      // Kilit bırakıldı: ardışık tur kilidi alır (site artık vaktinde değil, tarama yok)
+      const r3 = await runScheduledScans(store, { scan });
+      expect(r3.skipped ?? false).toBe(false);
+      expect(calls).toBe(1);
+    } finally {
+      await store.close();
+    }
   });
 });

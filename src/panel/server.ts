@@ -7,6 +7,7 @@ import {
   issueEmailVerification,
   requestPasswordReset,
   resetPassword,
+  sendVerificationInBackground,
   verifyEmail,
 } from "./account-lifecycle.js";
 import {
@@ -23,6 +24,7 @@ import { createIngestApi, IngestError } from "./ingest.js";
 import { receiptsToCsv } from "./chain.js";
 import { createApiKey } from "./api-keys.js";
 import { createRateLimiter } from "./rate-limit.js";
+import { resolveClientIp } from "./client-ip.js";
 import { buildEmbedSource, scanSite } from "../scanner/scan.js";
 import { runScheduledScans } from "../scanner/scheduler-run.js";
 import { renderScanRequestPage } from "../scanner/public.js";
@@ -125,7 +127,9 @@ if (process.env.ENABLE_SCAN_SCHEDULER === "1") {
           await mailSender.send(email);
         },
       });
-      if (result.scanned.length || result.notified.length) {
+      if (result.skipped) {
+        console.log("[sched] tur kilidi başka kopyada — bu tur atlandı");
+      } else if (result.scanned.length || result.notified.length) {
         console.log(
           `[sched] ${result.scanned.length} tarama, ${result.notified.length} uyarı e-postası`,
         );
@@ -156,6 +160,12 @@ const OPERATOR_EMAIL = process.env.CONTACT_OPERATOR_EMAIL ?? "iletisim@veriform.
 const OPERATOR_EMAILS = process.env.OPERATOR_EMAILS;
 // TLS sonlandıran proxy arkasında SESSION_COOKIE_SECURE=1 ver; düz HTTP'de Secure çerezi düşürür
 const COOKIE_SECURE = process.env.SESSION_COOKIE_SECURE === "1";
+// TLS sonlandıran proxy/tünel arkasında ziyaretçi IP'si X-Forwarded-For'dadır;
+// kapalıyken limiter soket adresine bakar (proxy arkasında tek kova).
+const TRUST_PROXY = process.env.TRUST_PROXY === "1";
+function clientIp(req: import("node:http").IncomingMessage): string {
+  return resolveClientIp(req.socket.remoteAddress, req.headers["x-forwarded-for"], TRUST_PROXY);
+}
 
 // Demo kiracı yalnızca geliştirme (in-memory) modunda seed edilir;
 // Postgres modunda ilk kurulum /register üzerinden yapılır.
@@ -300,7 +310,7 @@ export const server = createServer(async (req, res) => {
         mailSender,
         operatorEmail: OPERATOR_EMAIL,
         limiter: contactLimiter,
-        ip: req.socket.remoteAddress ?? "bilinmeyen",
+        ip: clientIp(req),
       });
       if (result.status === 303) {
         res.writeHead(303, { location: result.location ?? "/" });
@@ -327,7 +337,7 @@ export const server = createServer(async (req, res) => {
     }
 
     if (req.method === "POST" && url.pathname === "/login") {
-      if (!loginLimiter.allow(req.socket.remoteAddress ?? "bilinmeyen")) {
+      if (!loginLimiter.allow(clientIp(req))) {
         res.writeHead(429, { "content-type": "text/plain; charset=utf-8" });
         res.end("Çok fazla giriş denemesi — bir dakika bekleyip tekrar deneyin");
         return;
@@ -355,7 +365,7 @@ export const server = createServer(async (req, res) => {
     }
 
     if (req.method === "POST" && url.pathname === "/register") {
-      if (!registerLimiter.allow(req.socket.remoteAddress ?? "bilinmeyen")) {
+      if (!registerLimiter.allow(clientIp(req))) {
         res.writeHead(429, { "content-type": "text/plain; charset=utf-8" });
         res.end("Çok fazla kayıt denemesi — bir dakika bekleyip tekrar deneyin");
         return;
@@ -369,12 +379,8 @@ export const server = createServer(async (req, res) => {
           password: form.get("password") ?? "",
           package: form.get("package"),
         });
-        // Doğrulama maili hatası kaydı düşürmez — bağlantı panelden yeniden istenebilir.
-        try {
-          await issueEmailVerification(store, mailSender, user, panelBaseUrl);
-        } catch (error) {
-          console.error("[account] doğrulama maili gönderilemedi:", error);
-        }
+        // Kayıt maili beklemez: arka planda denenir, hata loglanır (panelden yeniden istenebilir).
+        sendVerificationInBackground(store, mailSender, user, panelBaseUrl);
         setSessionHeader(res, createSessionToken(tenant.id, SESSION_SECRET));
         res.writeHead(302, { location: "/clients" });
         res.end();
@@ -401,7 +407,7 @@ export const server = createServer(async (req, res) => {
     }
 
     if (req.method === "POST" && url.pathname === "/forgot-password") {
-      if (!resetLimiter.allow(req.socket.remoteAddress ?? "bilinmeyen")) {
+      if (!resetLimiter.allow(clientIp(req))) {
         res.writeHead(429, { "content-type": "text/plain; charset=utf-8" });
         res.end("Çok fazla istek — bir dakika bekleyip tekrar deneyin");
         return;
@@ -425,7 +431,7 @@ export const server = createServer(async (req, res) => {
     }
 
     if (req.method === "POST" && url.pathname === "/reset-password") {
-      if (!resetLimiter.allow(req.socket.remoteAddress ?? "bilinmeyen")) {
+      if (!resetLimiter.allow(clientIp(req))) {
         res.writeHead(429, { "content-type": "text/plain; charset=utf-8" });
         res.end("Çok fazla istek — bir dakika bekleyip tekrar deneyin");
         return;
@@ -591,7 +597,7 @@ export const server = createServer(async (req, res) => {
         return;
       }
       try {
-        const ip = req.socket.remoteAddress ?? "bilinmeyen";
+        const ip = clientIp(req);
         if (!scanLimiter.allow(ip)) {
           res.writeHead(429, { "content-type": "text/html; charset=utf-8" });
           res.end(
@@ -1264,7 +1270,7 @@ export const server = createServer(async (req, res) => {
     if (req.method === "POST" && /^\/sites\/[^/]+\/scan$/.test(url.pathname)) {
       const siteId = url.pathname.split("/")[2]!;
       const site = await service.resolveSite(siteId);
-      const ip = req.socket.remoteAddress ?? "bilinmeyen";
+      const ip = clientIp(req);
       if (!scanLimiter.allow(ip)) {
         res.writeHead(303, { location: `/sites/${siteId}?scan=limited` });
         res.end();
