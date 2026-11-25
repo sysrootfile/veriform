@@ -88,12 +88,12 @@ export interface ClientRow {
 function setupStrip(s: SetupProgress): string {
   const e = escapeHtml;
   const steps = [
-    { done: s.hasClient, title: "Müşteri ekle", hint: "Ajansınızın müşterisini kaydedin.", href: "/clients#yeni-musteri", locked: false },
-    { done: s.hasSite, title: "Site ekle", hint: "Müşteri sayfasından site adresini girin.", href: s.firstClientId ? `/clients/${e(s.firstClientId)}#yeni-site` : "/clients", locked: false },
-    { done: s.hasScan, title: "İlk tarama", hint: "Site sayfasında Şimdi tara düğmesine basın.", href: s.firstSiteId ? `/sites/${e(s.firstSiteId)}#tarama` : "/clients", locked: false },
-    { done: s.emailVerified, title: "E-postanı onayla", hint: "Gelen kutusundaki onay bağlantısına tıklayın.", href: "/settings/account", locked: false },
-    { done: s.hasEmbed, title: "İzleme kodunu kur", hint: "Kodu sitenizin head bölümüne ekleyin; bağlantı otomatik doğrulanır.", href: s.firstClientId ? `/clients/${e(s.firstClientId)}#izleme-kodu` : "/clients", locked: !s.emailVerified },
-    { done: s.hasBanner, title: "Banner'ı yayınla", hint: "Site sayfasında rıza bannerı metinlerini kaydedin.", href: s.firstSiteId ? `/sites/${e(s.firstSiteId)}#banner` : "/clients", locked: !s.emailVerified },
+    { done: s.hasClient, title: "Müşteri ekle", hint: "Müşterinizi kaydedin; sitelerini tek panelden izleyeceksiniz.", href: "/clients#yeni-musteri", locked: false },
+    { done: s.hasSite, title: "Site ekle", hint: "Site adresini girin; tarama ve izin kaydı bu siteye bağlanır.", href: s.firstClientId ? `/clients/${e(s.firstClientId)}#yeni-site` : "/clients", locked: false },
+    { done: s.hasScan, title: "İlk tarama", hint: "Şimdi tara'ya basın; sitelerin ne topladığını rapor olarak görün.", href: s.firstSiteId ? `/sites/${e(s.firstSiteId)}#tarama` : "/clients", locked: false },
+    { done: s.emailVerified, title: "E-postanı onayla", hint: "Kutunuzdaki bağlantıya tıklayın; banner yayını ve kod kurulumu açılır.", href: "/settings/account", locked: false },
+    { done: s.hasEmbed, title: "İzleme kodunu kur", hint: "Tek satır kodu head'e ekleyin; ziyaretçiden izin alınmaya başlar.", href: s.firstClientId ? `/clients/${e(s.firstClientId)}#izleme-kodu` : "/clients", locked: !s.emailVerified },
+    { done: s.hasBanner, title: "Banner'ı yayınla", hint: "İzin metinlerini kaydedin; ziyaretçi tercihi kayıt kanıta dönüşür.", href: s.firstSiteId ? `/sites/${e(s.firstSiteId)}#banner` : "/clients", locked: !s.emailVerified },
   ];
   if (steps.every((st) => st.done)) {
     return '<p class="setup-complete"><span class="badge-ok">Kurulum tamam ✓</span></p>';
@@ -106,7 +106,7 @@ function setupStrip(s: SetupProgress): string {
         return `<li class="setup-current">○ <strong>${st.title}</strong> — <span class="setup-hint">${st.hint}</span> <a class="setup-cta" href="${st.href}">Yap →</a></li>`;
       }
       const lock = st.locked ? ' — <span class="setup-hint">e-posta onayı bekliyor</span>' : "";
-      return `<li>○ <strong>${st.title}</strong>${lock}</li>`;
+      return `<li>○ <strong>${st.title}</strong> — <span class="setup-hint">${st.hint}</span>${lock}</li>`;
     })
     .join("\n");
   return `<section class="setup" aria-label="Kurulum">
@@ -143,7 +143,7 @@ export function renderClientsPage(input: {
             `<tr><td><a href="/clients/${e(c.id)}">${e(c.name)}</a></td><td class="num"><a href="/clients/${e(c.id)}">Siteleri →</a></td></tr>`,
         )
         .join("\n")
-    : '<tr><td class="empty">Henüz müşteri eklenmedi. <a href="#yeni-musteri">İlk müşterinizi ekleyin →</a></td></tr>';
+    : '<tr><td class="empty">Henüz müşteri eklenmedi. <a href="#yeni-musteri">İlk müşterinizi ekleyin →</a> — sitelerini buradan izleyeceksiniz.</td></tr>';
 
   const demoLink = input.demoSiteHref
     ? `<p class="empty">Demo: <a href="${e(input.demoSiteHref)}">örnek site sayfası</a></p>`
@@ -262,7 +262,7 @@ export function renderSitePage(input: {
           return `<tr><td>${e(s.scannedAt)}</td><td class="num">${s.report.formCount}</td><td class="num">${s.report.riskFlags.length}</td><td class="num">${violations}</td></tr>`;
         })
         .join("\n")
-    : '<tr><td colspan="4" class="empty">Henüz tarama yok — ilk taramayı şimdi başlatın; sonuçlar burada listelenir.</td></tr>';
+    : '<tr><td colspan="4" class="empty">Henüz tarama yok — ilk taramayı şimdi başlatın; sitenin ne topladığını rapor olarak görün.</td></tr>';
 
   const draftLinks = (input.draftLinks ?? [])
     .map((d) => `<a href="${e(d.href)}">${e(d.label)}</a>`)
@@ -287,7 +287,7 @@ export function renderSitePage(input: {
   <button type="submit">Onay bağlantısı gönder</button>
 </form>`
       : `<h2 id="banner">Rıza Bannerı Konfigürasyonu</h2>
-<p class="empty">Bu ayarlar izleme koduna <code>/api/embed/config</code> üzerinden akar; bannerVersion değişirse müşteri yeniden rıza verir.</p>
+<p class="empty">Bu metinler ziyaretçinin gördüğü izin penceresidir. Kaydedince izleme kodu otomatik çeker; sürüm değişirse ziyaretçiden yeniden izin istenir.</p>
 <form method="post" action="/sites/${e(input.siteId)}/banner">
   <input name="bannerVersion" placeholder="banner-2026-11" value="${e(bc?.bannerVersion ?? "")}" required>
   <input name="title" placeholder="Başlık" value="${e(bc?.texts.title ?? "Çerez Tercihleriniz")}" required>
@@ -404,7 +404,7 @@ export function renderClientDetailPage(input: {
             `<tr><td><a href="/sites/${e(s.id)}">${e(s.url)}</a></td><td><code>${e(s.ingestToken)}</code></td><td class="num"><a href="/sites/${e(s.id)}">Rapor →</a></td></tr>`,
         )
         .join("\n")
-    : '<tr><td colspan="3" class="empty">Henüz site eklenmedi — <a href="#yeni-site">ilk sitenizi ekleyin →</a>; ilk taramayı site sayfasından şimdi başlatabilirsiniz.</td></tr>';
+    : '<tr><td colspan="3" class="empty">Henüz site eklenmedi — <a href="#yeni-site">ilk sitenizi ekleyin →</a>; tarama ve izin kaydı bu siteye bağlanır.</td></tr>';
 
   const logoUrl = safeLogoUrl(input.logoUrl);
   const logo = logoUrl
@@ -422,7 +422,7 @@ export function renderClientDetailPage(input: {
   const installSection =
     input.emailVerified === false
       ? `<p class="badge-warn">İzleme kodunu kurmak için e-posta adresinizi onaylayın — <a href="/settings/account">Hesap ayarları</a>.</p>`
-      : `<p class="empty">İzleme kodunu sitenizin <code>&lt;head&gt;</code> bölümüne ekleyin; <code>data-site-token</code> yerine aşağıdaki site anahtarını yazın:</p>
+      : `<p class="empty">İzleme kodunu sitenizin <code>&lt;head&gt;</code> bölümüne ekleyin; <code>data-site-token</code> yerine aşağıdaki site anahtarını yazın. Kod çalışınca ziyaretçiden izin alınmaya başlar ve panel bağlantıyı doğrular.</p>
 <p><code>&lt;script src="${e(input.embedSrc ?? "/embed.js")}" data-site-token="…"&gt;&lt;/script&gt;</code></p>`;
 
   return panelPage(
@@ -569,6 +569,7 @@ export function renderRegisterPage(options: { errorKind?: RegisterErrorKind } = 
   return panelPage(
     "Kayıt",
     `<h1>Veriform Panel · Ajans Kaydı</h1>
+<p class="empty">Bu hesap ajansınızın çatısı: müşteri sitelerini tek panelden izler, tarama raporlarını ve izin kanıtlarını burada toplarsınız. Kayıt ve ilk tarama e-posta onayı olmadan serbesttir.</p>
 ${errorText ? `<p class="badge-warn">${errorText}</p>` : ""}
 <form method="post" action="/register">
   <input name="name" placeholder="Ajans adı" required>

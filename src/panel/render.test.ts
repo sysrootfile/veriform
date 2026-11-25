@@ -546,10 +546,10 @@ describe("boş durum yönlendirmeleri", () => {
     expect(html).toContain("ilk taramayı şimdi başlatın");
   });
 
-  it("müşteri detayı boş site listesinde ilk tarama yolunu anlatır", () => {
+  it("müşteri detayı boş site listesinde sıradaki işi ve kazanımı söyler", () => {
     const html = renderClientDetailPage({ clientName: "M", clientHref: "/clients/c1", sites: [] });
     expect(html).toContain("Henüz site eklenmedi");
-    expect(html).toContain("ilk tarama");
+    expect(html).toContain("tarama ve izin kaydı bu siteye bağlanır");
   });
 
   it("nav'da Rehber bağlantısı tüm oturumlu sayfalarda var", () => {
@@ -944,5 +944,45 @@ describe("güvenlik akış sayfaları", () => {
       siteInvalid: true,
     });
     expect(html).toContain("Site eklenmedi");
+  });
+});
+
+describe("anlaşılırlık — panel müşteri dili", () => {
+  const progress = (over: Partial<SetupProgress> = {}): SetupProgress => ({
+    hasClient: false,
+    hasSite: false,
+    hasScan: false,
+    emailVerified: false,
+    hasEmbed: false,
+    hasBanner: false,
+    ...over,
+  });
+
+  it("kurulum adımları ne kazanılacağını söyler", () => {
+    const html = renderClientsPage({ tenantName: "A", clients: [], setup: progress() });
+    expect(html).toContain("sitelerin ne topladığını rapor olarak görün");
+    expect(html).toContain("ziyaretçiden izin alınmaya başlar");
+    expect(html).toContain("kayıt kanıta dönüşür");
+  });
+
+  it("kayıt sayfası hesabın ne işe yaradığını söyler", () => {
+    const html = renderRegisterPage();
+    expect(html).toContain("müşteri sitelerini tek panelden izler");
+    expect(html).toContain("Kayıt ve ilk tarama");
+  });
+
+  it("izleme kodu talimatı ne kazandıracağını söyler", () => {
+    const detail = renderClientDetailPage({ clientName: "M", clientHref: "/clients/c1", sites: [] });
+    expect(detail).toContain("ziyaretçiden izin alınmaya başlar");
+    expect(detail).toContain("panel bağlantıyı doğrular");
+  });
+
+  it("boş durumlar sıradaki işi ve kazanımı söyler", () => {
+    const clients = renderClientsPage({ tenantName: "A", clients: [], setup: progress() });
+    expect(clients).toContain("sitelerini buradan izleyeceksiniz");
+    const detail = renderClientDetailPage({ clientName: "M", clientHref: "/clients/c1", sites: [] });
+    expect(detail).toContain("tarama ve izin kaydı bu siteye bağlanır");
+    const site = renderSitePage({ siteId: "s1", siteUrl: "https://musteri1.com", chainValid: true, scans: [] });
+    expect(site).toContain("sitenin ne topladığını rapor olarak görün");
   });
 });
