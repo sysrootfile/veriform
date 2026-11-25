@@ -72,8 +72,8 @@ async function seededStore(): Promise<{ store: PanelStore; siteId: string }> {
     role: "owner",
   });
   const client = await store.createClient({ tenantId: tenant.id, name: "M" });
-  const site = await store.createSite({ clientId: client.id, url: SITE_URL });
-  await store.setScanSchedule(site.id, 24);
+  const site = await store.createSite({ tenantId: tenant.id, clientId: client.id, url: SITE_URL });
+  await store.setScanSchedule(tenant.id, site.id, 24);
   return { store, siteId: site.id };
 }
 

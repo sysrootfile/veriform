@@ -896,7 +896,7 @@ export const server = createServer(async (req, res) => {
       const quota = await service.getSiteQuota();
       const clients = await store.listClients(tenantId);
       const breakdown = await Promise.all(
-        clients.map(async (c) => ({ name: c.name, siteCount: (await store.listSites(c.id)).length })),
+        clients.map(async (c) => ({ name: c.name, siteCount: (await store.listSites(tenantId, c.id)).length })),
       );
       const requests = await store.listPlanChangeRequests(tenantId);
       const pending = requests.find((r) => r.status === "pending");

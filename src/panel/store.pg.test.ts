@@ -37,6 +37,7 @@ d("createPostgresPanelStore (GERÇEK Postgres — docker veriform-pg)", () => {
     const tenant = await store.createTenant({ name: "PG Ajans", kind: "agency" });
     const client = await store.createClient({ tenantId: tenant.id, name: "PG Müşteri" });
     const site = await store.createSite({
+      tenantId: tenant.id,
       clientId: client.id,
       url: "https://pg-musteri.com",
     });
@@ -52,10 +53,10 @@ d("createPostgresPanelStore (GERÇEK Postgres — docker veriform-pg)", () => {
   it("markEmbedSeen: embed_last_seen_at sütununa yazar ve ISO okur", async () => {
     const tenant = await store.createTenant({ name: "PG Seen", kind: "agency" });
     const client = await store.createClient({ tenantId: tenant.id, name: "PG M" });
-    const site = await store.createSite({ clientId: client.id, url: "https://pg-seen.com" });
+    const site = await store.createSite({ tenantId: tenant.id, clientId: client.id, url: "https://pg-seen.com" });
     expect(site.embedLastSeenAt).toBeUndefined();
     await store.markEmbedSeen(site.id);
-    const seen = (await store.getSite(site.id))?.embedLastSeenAt;
+    const seen = (await store.getSite(tenant.id, site.id))?.embedLastSeenAt;
     expect(seen).toBeDefined();
     expect(Number.isNaN(Date.parse(seen!))).toBe(false);
   });
@@ -63,7 +64,7 @@ d("createPostgresPanelStore (GERÇEK Postgres — docker veriform-pg)", () => {
   it("taramayı jsonb olarak yazar/okur; kurcalamadan izole kopya döner", async () => {
     const tenant = await store.createTenant({ name: "A", kind: "direct" });
     const client = await store.createClient({ tenantId: tenant.id, name: "M" });
-    const site = await store.createSite({ clientId: client.id, url: "https://pg-musteri.com" });
+    const site = await store.createSite({ tenantId: tenant.id, clientId: client.id, url: "https://pg-musteri.com" });
 
     const saved = await store.saveScan({
       siteId: site.id,
@@ -73,17 +74,17 @@ d("createPostgresPanelStore (GERÇEK Postgres — docker veriform-pg)", () => {
     });
     expect(saved.report.categoryCounts).toEqual([{ category: "email", forms: 1 }]);
 
-    const scans = await store.listScans(site.id);
+    const scans = await store.listScans(tenant.id, site.id);
     expect(scans).toHaveLength(1);
     expect(scans[0]!.cookies[0]!.name).toBe("_fbp");
     scans[0]!.report.formCount = 999;
-    expect((await store.listScans(site.id))[0]!.report.formCount).toBe(1);
+    expect((await store.listScans(tenant.id, site.id))[0]!.report.formCount).toBe(1);
   });
 
   it("kanıt zinciri gerçek veritabanında doğrulanır; sahte selfHash reddedilir", async () => {
     const tenant = await store.createTenant({ name: "B", kind: "direct" });
     const client = await store.createClient({ tenantId: tenant.id, name: "M2" });
-    const site = await store.createSite({ clientId: client.id, url: "https://pg2.com" });
+    const site = await store.createSite({ tenantId: tenant.id, clientId: client.id, url: "https://pg2.com" });
 
     const r1 = await buildConsentReceipt({
       site: "https://pg2.com",
@@ -108,13 +109,13 @@ d("createPostgresPanelStore (GERÇEK Postgres — docker veriform-pg)", () => {
     });
     await store.appendReceipt({ siteId: site.id, receipt: r2 });
 
-    expect(await store.verifySiteChain(site.id)).toBe(true);
+    expect(await store.verifySiteChain(tenant.id, site.id)).toBe(true);
   });
 
   it("eşzamanlı kanıt kabulleri zinciri çatallamaz (advisory lock)", async () => {
     const tenant = await store.createTenant({ name: "D", kind: "direct" });
     const client = await store.createClient({ tenantId: tenant.id, name: "M4" });
-    const site = await store.createSite({ clientId: client.id, url: "https://pg4.com" });
+    const site = await store.createSite({ tenantId: tenant.id, clientId: client.id, url: "https://pg4.com" });
 
     const receipts = await Promise.all(
       [0, 1, 2].map((i) =>
@@ -131,13 +132,13 @@ d("createPostgresPanelStore (GERÇEK Postgres — docker veriform-pg)", () => {
       receipts.map((receipt) => store.appendReceipt({ siteId: site.id, receipt })),
     );
 
-    expect(await store.verifySiteChain(site.id)).toBe(true);
+    expect(await store.verifySiteChain(tenant.id, site.id)).toBe(true);
   });
 
   it("DSAR gerçek veritabanında saklanır: süre hesabı, uzatma, durum geçişi", async () => {
     const tenant = await store.createTenant({ name: "C", kind: "direct" });
     const client = await store.createClient({ tenantId: tenant.id, name: "M3" });
-    const site = await store.createSite({ clientId: client.id, url: "https://pg3.com" });
+    const site = await store.createSite({ tenantId: tenant.id, clientId: client.id, url: "https://pg3.com" });
 
     const dsar = await store.saveDsar({
       siteId: site.id,
@@ -148,24 +149,24 @@ d("createPostgresPanelStore (GERÇEK Postgres — docker veriform-pg)", () => {
     });
     expect(dsar.deadlineAt).toBe("2026-12-02T10:00:00.000Z");
 
-    const extended = await store.updateDsar(site.id, dsar.id, { extend: true });
+    const extended = await store.updateDsar(tenant.id, site.id, dsar.id, { extend: true });
     expect(extended.deadlineAt).toBe("2027-01-01T10:00:00.000Z");
-    await expect(store.updateDsar(site.id, dsar.id, { extend: true })).rejects.toThrow(/zaten/);
+    await expect(store.updateDsar(tenant.id, site.id, dsar.id, { extend: true })).rejects.toThrow(/zaten/);
 
-    const done = await store.updateDsar(site.id, dsar.id, {
+    const done = await store.updateDsar(tenant.id, site.id, dsar.id, {
       status: "completed",
       responseNote: "Silme işlemi tamamlandı",
     });
     expect(done.status).toBe("completed");
     expect(done.respondedAt).toBeDefined();
-    expect((await store.listDsars(site.id))).toHaveLength(1);
+    expect((await store.listDsars(tenant.id, site.id))).toHaveLength(1);
   });
 
   it("updateDsar gerçek DB'de başka sitenin başvurusunu güncelleyemez", async () => {
     const tenant = await store.createTenant({ name: "Sahiplik", kind: "direct" });
     const client = await store.createClient({ tenantId: tenant.id, name: "MS" });
-    const siteA = await store.createSite({ clientId: client.id, url: "https://pg-sahip-a.com" });
-    const siteB = await store.createSite({ clientId: client.id, url: "https://pg-sahip-b.com" });
+    const siteA = await store.createSite({ tenantId: tenant.id, clientId: client.id, url: "https://pg-sahip-a.com" });
+    const siteB = await store.createSite({ tenantId: tenant.id, clientId: client.id, url: "https://pg-sahip-b.com" });
     const dsar = await store.saveDsar({
       siteId: siteA.id,
       type: "silme",
@@ -174,10 +175,10 @@ d("createPostgresPanelStore (GERÇEK Postgres — docker veriform-pg)", () => {
       receivedAt: "2026-11-02T10:00:00.000Z",
     });
 
-    await expect(store.updateDsar(siteB.id, dsar.id, { status: "completed" })).rejects.toThrow(
+    await expect(store.updateDsar(tenant.id, siteB.id, dsar.id, { status: "completed" })).rejects.toThrow(
       /başvuru bulunamadı/,
     );
-    expect((await store.listDsars(siteA.id))[0]!.status).toBe("new");
+    expect((await store.listDsars(tenant.id, siteA.id))[0]!.status).toBe("new");
   });
 
   it("invalidateSessions gerçek DB'de oturum geçerlilik anını şimdiye çeker", async () => {
@@ -237,12 +238,12 @@ d("createPostgresPanelStore (GERÇEK Postgres — docker veriform-pg)", () => {
     const c2 = await store.createClient({ tenantId: tenant.id, name: "M2" });
     const oc = await store.createClient({ tenantId: other.id, name: "Yabancı" });
     expect(await store.countSitesByTenant(tenant.id)).toBe(0);
-    await store.createSite({ clientId: c1.id, url: "https://kota1.com" });
-    await store.createSite({ clientId: c2.id, url: "https://kota2.com" });
-    await store.createSite({ clientId: oc.id, url: "https://yabanci.com" });
+    await store.createSite({ tenantId: tenant.id, clientId: c1.id, url: "https://kota1.com" });
+    await store.createSite({ tenantId: tenant.id, clientId: c2.id, url: "https://kota2.com" });
+    await store.createSite({ tenantId: other.id, clientId: oc.id, url: "https://yabanci.com" });
     expect(await store.countSitesByTenant(tenant.id)).toBe(2);
     expect(await store.countSitesByTenant(other.id)).toBe(1);
-    await store.deleteClient(c1.id);
+    await store.deleteClient(tenant.id, c1.id);
     expect(await store.countSitesByTenant(tenant.id)).toBe(1);
   });
 
@@ -300,7 +301,7 @@ d("createPostgresPanelStore (GERÇEK Postgres — docker veriform-pg)", () => {
       passwordHash: "hash-s",
     });
     const client = await store.createClient({ tenantId: tenant.id, name: "Silinecek" });
-    await store.createSite({ clientId: client.id, url: "https://sil-pg.com" });
+    await store.createSite({ tenantId: tenant.id, clientId: client.id, url: "https://sil-pg.com" });
     const tokenS = randomUUID().replaceAll("-", "").padEnd(64, "s");
     await store.createAccountToken({
       userId: user.id,

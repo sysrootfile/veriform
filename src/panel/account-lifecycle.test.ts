@@ -162,7 +162,7 @@ describe("hesap silme (KVKK)", () => {
   it("kiracı, kullanıcı ve müşteri verisi birlikte silinir", async () => {
     const { store, tenant } = await setup();
     const client = await store.createClient({ tenantId: tenant.id, name: "M" });
-    await store.createSite({ clientId: client.id, url: "https://sil.com" });
+    await store.createSite({ tenantId: tenant.id, clientId: client.id, url: "https://sil.com" });
     await deleteAccount(store, tenant.id);
     expect(await store.getTenant(tenant.id)).toBeNull();
     expect(await store.findUserByEmail("hesap@probe.test")).toBeNull();

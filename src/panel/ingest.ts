@@ -104,7 +104,7 @@ export function createIngestApi(store: PanelStore): IngestApi {
       const { cookies, observedTargets } = requireScanArrays(input.cookies, input.observedTargets);
       const report = requireScanReport(input.report);
       // İnsan onaylı düzeltme haritası: kabul anında rapora uygulanır
-      const corrections = await store.listCorrections(site.id);
+      const corrections = await store.listAllCorrections(site.id);
       const corrected = applyCorrections(report, corrections);
       return store.saveScan({
         siteId: site.id,
