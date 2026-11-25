@@ -70,6 +70,8 @@ export interface PanelStore {
   findUserByTenant(tenantId: string): Promise<PanelUser | null>;
   setUserEmailVerified(userId: string): Promise<void>;
   updateUserPassword(userId: string, passwordHash: string): Promise<void>;
+  /** Kullanıcının açık oturumlarını düşürür (şimdi'den önce verilenler geçersiz olur). */
+  invalidateSessions(userId: string): Promise<void>;
   /** KVKK hesap silme: kiracı ve bağlı tüm veri (FK cascade). */
   deleteTenant(tenantId: string): Promise<void>;
   createAccountToken(input: {
@@ -92,7 +94,9 @@ export interface PanelStore {
     receivedAt?: string | undefined;
   }): Promise<DsarRequest>;
   listDsars(siteId: string): Promise<DsarRequest[]>;
+  /** siteId sahiplik şartı: başvuru başka siteye aitse hata fırlar. */
   updateDsar(
+    siteId: string,
     dsarId: string,
     patch: { status?: DsarStatus | undefined; responseNote?: string | undefined; extend?: boolean | undefined },
   ): Promise<DsarRequest>;
@@ -321,10 +325,17 @@ export function createInMemoryPanelStore(): PanelStore {
         tenantId: input.tenantId,
         email: input.email,
         passwordHash: input.passwordHash,
+        sessionsValidAfter: new Date(0).toISOString(),
         createdAt: new Date().toISOString(),
       };
       users.push(user);
       return clone(user);
+    },
+
+    async invalidateSessions(userId) {
+      const user = users.find((u) => u.id === userId);
+      if (!user) throw new Error(`kullanıcı bulunamadı: ${userId}`);
+      user.sessionsValidAfter = new Date().toISOString();
     },
 
     async findUserByEmail(email) {
@@ -427,8 +438,8 @@ export function createInMemoryPanelStore(): PanelStore {
       return clone(dsars.filter((d) => d.siteId === siteId));
     },
 
-    async updateDsar(dsarId, patch) {
-      const dsar = dsars.find((d) => d.id === dsarId);
+    async updateDsar(siteId, dsarId, patch) {
+      const dsar = dsars.find((d) => d.id === dsarId && d.siteId === siteId);
       if (!dsar) throw new Error(`başvuru bulunamadı: ${dsarId}`);
 
       if (patch.extend) {

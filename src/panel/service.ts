@@ -1,3 +1,4 @@
+import { assertPublicHttpUrl } from "../scanner/url-guard.js";
 import type { RequestTarget } from "../collector/targets.js";
 import type { ConsentReceipt } from "../consent/receipt.js";
 import type { DsarRequest, DsarStatus } from "../dsar/types.js";
@@ -143,6 +144,7 @@ export function createPanelService(store: PanelStore, context: PanelContext): Pa
       if (limit !== null && (await store.countSitesByTenant(context.tenantId)) >= limit) {
         throw new Error("site kotası doldu");
       }
+      assertPublicHttpUrl(url);
       const site = await store.createSite({ clientId, url });
       await store.recordAudit(context.tenantId, "site.created", {
         siteId: site.id,
@@ -260,8 +262,9 @@ export function createPanelService(store: PanelStore, context: PanelContext): Pa
     },
 
     async updateDsarStatus(siteId, dsarId, patch) {
+      denyAuditor(role);
       await assertSiteOwnership(siteId);
-      return store.updateDsar(dsarId, patch);
+      return store.updateDsar(siteId, dsarId, patch);
     },
   };
 }

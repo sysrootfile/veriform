@@ -21,6 +21,8 @@ services:
         WITH_SCANNER: "1"
     environment:
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/veriform
+      # Mail bağlantılarının ve embed adresinin kökü — Postgres modunda zorunlu
+      PANEL_URL: "${PANEL_URL:?PANEL_URL zorunludur (örn. https://panel.veriform.io)}"
       PORT: "4620"
       SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET zorunlu — openssl rand -hex 32 ile üret}
       # TLS sonlandıran proxy arkasında 1 yap; düz HTTP'de Secure çerez oturumu düşürür

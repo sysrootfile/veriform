@@ -8,6 +8,7 @@ import {
   resetPassword,
   verifyEmail,
 } from "./account-lifecycle.js";
+import { hashPassword } from "./auth.js";
 import { login } from "./accounts.js";
 import type { EmailSender, OutgoingEmail } from "./mailer.js";
 import { createInMemoryPanelStore } from "./store.js";
@@ -166,5 +167,23 @@ describe("hesap silme (KVKK)", () => {
     expect(await store.getTenant(tenant.id)).toBeNull();
     expect(await store.findUserByEmail("hesap@probe.test")).toBeNull();
     expect(await store.listClients(tenant.id)).toEqual([]);
+  });
+});
+describe("oturum düşürme", () => {
+  it("şifre sıfırlama ve şifre değiştirme önceki oturumları düşürür", async () => {
+    const { store, tenant, user } = await setup();
+    const { sent, sender } = spyMailer();
+    expect((await store.findUserByTenant(tenant.id))!.sessionsValidAfter).toBe("1970-01-01T00:00:00.000Z");
+
+    await requestPasswordReset(store, sender, "hesap@probe.test", "https://panel.test");
+    const token = sent[0]!.text.match(/token=([0-9a-f]{64})/)![1]!;
+    await resetPassword(store, token, "yeni-sifre-123");
+    const afterReset = (await store.findUserByTenant(tenant.id))!.sessionsValidAfter;
+    expect(Date.parse(afterReset)).toBeGreaterThan(Date.now() - 60_000);
+
+    await store.updateUserPassword(user.id, await hashPassword("yeni-sifre-123"));
+    await changePassword(store, tenant.id, "yeni-sifre-123", "daha-yeni-sifre-456");
+    const afterChange = (await store.findUserByTenant(tenant.id))!.sessionsValidAfter;
+    expect(Date.parse(afterChange)).toBeGreaterThanOrEqual(Date.parse(afterReset));
   });
 });

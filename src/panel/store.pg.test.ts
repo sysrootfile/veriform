@@ -148,17 +148,51 @@ d("createPostgresPanelStore (GERÇEK Postgres — docker veriform-pg)", () => {
     });
     expect(dsar.deadlineAt).toBe("2026-12-02T10:00:00.000Z");
 
-    const extended = await store.updateDsar(dsar.id, { extend: true });
+    const extended = await store.updateDsar(site.id, dsar.id, { extend: true });
     expect(extended.deadlineAt).toBe("2027-01-01T10:00:00.000Z");
-    await expect(store.updateDsar(dsar.id, { extend: true })).rejects.toThrow(/zaten/);
+    await expect(store.updateDsar(site.id, dsar.id, { extend: true })).rejects.toThrow(/zaten/);
 
-    const done = await store.updateDsar(dsar.id, {
+    const done = await store.updateDsar(site.id, dsar.id, {
       status: "completed",
       responseNote: "Silme işlemi tamamlandı",
     });
     expect(done.status).toBe("completed");
     expect(done.respondedAt).toBeDefined();
     expect((await store.listDsars(site.id))).toHaveLength(1);
+  });
+
+  it("updateDsar gerçek DB'de başka sitenin başvurusunu güncelleyemez", async () => {
+    const tenant = await store.createTenant({ name: "Sahiplik", kind: "direct" });
+    const client = await store.createClient({ tenantId: tenant.id, name: "MS" });
+    const siteA = await store.createSite({ clientId: client.id, url: "https://pg-sahip-a.com" });
+    const siteB = await store.createSite({ clientId: client.id, url: "https://pg-sahip-b.com" });
+    const dsar = await store.saveDsar({
+      siteId: siteA.id,
+      type: "silme",
+      subjectName: "Sahne Adı",
+      subjectEmail: "sahip@example.com",
+      receivedAt: "2026-11-02T10:00:00.000Z",
+    });
+
+    await expect(store.updateDsar(siteB.id, dsar.id, { status: "completed" })).rejects.toThrow(
+      /başvuru bulunamadı/,
+    );
+    expect((await store.listDsars(siteA.id))[0]!.status).toBe("new");
+  });
+
+  it("invalidateSessions gerçek DB'de oturum geçerlilik anını şimdiye çeker", async () => {
+    const tenant = await store.createTenant({ name: "Oturum", kind: "direct" });
+    const user = await store.createUser({
+      tenantId: tenant.id,
+      email: `oturum-pg-${randomUUID()}@example.com`,
+      passwordHash: "h",
+    });
+    expect(user.sessionsValidAfter).toBe("1970-01-01T00:00:00.000Z");
+
+    await store.invalidateSessions(user.id);
+
+    const found = await store.findUserByTenant(tenant.id);
+    expect(Date.parse(found!.sessionsValidAfter)).toBeGreaterThan(Date.now() - 60_000);
   });
 
   it("ping gerçek DB'ye select 1 atar; erişilemeyen DB'de reddedilir", async () => {

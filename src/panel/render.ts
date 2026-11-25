@@ -363,8 +363,21 @@ ${scheduleForm}`,
 
 /** Giriş/kayıt hata metinleri — rota yalnızca kod/boolean geçirir, metin sabittir. */
 export const LOGIN_ERROR_TEXT = "E-posta veya şifre hatalı";
-export const REGISTER_ERRORS: Record<"duplicate" | "generic", string> = {
+export type RegisterErrorKind = "duplicate" | "generic" | "password" | "email" | "name";
+
+export function registerErrorKind(message: string): RegisterErrorKind {
+  if (/zaten kayıtlı/.test(message)) return "duplicate";
+  if (/şifre/.test(message)) return "password";
+  if (/e-posta adresi/.test(message)) return "email";
+  if (/ajans adı/.test(message)) return "name";
+  return "generic";
+}
+
+export const REGISTER_ERRORS: Record<RegisterErrorKind, string> = {
   duplicate: "Bu e-posta zaten kayıtlı — başka bir e-posta deneyin.",
+  password: "Şifre en az 8, en fazla 128 karakter olmalı.",
+  email: "Geçerli bir e-posta adresi girin.",
+  name: "Ajans adı en az 2 karakter olmalı.",
   generic: "Kayıt başarısız — girdileri kontrol edin.",
 };
 
@@ -378,6 +391,8 @@ export function renderClientDetailPage(input: {
   embedSrc?: string | undefined;
   /** Paket kotası dolduysa yükseltme uyarısı gösterilir. */
   quotaFull?: boolean | undefined;
+  /** Eklenmek istenen site adresi reddedildiyse (özel ağ, http dışı protokol) uyarı gösterilir. */
+  siteInvalid?: boolean | undefined;
   emailVerified?: boolean | undefined;
   setup?: SetupProgress | undefined;
 }): string {
@@ -400,6 +415,10 @@ export function renderClientDetailPage(input: {
     ? '<p class="badge-warn">Site kotası doldu — yeni site eklemek için paketinizi yükseltin: <a href="/#paketler">Paketler</a> · <a href="/#iletisim">İletişim</a></p>'
     : "";
 
+  const siteWarning = input.siteInvalid
+    ? '<p class="badge-warn">Site eklenmedi: yalnızca genel internetteki http(s) site adresleri eklenebilir.</p>'
+    : "";
+
   const installSection =
     input.emailVerified === false
       ? `<p class="badge-warn">İzleme kodunu kurmak için e-posta adresinizi onaylayın — <a href="/settings/account">Hesap ayarları</a>.</p>`
@@ -410,6 +429,7 @@ export function renderClientDetailPage(input: {
     input.clientName,
     `<h1>${logo}${e(input.clientName)}</h1>
 ${quotaWarning}
+${siteWarning}
 <h2 id="izleme-kodu">Siteler</h2>
 ${installSection}
 <div class="table-scroll">
@@ -535,7 +555,7 @@ ${noticeText ? `<p class="badge-ok">${noticeText}</p>` : ""}
 ${options.hasError ? `<p class="badge-warn">${LOGIN_ERROR_TEXT}</p>` : ""}
 <form method="post" action="/login">
   <input name="email" type="email" placeholder="E-posta" required>
-  <input name="password" type="password" placeholder="Şifre" required>
+  <input name="password" type="password" placeholder="Şifre" minlength="8" maxlength="128" required>
   <button type="submit">Giriş yap</button>
 </form>
 <p class="empty"><a href="/forgot-password">Şifreni mi unuttun?</a></p>
@@ -544,7 +564,7 @@ ${options.hasError ? `<p class="badge-warn">${LOGIN_ERROR_TEXT}</p>` : ""}
   );
 }
 
-export function renderRegisterPage(options: { errorKind?: "duplicate" | "generic" } = {}): string {
+export function renderRegisterPage(options: { errorKind?: RegisterErrorKind } = {}): string {
   const errorText = options.errorKind ? REGISTER_ERRORS[options.errorKind] : undefined;
   return panelPage(
     "Kayıt",
@@ -599,6 +619,19 @@ ${input.errorKind ? `<p class="badge-warn">${RESET_ERRORS[input.errorKind]}</p>`
   <button type="submit">Şifreyi güncelle</button>
 </form>
 <p class="empty"><a href="/forgot-password">Yeni bağlantı iste</a> · <a href="/login">Girişe dön</a></p>`,
+  );
+}
+
+/** GET bağlantısı token'ı tüketmez: posta tarayıcıları bağlantıyı ön okuyunca token yanmasın. */
+export function renderVerifyEmailConfirmPage(token: string): string {
+  return panelPage(
+    "E-posta Doğrulama",
+    `<h1>E-posta Doğrulama</h1>
+<p>E-posta adresinizi doğrulamak için onaylayın. Bağlantı sizin tarafınızdan açılmadıysa bu sayfayı kapatın.</p>
+<form method="post" action="/verify-email">
+  <input type="hidden" name="token" value="${escapeHtml(token)}">
+  <button type="submit">E-posta adresimi doğrula</button>
+</form>`,
   );
 }
 

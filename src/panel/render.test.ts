@@ -926,3 +926,23 @@ describe("Zincir Defter dünyası", () => {
     expect(renderRegisterPage()).not.toContain('class="topnav"');
   });
 });
+
+import { renderVerifyEmailConfirmPage } from "./render.js";
+
+describe("güvenlik akış sayfaları", () => {
+  it("e-posta doğrulama onay sayfası token'ı POST formunda taşır (GET tüketmez)", () => {
+    const html = renderVerifyEmailConfirmPage('ab"c');
+    expect(html).toContain('method="post" action="/verify-email"');
+    expect(html).toContain('name="token" value="ab&quot;c"');
+  });
+
+  it("reddedilen site adresi için uyarı gösterilir", () => {
+    const html = renderClientDetailPage({
+      clientName: "Müşteri",
+      clientHref: "/clients/1",
+      sites: [],
+      siteInvalid: true,
+    });
+    expect(html).toContain("Site eklenmedi");
+  });
+});
