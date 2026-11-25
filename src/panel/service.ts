@@ -11,9 +11,10 @@ import type { Client, ScanCookie, ScannedScript, SetupProgress, Site, SiteBanner
 
 /**
  * Panel servis katmanı — HTTP handler'ların çağıracağı uygulama sözleşmesi.
- * Her işlem kiracı bağlamıyla çalışır ve sahiplik doğrular: RLS'in üstünde
- * savunma-derinliği katmanı. Hata mesajları varoluş sızdırmaz — bulunamayan
- * ile başkasının kaydı arasında ayrım yapılmaz.
+ * Her işlem kiracı bağlamıyla çalışır ve sahiplik doğrular. Depo zaten RLS
+ * kapsamında koşar; buradaki sahiplik denetimi onun üstünde ikinci bir katmandır
+ * (hata → 403). Hata mesajları varoluş sızdırmaz — bulunamayan ile başkasının
+ * kaydı arasında ayrım yapılmaz.
  */
 
 export interface PanelContext {
@@ -84,10 +85,8 @@ export function createPanelService(store: PanelStore, context: PanelContext): Pa
   };
 
   const assertSiteOwnership = async (siteId: string): Promise<Site> => {
-    const site = await store.getSite(siteId);
+    const site = await store.getSite(context.tenantId, siteId);
     if (!site) deny();
-    const clients = await store.listClients(context.tenantId);
-    if (!clients.some((c) => c.id === site!.clientId)) deny();
     return site!;
   };
 
@@ -111,7 +110,7 @@ export function createPanelService(store: PanelStore, context: PanelContext): Pa
       status.hasClient = true;
       let firstSiteId: string | undefined;
       for (const client of clients) {
-        const sites = await store.listSites(client.id);
+        const sites = await store.listSites(context.tenantId, client.id);
         if (sites.length) {
           status.hasSite = true;
           firstSiteId ??= sites[0]!.id;
@@ -119,7 +118,7 @@ export function createPanelService(store: PanelStore, context: PanelContext): Pa
         for (const site of sites) {
           if (site.bannerConfig) status.hasBanner = true;
           if (site.embedLastSeenAt) status.hasEmbed = true;
-          if (!status.hasScan && (await store.listScans(site.id)).length) status.hasScan = true;
+          if (!status.hasScan && (await store.listScans(context.tenantId, site.id)).length) status.hasScan = true;
         }
       }
       return {
@@ -145,7 +144,7 @@ export function createPanelService(store: PanelStore, context: PanelContext): Pa
         throw new Error("site kotası doldu");
       }
       assertPublicHttpUrl(url);
-      const site = await store.createSite({ clientId, url });
+      const site = await store.createSite({ tenantId: context.tenantId, clientId, url });
       await store.recordAudit(context.tenantId, "site.created", {
         siteId: site.id,
         url,
@@ -169,13 +168,13 @@ export function createPanelService(store: PanelStore, context: PanelContext): Pa
 
     async getClientSites(clientId) {
       await assertClientOwnership(clientId);
-      return store.listSites(clientId);
+      return store.listSites(context.tenantId, clientId);
     },
 
     async setClientBranding(clientId, input) {
       denyAuditor(role);
       await assertClientOwnership(clientId);
-      const client = await store.setClientBranding(clientId, input);
+      const client = await store.setClientBranding(context.tenantId, clientId, input);
       await store.recordAudit(context.tenantId, "client.branding", {
         clientId,
         brandColor: input.brandColor ?? null,
@@ -191,14 +190,14 @@ export function createPanelService(store: PanelStore, context: PanelContext): Pa
     async deleteClient(clientId) {
       denyAuditor(role);
       await assertClientOwnership(clientId);
-      await store.deleteClient(clientId);
+      await store.deleteClient(context.tenantId, clientId);
       await store.recordAudit(context.tenantId, "client.deleted", { clientId });
     },
 
     async setBannerConfig(siteId, config) {
       denyAuditor(role);
       await assertSiteOwnership(siteId);
-      const site = await store.setBannerConfig(siteId, config);
+      const site = await store.setBannerConfig(context.tenantId, siteId, config);
       await store.recordAudit(context.tenantId, "banner.configured", {
         siteId,
         bannerVersion: config?.bannerVersion ?? null,
@@ -209,7 +208,7 @@ export function createPanelService(store: PanelStore, context: PanelContext): Pa
     async setScanSchedule(siteId, intervalHours) {
       denyAuditor(role);
       await assertSiteOwnership(siteId);
-      const site = await store.setScanSchedule(siteId, intervalHours);
+      const site = await store.setScanSchedule(context.tenantId, siteId, intervalHours);
       await store.recordAudit(context.tenantId, "scan.schedule.changed", {
         siteId,
         intervalHours,
@@ -219,7 +218,7 @@ export function createPanelService(store: PanelStore, context: PanelContext): Pa
 
     async getSiteScans(siteId) {
       await assertSiteOwnership(siteId);
-      return store.listScans(siteId);
+      return store.listScans(context.tenantId, siteId);
     },
 
     async ingestScan(input) {
@@ -236,23 +235,23 @@ export function createPanelService(store: PanelStore, context: PanelContext): Pa
 
     async verifySite(siteId) {
       await assertSiteOwnership(siteId);
-      return store.verifySiteChain(siteId);
+      return store.verifySiteChain(context.tenantId, siteId);
     },
 
     async getSiteDsars(siteId) {
       await assertSiteOwnership(siteId);
-      return store.listDsars(siteId);
+      return store.listDsars(context.tenantId, siteId);
     },
 
     async getSiteReceipts(siteId) {
       await assertSiteOwnership(siteId);
-      return store.listReceipts(siteId);
+      return store.listReceipts(context.tenantId, siteId);
     },
 
     async saveCorrection(siteId, input) {
       denyAuditor(role);
       await assertSiteOwnership(siteId);
-      const correction = await store.saveCorrection(siteId, input);
+      const correction = await store.saveCorrection(context.tenantId, siteId, input);
       await store.recordAudit(context.tenantId, "correction.saved", {
         siteId,
         fieldName: input.fieldName,
@@ -264,7 +263,7 @@ export function createPanelService(store: PanelStore, context: PanelContext): Pa
     async updateDsarStatus(siteId, dsarId, patch) {
       denyAuditor(role);
       await assertSiteOwnership(siteId);
-      return store.updateDsar(siteId, dsarId, patch);
+      return store.updateDsar(context.tenantId, siteId, dsarId, patch);
     },
   };
 }

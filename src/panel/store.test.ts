@@ -37,13 +37,13 @@ describe("createInMemoryPanelStore", () => {
     const store = createInMemoryPanelStore();
     const tenant = await store.createTenant({ name: "Ajans A", kind: "agency" });
     const client = await store.createClient({ tenantId: tenant.id, name: "Müşteri 1" });
-    const site = await store.createSite({ clientId: client.id, url: "https://musteri1.com" });
+    const site = await store.createSite({ tenantId: tenant.id, clientId: client.id, url: "https://musteri1.com" });
 
     expect(site.clientId).toBe(client.id);
     const clients = await store.listClients(tenant.id);
     expect(clients).toHaveLength(1);
     expect(clients[0]!.name).toBe("Müşteri 1");
-    await expect(store.createSite({ clientId: "yok", url: "https://x.com" })).rejects.toThrow(
+    await expect(store.createSite({ tenantId: tenant.id, clientId: "yok", url: "https://x.com" })).rejects.toThrow(
       /client/,
     );
   });
@@ -52,10 +52,10 @@ describe("createInMemoryPanelStore", () => {
     const store = createInMemoryPanelStore();
     const tenant = await store.createTenant({ name: "A", kind: "agency" });
     const client = await store.createClient({ tenantId: tenant.id, name: "M" });
-    const site = await store.createSite({ clientId: client.id, url: "https://musteri1.com" });
+    const site = await store.createSite({ tenantId: tenant.id, clientId: client.id, url: "https://musteri1.com" });
     expect(site.embedLastSeenAt).toBeUndefined();
     await store.markEmbedSeen(site.id);
-    const seen = (await store.getSite(site.id))?.embedLastSeenAt;
+    const seen = (await store.getSite(tenant.id, site.id))?.embedLastSeenAt;
     expect(seen).toBeDefined();
     expect(Number.isNaN(Date.parse(seen!))).toBe(false);
     await expect(store.markEmbedSeen("yok")).resolves.toBeUndefined();
@@ -65,7 +65,7 @@ describe("createInMemoryPanelStore", () => {
     const store = createInMemoryPanelStore();
     const tenant = await store.createTenant({ name: "A", kind: "agency" });
     const client = await store.createClient({ tenantId: tenant.id, name: "Gidecek" });
-    const site = await store.createSite({ clientId: client.id, url: "https://gidecek.com" });
+    const site = await store.createSite({ tenantId: tenant.id, clientId: client.id, url: "https://gidecek.com" });
     const receipt = await buildConsentReceipt({
       site: "https://gidecek.com",
       bannerVersion: "b",
@@ -75,20 +75,20 @@ describe("createInMemoryPanelStore", () => {
     });
     await store.appendReceipt({ siteId: site.id, receipt });
 
-    await store.deleteClient(client.id);
+    await store.deleteClient(tenant.id, client.id);
 
     expect((await store.listClients(tenant.id))).toHaveLength(0);
-    expect(await store.listSites(client.id)).toEqual([]);
-    expect(await store.listScans(site.id)).toEqual([]);
-    expect(await store.verifySiteChain(site.id)).toBe(true); // boş zincir = silindi
-    await expect(store.deleteClient("yok")).rejects.toThrow(/client/);
+    expect(await store.listSites(tenant.id, client.id)).toEqual([]);
+    expect(await store.listScans(tenant.id, site.id)).toEqual([]);
+    expect(await store.verifySiteChain(tenant.id, site.id)).toBe(true); // boş zincir = silindi
+    await expect(store.deleteClient(tenant.id, "yok")).rejects.toThrow(/client/);
   });
 
   it("setBannerConfig: site bazlı banner konfigürasyonu yazar ve temizler", async () => {
     const store = createInMemoryPanelStore();
     const tenant = await store.createTenant({ name: "A", kind: "direct" });
     const client = await store.createClient({ tenantId: tenant.id, name: "M" });
-    const site = await store.createSite({ clientId: client.id, url: "https://musteri1.com" });
+    const site = await store.createSite({ tenantId: tenant.id, clientId: client.id, url: "https://musteri1.com" });
 
     const config = {
       bannerVersion: "banner-2026-11",
@@ -99,13 +99,13 @@ describe("createInMemoryPanelStore", () => {
         rejectAll: "Sadece Zorunlu",
       },
     };
-    const updated = await store.setBannerConfig(site.id, config);
+    const updated = await store.setBannerConfig(tenant.id, site.id, config);
     expect(updated.bannerConfig?.bannerVersion).toBe("banner-2026-11");
-    expect((await store.getSite(site.id))?.bannerConfig?.texts.title).toBe("Çerez Tercihleriniz");
+    expect((await store.getSite(tenant.id, site.id))?.bannerConfig?.texts.title).toBe("Çerez Tercihleriniz");
 
-    const cleared = await store.setBannerConfig(site.id, null);
+    const cleared = await store.setBannerConfig(tenant.id, site.id, null);
     expect(cleared.bannerConfig).toBeUndefined();
-    await expect(store.setBannerConfig("yok", config)).rejects.toThrow(/site/);
+    await expect(store.setBannerConfig(tenant.id, "yok", config)).rejects.toThrow(/site/);
   });
 
   it("getTenant kiracıyı döndürür, bilinmeyeni null verir; marka rengi ve logosu saklanır", async () => {
@@ -127,18 +127,18 @@ describe("createInMemoryPanelStore", () => {
     const store = createInMemoryPanelStore();
     const tenant = await store.createTenant({ name: "A", kind: "agency" });
     const client = await store.createClient({ tenantId: tenant.id, name: "M" });
-    await store.createSite({ clientId: client.id, url: "https://b.com" });
-    await store.createSite({ clientId: client.id, url: "https://a.com" });
-    const sites = await store.listSites(client.id);
+    await store.createSite({ tenantId: tenant.id, clientId: client.id, url: "https://b.com" });
+    await store.createSite({ tenantId: tenant.id, clientId: client.id, url: "https://a.com" });
+    const sites = await store.listSites(tenant.id, client.id);
     expect(sites.map((s) => s.url)).toEqual(["https://b.com", "https://a.com"]);
-    expect(await store.listSites("yok")).toEqual([]);
+    expect(await store.listSites(tenant.id, "yok")).toEqual([]);
   });
 
   it("DSAR kaydedilir: süre otomatik hesaplanır; durum güncelleme ve tek seferlik uzatma", async () => {
     const store = createInMemoryPanelStore();
     const tenant = await store.createTenant({ name: "A", kind: "direct" });
     const client = await store.createClient({ tenantId: tenant.id, name: "M" });
-    const site = await store.createSite({ clientId: client.id, url: "https://musteri1.com" });
+    const site = await store.createSite({ tenantId: tenant.id, clientId: client.id, url: "https://musteri1.com" });
 
     const dsar = await store.saveDsar({
       siteId: site.id,
@@ -150,29 +150,29 @@ describe("createInMemoryPanelStore", () => {
     });
     expect(dsar.status).toBe("new");
     expect(dsar.deadlineAt).toBe(computeDeadline("2026-11-02T10:00:00.000Z"));
-    expect((await store.listDsars(site.id))).toHaveLength(1);
+    expect((await store.listDsars(tenant.id, site.id))).toHaveLength(1);
 
-    const extended = await store.updateDsar(site.id, dsar.id, { extend: true });
+    const extended = await store.updateDsar(tenant.id, site.id, dsar.id, { extend: true });
     expect(extended.extended).toBe(true);
 
-    await expect(store.updateDsar(site.id, dsar.id, { extend: true })).rejects.toThrow(/zaten/);
+    await expect(store.updateDsar(tenant.id, site.id, dsar.id, { extend: true })).rejects.toThrow(/zaten/);
 
-    const done = await store.updateDsar(site.id, dsar.id, {
+    const done = await store.updateDsar(tenant.id, site.id, dsar.id, {
       status: "completed",
       responseNote: "Veriler silindi",
     });
     expect(done.status).toBe("completed");
     expect(done.respondedAt).toBeDefined();
 
-    await expect(store.updateDsar(site.id, "yok", { status: "completed" })).rejects.toThrow(/başvuru/);
+    await expect(store.updateDsar(tenant.id, site.id, "yok", { status: "completed" })).rejects.toThrow(/başvuru/);
   });
 
   it("updateDsar başka sitenin başvurusunu güncelleyemez (sahiplik)", async () => {
     const store = createInMemoryPanelStore();
     const tenant = await store.createTenant({ name: "A", kind: "direct" });
     const client = await store.createClient({ tenantId: tenant.id, name: "M" });
-    const siteA = await store.createSite({ clientId: client.id, url: "https://a.com" });
-    const siteB = await store.createSite({ clientId: client.id, url: "https://b.com" });
+    const siteA = await store.createSite({ tenantId: tenant.id, clientId: client.id, url: "https://a.com" });
+    const siteB = await store.createSite({ tenantId: tenant.id, clientId: client.id, url: "https://b.com" });
     const dsar = await store.saveDsar({
       siteId: siteA.id,
       type: "silme",
@@ -182,9 +182,9 @@ describe("createInMemoryPanelStore", () => {
     });
 
     await expect(
-      store.updateDsar(siteB.id, dsar.id, { status: "completed" }),
+      store.updateDsar(tenant.id, siteB.id, dsar.id, { status: "completed" }),
     ).rejects.toThrow(/başvuru bulunamadı/);
-    expect((await store.listDsars(siteA.id))[0]!.status).toBe("new");
+    expect((await store.listDsars(tenant.id, siteA.id))[0]!.status).toBe("new");
   });
 
   it("setClientBranding: per-client marka alanları yazar ve temizler", async () => {
@@ -192,7 +192,7 @@ describe("createInMemoryPanelStore", () => {
     const tenant = await store.createTenant({ name: "A", kind: "agency" });
     const client = await store.createClient({ tenantId: tenant.id, name: "M" });
 
-    const branded = await store.setClientBranding(client.id, {
+    const branded = await store.setClientBranding(tenant.id, client.id, {
       brandColor: "#0b5394",
       brandLogoUrl: "https://musteri.com/logo.png",
     });
@@ -200,11 +200,11 @@ describe("createInMemoryPanelStore", () => {
     expect(branded.brandLogoUrl).toBe("https://musteri.com/logo.png");
     expect((await store.getTenant(tenant.id))?.brandColor).toBeUndefined(); // kiracı kirletilmedi
 
-    const cleared = await store.setClientBranding(client.id, {});
+    const cleared = await store.setClientBranding(tenant.id, client.id, {});
     expect(cleared.brandColor).toBeUndefined();
     expect(cleared.brandLogoUrl).toBeUndefined();
     await expect(
-      store.setClientBranding("yok", { brandColor: "#000000" }),
+      store.setClientBranding(tenant.id, "yok", { brandColor: "#000000" }),
     ).rejects.toThrow(/client/);
   });
 
@@ -212,22 +212,22 @@ describe("createInMemoryPanelStore", () => {
     const store = createInMemoryPanelStore();
     const tenant = await store.createTenant({ name: "A", kind: "direct" });
     const client = await store.createClient({ tenantId: tenant.id, name: "M" });
-    const site = await store.createSite({ clientId: client.id, url: "https://musteri1.com" });
+    const site = await store.createSite({ tenantId: tenant.id, clientId: client.id, url: "https://musteri1.com" });
 
-    const scheduled = await store.setScanSchedule(site.id, 24);
+    const scheduled = await store.setScanSchedule(tenant.id, site.id, 24);
     expect(scheduled.scanIntervalHours).toBe(24);
-    expect((await store.getSite(site.id))?.scanIntervalHours).toBe(24);
+    expect((await store.getSite(tenant.id, site.id))?.scanIntervalHours).toBe(24);
 
-    const off = await store.setScanSchedule(site.id, 0);
+    const off = await store.setScanSchedule(tenant.id, site.id, 0);
     expect(off.scanIntervalHours).toBe(0);
-    await expect(store.setScanSchedule("yok", 24)).rejects.toThrow(/site/);
+    await expect(store.setScanSchedule(tenant.id, "yok", 24)).rejects.toThrow(/site/);
   });
 
   it("saveScan scripts alanını saklar ve listScans geri döndürür", async () => {
     const store = createInMemoryPanelStore();
     const tenant = await store.createTenant({ name: "A", kind: "direct" });
     const client = await store.createClient({ tenantId: tenant.id, name: "M" });
-    const site = await store.createSite({ clientId: client.id, url: "https://musteri1.com" });
+    const site = await store.createSite({ tenantId: tenant.id, clientId: client.id, url: "https://musteri1.com" });
 
     await store.saveScan({
       siteId: site.id,
@@ -236,7 +236,7 @@ describe("createInMemoryPanelStore", () => {
       observedTargets: [],
       scripts: [{ url: "https://www.googletagmanager.com/gtag/js", category: "analytics" }],
     });
-    const scans = await store.listScans(site.id);
+    const scans = await store.listScans(tenant.id, site.id);
     expect(scans[0]!.scripts).toEqual([
       { url: "https://www.googletagmanager.com/gtag/js", category: "analytics" },
     ]);
@@ -248,8 +248,8 @@ describe("createInMemoryPanelStore", () => {
     const t2 = await store.createTenant({ name: "B", kind: "direct" });
     const c1 = await store.createClient({ tenantId: t1.id, name: "M1" });
     const c2 = await store.createClient({ tenantId: t2.id, name: "M2" });
-    await store.createSite({ clientId: c1.id, url: "https://a.com" });
-    await store.createSite({ clientId: c2.id, url: "https://b.com" });
+    await store.createSite({ tenantId: t1.id, clientId: c1.id, url: "https://a.com" });
+    await store.createSite({ tenantId: t2.id, clientId: c2.id, url: "https://b.com" });
     const all = await store.listAllSites();
     expect(all.map((s) => s.url).sort()).toEqual(["https://a.com", "https://b.com"]);
   });
@@ -288,17 +288,17 @@ describe("createInMemoryPanelStore", () => {
     const store = createInMemoryPanelStore();
     const tenant = await store.createTenant({ name: "A", kind: "direct" });
     const client = await store.createClient({ tenantId: tenant.id, name: "M" });
-    const site = await store.createSite({ clientId: client.id, url: "https://musteri1.com" });
-    expect((await store.getSite(site.id))?.url).toBe("https://musteri1.com");
-    expect(await store.getSite("yok")).toBeNull();
+    const site = await store.createSite({ tenantId: tenant.id, clientId: client.id, url: "https://musteri1.com" });
+    expect((await store.getSite(tenant.id, site.id))?.url).toBe("https://musteri1.com");
+    expect(await store.getSite(tenant.id, "yok")).toBeNull();
   });
 
   it("her site benzersiz ingest token'ı alır ve token'la çözümlenir", async () => {
     const store = createInMemoryPanelStore();
     const tenant = await store.createTenant({ name: "A", kind: "agency" });
     const client = await store.createClient({ tenantId: tenant.id, name: "M" });
-    const site1 = await store.createSite({ clientId: client.id, url: "https://a.com" });
-    const site2 = await store.createSite({ clientId: client.id, url: "https://b.com" });
+    const site1 = await store.createSite({ tenantId: tenant.id, clientId: client.id, url: "https://a.com" });
+    const site2 = await store.createSite({ tenantId: tenant.id, clientId: client.id, url: "https://b.com" });
 
     expect(site1.ingestToken).toMatch(/^[0-9a-f]{64}$/);
     expect(site2.ingestToken).toMatch(/^[0-9a-f]{64}$/);
@@ -313,7 +313,7 @@ describe("createInMemoryPanelStore", () => {
     const store = createInMemoryPanelStore();
     const tenant = await store.createTenant({ name: "A", kind: "direct" });
     const client = await store.createClient({ tenantId: tenant.id, name: "M" });
-    const site = await store.createSite({ clientId: client.id, url: "https://musteri1.com" });
+    const site = await store.createSite({ tenantId: tenant.id, clientId: client.id, url: "https://musteri1.com" });
 
     await store.saveScan({ siteId: site.id, report: emptyReport(), cookies: [], observedTargets: [] });
     await store.saveScan({
@@ -323,14 +323,14 @@ describe("createInMemoryPanelStore", () => {
       observedTargets: [],
     });
 
-    const scans = await store.listScans(site.id);
+    const scans = await store.listScans(tenant.id, site.id);
     expect(scans).toHaveLength(2);
     expect(scans[0]!.report.formCount).toBe(1);
     expect(scans[1]!.cookies).toEqual([{ name: "_ga", domain: ".", category: "analytics" }]);
 
     // izolasyon: dönen kopya üzerinde kurcalama depoyu etkilemez
     scans[0]!.report.formCount = 999;
-    expect((await store.listScans(site.id))[0]!.report.formCount).toBe(1);
+    expect((await store.listScans(tenant.id, site.id))[0]!.report.formCount).toBe(1);
 
     await expect(
       store.saveScan({ siteId: "yok", report: emptyReport(), cookies: [], observedTargets: [] }),
@@ -341,7 +341,7 @@ describe("createInMemoryPanelStore", () => {
     const store = createInMemoryPanelStore();
     const tenant = await store.createTenant({ name: "A", kind: "direct" });
     const client = await store.createClient({ tenantId: tenant.id, name: "M" });
-    const site = await store.createSite({ clientId: client.id, url: "https://musteri1.com" });
+    const site = await store.createSite({ tenantId: tenant.id, clientId: client.id, url: "https://musteri1.com" });
 
     const r1 = await buildConsentReceipt({
       site: "https://musteri1.com",
@@ -367,7 +367,7 @@ describe("createInMemoryPanelStore", () => {
     });
     await store.appendReceipt({ siteId: site.id, receipt: r2 });
 
-    expect(await store.verifySiteChain(site.id)).toBe(true);
+    expect(await store.verifySiteChain(tenant.id, site.id)).toBe(true);
     await expect(store.appendReceipt({ siteId: "yok", receipt: r1 })).rejects.toThrow(/site/);
   });
 
@@ -412,9 +412,9 @@ describe("paket ve site sayacı", () => {
     const c1 = await store.createClient({ tenantId: a.id, name: "M1" });
     const c2 = await store.createClient({ tenantId: a.id, name: "M2" });
     const cb = await store.createClient({ tenantId: b.id, name: "MB" });
-    await store.createSite({ clientId: c1.id, url: "https://bir.com" });
-    await store.createSite({ clientId: c2.id, url: "https://iki.com" });
-    await store.createSite({ clientId: cb.id, url: "https://uc.com" });
+    await store.createSite({ tenantId: a.id, clientId: c1.id, url: "https://bir.com" });
+    await store.createSite({ tenantId: a.id, clientId: c2.id, url: "https://iki.com" });
+    await store.createSite({ tenantId: b.id, clientId: cb.id, url: "https://uc.com" });
     expect(await store.countSitesByTenant(a.id)).toBe(2);
     expect(await store.countSitesByTenant(b.id)).toBe(1);
   });
@@ -423,8 +423,8 @@ describe("paket ve site sayacı", () => {
     const store = createInMemoryPanelStore();
     const a = await store.createTenant({ name: "A", kind: "agency" });
     const c1 = await store.createClient({ tenantId: a.id, name: "M1" });
-    await store.createSite({ clientId: c1.id, url: "https://bir.com" });
-    await store.deleteClient(c1.id);
+    await store.createSite({ tenantId: a.id, clientId: c1.id, url: "https://bir.com" });
+    await store.deleteClient(a.id, c1.id);
     expect(await store.countSitesByTenant(a.id)).toBe(0);
   });
 });
@@ -468,7 +468,7 @@ describe("hesap yaşam döngüsü store portları", () => {
     const store = createInMemoryPanelStore();
     const t = await store.createTenant({ name: "A", kind: "agency" });
     const c = await store.createClient({ tenantId: t.id, name: "M" });
-    await store.createSite({ clientId: c.id, url: "https://x.com" });
+    await store.createSite({ tenantId: t.id, clientId: c.id, url: "https://x.com" });
     await store.createUser({ tenantId: t.id, email: "u@x.com", passwordHash: "h" });
     await store.deleteTenant(t.id);
     expect(await store.getTenant(t.id)).toBeNull();

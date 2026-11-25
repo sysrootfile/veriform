@@ -58,8 +58,8 @@ async function seededStore(
   const store = createInMemoryPanelStore();
   const tenant = await store.createTenant({ name: "A", kind: "direct" });
   const client = await store.createClient({ tenantId: tenant.id, name: "M" });
-  const site = await store.createSite({ clientId: client.id, url: SITE_URL });
-  if (intervalHours !== null) await store.setScanSchedule(site.id, intervalHours);
+  const site = await store.createSite({ tenantId: tenant.id, clientId: client.id, url: SITE_URL });
+  if (intervalHours !== null) await store.setScanSchedule(tenant.id, site.id, intervalHours);
   return { store, siteId: site.id, tenantId: tenant.id };
 }
 
@@ -76,7 +76,7 @@ describe("runScheduledScans (worker döngüsü)", () => {
     // ikinci tur: az önce tarandı, 24 saat dolmadı → vakti yok
     const second = await runScheduledScans(store, { scan });
     expect(second.scanned).toHaveLength(0);
-    expect(await store.listScans(siteId)).toHaveLength(1);
+    expect(await store.listAllScans(siteId)).toHaveLength(1);
     expect(urls).toHaveLength(1);
   });
 
@@ -95,10 +95,10 @@ describe("runScheduledScans (worker döngüsü)", () => {
     const store = createInMemoryPanelStore();
     const tenant = await store.createTenant({ name: "A", kind: "direct" });
     const client = await store.createClient({ tenantId: tenant.id, name: "M" });
-    const deadSite = await store.createSite({ clientId: client.id, url: DEAD_URL });
-    await store.setScanSchedule(deadSite.id, 24);
-    const good = await store.createSite({ clientId: client.id, url: SITE_URL });
-    await store.setScanSchedule(good.id, 24);
+    const deadSite = await store.createSite({ tenantId: tenant.id, clientId: client.id, url: DEAD_URL });
+    await store.setScanSchedule(tenant.id, deadSite.id, 24);
+    const good = await store.createSite({ tenantId: tenant.id, clientId: client.id, url: SITE_URL });
+    await store.setScanSchedule(tenant.id, good.id, 24);
 
     const { scan, urls } = recorder((url) => {
       if (url === DEAD_URL) throw new Error("connect ECONNREFUSED 127.0.0.1:1");
@@ -141,7 +141,7 @@ describe("runScheduledScans (worker döngüsü)", () => {
     expect(sent).toHaveLength(1);
     expect(sent[0]!.to).toBe("owner@ajans.com");
     expect(sent[0]!.subject).toContain(SITE_URL);
-    expect(await store.listScans(siteId)).toHaveLength(2);
+    expect(await store.listAllScans(siteId)).toHaveLength(2);
   });
 
   it("notifier hatası tarama turunu engellemez", async () => {
@@ -163,6 +163,6 @@ describe("runScheduledScans (worker döngüsü)", () => {
 
     expect(result.scanned).toHaveLength(1); // tarama yine kaydedildi
     expect(result.notified).toHaveLength(0);
-    expect(await store.listScans(siteId)).toHaveLength(2);
+    expect(await store.listAllScans(siteId)).toHaveLength(2);
   });
 });

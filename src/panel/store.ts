@@ -12,9 +12,16 @@ import type { ApiKeyRecord } from "./api-keys.js";
 import { hashApiKey } from "./api-keys.js";
 
 /**
- * Ajans paneli depolama portu — Postgres adapter'ı (RLS'li, bkz. schema.sql)
+ * Ajans paneli depolama portu — Postgres adapter'ı (RLS'li, bkz. migrations/)
  * bu sözleşmenin birebir aynısını uygular. Depodan dönen her nesne derin
  * kopyadır: çağıranın kurcalaması depoyu etkilemez.
+ *
+ * İki güven düzeyi vardır:
+ * - tenantId alan metotlar kiracı oturumundan çağrılır. Postgres'te RLS
+ *   kapsamında koşarlar (store.pg.ts asTenant); başka kiracının kaydı görünmez
+ *   ve değişmez. In-memory adapter aynı sözleşmeyi sahiplik denetimiyle uygular.
+ * - tenantId almayan, kaynağı kimlikle bulan metotlar sistem yoludur (ingest
+ *   anahtarı, zamanlayıcı, operatör, hesap belirteci): kiracı filtresi yoktur.
  */
 
 export interface PanelStore {
@@ -34,15 +41,16 @@ export interface PanelStore {
   createClient(input: { tenantId: string; name: string }): Promise<Client>;
   /** Per-client white-label — boş input marka alanlarını temizler. */
   setClientBranding(
+    tenantId: string,
     clientId: string,
     input: { brandColor?: string | undefined; brandLogoUrl?: string | undefined },
   ): Promise<Client>;
   /** Hard delete: client + siteleri + taramaları + kanıt zinciri (KVKK saklama yükümlülüğü dışında kalıcı silme talebi için). */
-  deleteClient(clientId: string): Promise<void>;
+  deleteClient(tenantId: string, clientId: string): Promise<void>;
   listClients(tenantId: string): Promise<Client[]>;
-  createSite(input: { clientId: string; url: string }): Promise<Site>;
-  listSites(clientId: string): Promise<Site[]>;
-  getSite(siteId: string): Promise<Site | null>;
+  createSite(input: { tenantId: string; clientId: string; url: string }): Promise<Site>;
+  listSites(tenantId: string, clientId: string): Promise<Site[]>;
+  getSite(tenantId: string, siteId: string): Promise<Site | null>;
   /** Sürekli izleme worker'ı için tüm siteler (sistem düzeyi, kiracı filtresi yok). */
   listAllSites(): Promise<Site[]>;
   /** Ingest kimliklendirme: token → site (bilinmeyen token → null). */
@@ -56,10 +64,12 @@ export interface PanelStore {
     observedTargets: RequestTarget[];
     scripts?: ScannedScript[];
   }): Promise<StoredScan>;
-  listScans(siteId: string): Promise<StoredScan[]>;
+  listScans(tenantId: string, siteId: string): Promise<StoredScan[]>;
+  /** Zamanlayıcı için site taramaları (sistem düzeyi, kiracı filtresi yok). */
+  listAllScans(siteId: string): Promise<StoredScan[]>;
   /** Client kanıtının selfHash'i doğrulanır; zincir bağını sunucu hesaplar. */
   appendReceipt(input: { siteId: string; receipt: ConsentReceipt }): Promise<StoredReceiptEntry>;
-  verifySiteChain(siteId: string): Promise<boolean>;
+  verifySiteChain(tenantId: string, siteId: string): Promise<boolean>;
   createUser(input: {
     tenantId: string;
     email: string;
@@ -82,9 +92,9 @@ export interface PanelStore {
   }): Promise<void>;
   /** Tek kullanımlık tüketim: yok/süresi dolmuş/kullanılmış/amaç farklı → null. */
   consumeAccountToken(tokenHash: string, purpose: AccountTokenPurpose): Promise<{ userId: string } | null>;
-  setBannerConfig(siteId: string, config: SiteBannerConfig | null): Promise<Site>;
+  setBannerConfig(tenantId: string, siteId: string, config: SiteBannerConfig | null): Promise<Site>;
   /** Sürekli izleme aralığı (saat); 0 = kapalı. */
-  setScanSchedule(siteId: string, intervalHours: number): Promise<Site>;
+  setScanSchedule(tenantId: string, siteId: string, intervalHours: number): Promise<Site>;
   saveDsar(input: {
     siteId: string;
     type: DsarType;
@@ -93,18 +103,21 @@ export interface PanelStore {
     message?: string | undefined;
     receivedAt?: string | undefined;
   }): Promise<DsarRequest>;
-  listDsars(siteId: string): Promise<DsarRequest[]>;
-  /** siteId sahiplik şartı: başvuru başka siteye aitse hata fırlar. */
+  listDsars(tenantId: string, siteId: string): Promise<DsarRequest[]>;
+  /** Başvuru siteye ait değilse hata fırlar. */
   updateDsar(
+    tenantId: string,
     siteId: string,
     dsarId: string,
     patch: { status?: DsarStatus | undefined; responseNote?: string | undefined; extend?: boolean | undefined },
   ): Promise<DsarRequest>;
   /** Kanıt ihracı: siteye ait zincir girişleri (varış sırasına göre). */
-  listReceipts(siteId: string): Promise<StoredReceiptEntry[]>;
+  listReceipts(tenantId: string, siteId: string): Promise<StoredReceiptEntry[]>;
   /** İnsan onaylı düzeltme — aynı alan için yenisi eskisinin üzerine yazar. */
-  saveCorrection(siteId: string, input: { fieldName: string; category: string }): Promise<Correction>;
-  listCorrections(siteId: string): Promise<Correction[]>;
+  saveCorrection(tenantId: string, siteId: string, input: { fieldName: string; category: string }): Promise<Correction>;
+  listCorrections(tenantId: string, siteId: string): Promise<Correction[]>;
+  /** Ingest için düzeltme haritası (sistem düzeyi, kiracı filtresi yok). */
+  listAllCorrections(siteId: string): Promise<Correction[]>;
   /** Denetim izi — panel mutasyonları service katmanından kaydedilir. */
   recordAudit(tenantId: string, action: string, detail?: Record<string, unknown>): Promise<void>;
   listAudit(tenantId: string): Promise<AuditEntry[]>;
@@ -164,6 +177,24 @@ export function createInMemoryPanelStore(): PanelStore {
 
   const clone = deepClone;
 
+  // Başka kiracının kaydı ile var olmayan kayıt aynı yanıtı verir (varoluş sızdırmaz).
+  const ownClient = (tenantId: string, clientId: string): Client | undefined =>
+    clients.find((c) => c.id === clientId && c.tenantId === tenantId);
+  const ownSite = (tenantId: string, siteId: string): Site | undefined => {
+    const site = sites.find((s) => s.id === siteId);
+    return site && ownClient(tenantId, site.clientId) ? site : undefined;
+  };
+  const requireClient = (tenantId: string, clientId: string): Client => {
+    const client = ownClient(tenantId, clientId);
+    if (!client) throw new Error(`client bulunamadı: ${clientId}`);
+    return client;
+  };
+  const requireSite = (tenantId: string, siteId: string): Site => {
+    const site = ownSite(tenantId, siteId);
+    if (!site) throw new Error(`site bulunamadı: ${siteId}`);
+    return site;
+  };
+
   return {
     async ping() {},
 
@@ -210,16 +241,15 @@ export function createInMemoryPanelStore(): PanelStore {
       return clone(clients.filter((c) => c.tenantId === tenantId));
     },
 
-    async setClientBranding(clientId, input) {
-      const client = clients.find((c) => c.id === clientId);
-      if (!client) throw new Error(`client bulunamadı: ${clientId}`);
+    async setClientBranding(tenantId, clientId, input) {
+      const client = requireClient(tenantId, clientId);
       client.brandColor = input.brandColor;
       client.brandLogoUrl = input.brandLogoUrl;
       return clone(client);
     },
 
-    async deleteClient(clientId) {
-      const idx = clients.findIndex((c) => c.id === clientId);
+    async deleteClient(tenantId, clientId) {
+      const idx = clients.findIndex((c) => c.id === clientId && c.tenantId === tenantId);
       if (idx === -1) throw new Error(`client bulunamadı: ${clientId}`);
       const siteIds = sites.filter((s) => s.clientId === clientId).map((s) => s.id);
       clients.splice(idx, 1);
@@ -238,9 +268,7 @@ export function createInMemoryPanelStore(): PanelStore {
     },
 
     async createSite(input) {
-      if (!clients.some((c) => c.id === input.clientId)) {
-        throw new Error(`client bulunamadı: ${input.clientId}`);
-      }
+      requireClient(input.tenantId, input.clientId);
       const site: Site = {
         id: crypto.randomUUID(),
         clientId: input.clientId,
@@ -257,12 +285,13 @@ export function createInMemoryPanelStore(): PanelStore {
       return site ? clone(site) : null;
     },
 
-    async listSites(clientId) {
-      return clone(sites.filter((s) => s.clientId === clientId));
+    async listSites(tenantId, clientId) {
+      const client = ownClient(tenantId, clientId);
+      return clone(client ? sites.filter((s) => s.clientId === clientId) : []);
     },
 
-    async getSite(siteId) {
-      const site = sites.find((s) => s.id === siteId);
+    async getSite(tenantId, siteId) {
+      const site = ownSite(tenantId, siteId);
       return site ? clone(site) : null;
     },
 
@@ -292,7 +321,11 @@ export function createInMemoryPanelStore(): PanelStore {
       return clone(scan);
     },
 
-    async listScans(siteId) {
+    async listScans(tenantId, siteId) {
+      return clone(ownSite(tenantId, siteId) ? scans.filter((s) => s.siteId === siteId) : []);
+    },
+
+    async listAllScans(siteId) {
       return clone(scans.filter((s) => s.siteId === siteId));
     },
 
@@ -311,8 +344,9 @@ export function createInMemoryPanelStore(): PanelStore {
       return clone(entry);
     },
 
-    async verifySiteChain(siteId) {
-      return verifyStoredChain(receiptEntries.filter((e) => e.siteId === siteId));
+    async verifySiteChain(tenantId, siteId) {
+      const visible = ownSite(tenantId, siteId);
+      return verifyStoredChain(visible ? receiptEntries.filter((e) => e.siteId === siteId) : []);
     },
 
     async createUser(input) {
@@ -400,16 +434,14 @@ export function createInMemoryPanelStore(): PanelStore {
       return { userId: token.userId };
     },
 
-    async setBannerConfig(siteId, config) {
-      const site = sites.find((s) => s.id === siteId);
-      if (!site) throw new Error(`site bulunamadı: ${siteId}`);
+    async setBannerConfig(tenantId, siteId, config) {
+      const site = requireSite(tenantId, siteId);
       site.bannerConfig = config ? clone(config) : undefined;
       return clone(site);
     },
 
-    async setScanSchedule(siteId, intervalHours) {
-      const site = sites.find((s) => s.id === siteId);
-      if (!site) throw new Error(`site bulunamadı: ${siteId}`);
+    async setScanSchedule(tenantId, siteId, intervalHours) {
+      const site = requireSite(tenantId, siteId);
       site.scanIntervalHours = intervalHours;
       return clone(site);
     },
@@ -434,11 +466,12 @@ export function createInMemoryPanelStore(): PanelStore {
       return clone(dsar);
     },
 
-    async listDsars(siteId) {
-      return clone(dsars.filter((d) => d.siteId === siteId));
+    async listDsars(tenantId, siteId) {
+      return clone(ownSite(tenantId, siteId) ? dsars.filter((d) => d.siteId === siteId) : []);
     },
 
-    async updateDsar(siteId, dsarId, patch) {
+    async updateDsar(tenantId, siteId, dsarId, patch) {
+      requireSite(tenantId, siteId);
       const dsar = dsars.find((d) => d.id === dsarId && d.siteId === siteId);
       if (!dsar) throw new Error(`başvuru bulunamadı: ${dsarId}`);
 
@@ -457,14 +490,12 @@ export function createInMemoryPanelStore(): PanelStore {
       return clone(dsar);
     },
 
-    async listReceipts(siteId) {
-      return clone(receiptEntries.filter((e) => e.siteId === siteId));
+    async listReceipts(tenantId, siteId) {
+      return clone(ownSite(tenantId, siteId) ? receiptEntries.filter((e) => e.siteId === siteId) : []);
     },
 
-    async saveCorrection(siteId, input) {
-      if (!sites.some((s) => s.id === siteId)) {
-        throw new Error(`site bulunamadı: ${siteId}`);
-      }
+    async saveCorrection(tenantId, siteId, input) {
+      requireSite(tenantId, siteId);
       const correction: Correction = {
         fieldName: input.fieldName,
         category: input.category as Correction["category"],
@@ -478,7 +509,11 @@ export function createInMemoryPanelStore(): PanelStore {
       return clone(correction);
     },
 
-    async listCorrections(siteId) {
+    async listCorrections(tenantId, siteId) {
+      return clone(ownSite(tenantId, siteId) ? corrections.filter((c) => c.siteId === siteId) : []);
+    },
+
+    async listAllCorrections(siteId) {
       return clone(corrections.filter((c) => c.siteId === siteId));
     },
 

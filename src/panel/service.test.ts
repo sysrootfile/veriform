@@ -316,7 +316,7 @@ describe("site kotası (paket zorlaması)", () => {
     const { store, service, client } = await tenantWithPackage("starter");
     const sites = [];
     for (let i = 1; i <= 3; i++) sites.push(await service.addSite(client.id, `https://s${i}.com`));
-    await store.deleteClient(client.id);
+    await service.deleteClient(client.id);
     const client2 = await service.addClient("Yeni Müşteri");
     await expect(service.addSite(client2.id, "https://yeniden.com")).resolves.toBeTruthy();
     expect(sites.length).toBe(3);

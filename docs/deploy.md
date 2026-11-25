@@ -318,9 +318,12 @@ exists` alır — bu yüzden hedef hep boş olsun, sonra `ALTER DATABASE … REN
 - Rate limiter bellek içi ve anahtarı `req.socket.remoteAddress`: panel yeniden başladığında sayaçlar
   sıfırlanır, çok kopyada paylaşılır değil, ters proxy arkasında tek balta haline gelir (§6).
 - Compose `build` kullanıyor, `image:` satırı yok → etiketli rollback kurulu değil (§8).
-- RLS politikaları şemada tanımlı ama **etkin değil**: uygulama `postgres` süper kullanıcısıyla
-  bağlanıyor ve `app.current_tenant` hiç ayarlanmıyor. Kiracı ayrımı uygulama sorgularındaki
-  `tenant_id` / `site_id` filtrelerinde. Gerçek RLS zorlaması ayrı bir iş.
+- RLS **etkin** (migration 009, §19), iki sınırla: (1) uygulama `postgres` süper kullanıcısıyla
+  bağlanıyor; kiracı yolu işlem boyunca `veriform_app` rolüne geçiyor ama sistem yolları (ingest
+  anahtarı, zamanlayıcı, operatör, hesap belirteci) tablo sahibi olarak kalıyor ve kiracı filtresi yok.
+  Ayrı bağlantı hesabı + `FORCE ROW LEVEL SECURITY` sonraki sertleştirme. (2) Kiracı oturumunun
+  yalnız `tenantId` alan depo metotlarını çağırdığı kod incelemesiyle sağlanıyor; tip sistemi
+  zorlamıyor.
 - IP anahtarlı limiterler (giriş, kayıt, sıfırlama, `/tarama`) proxy arkasında tek adrese iner
   (yukarıdaki madde). DSAR ve ingest limiterleri token doğrulandıktan sonra site kimliğiyle sayar,
   proxy arkasında da doğru çalışır.
@@ -524,3 +527,29 @@ rota bağlantısını ölçer (12 test). Bu test yazılırken iki eski kusur ç�
 | `vitest run` (probe PG dahil) | 582 passed / 0 skipped (65 dosya) |
 | Konteyner (probe 14621): Blok 15 curl senaryosu | 37/37 |
 | Konteyner: 6 MB gövde, `curl` / Node `fetch` | `413` / `413` + mesaj |
+
+## 19. Canlı ölçüm kaydı — 2026-11-25 (Blok 17: RLS zorlaması)
+
+Değişiklik: satır düzeyi güvenlik (RLS) artık etkin. Migration `009_rls_app_role.sql` giriş yapamayan
+`veriform_app` rolünü kurar, kiracı tablolarına yalnız veri izni verir (DDL yok, `contact_requests` /
+`account_tokens` / `schema_migrations` açık değil) ve `audit_log`, `api_keys`, `plan_change_requests`
+için RLS'i açar. Depoda `tenantId` alan her metot işlem boyunca bu role geçer (`set local role` +
+`app.current_tenant`), işlem bitince bağlantı sahibine döner. İki depo için ortak sözleşme testi:
+`src/panel/store.tenant-scope.test.ts`. Uygulama migration'ı çalıştıran kullanıcıyla bağlanmalı
+(compose ve CI: `postgres`); ikinci bir şifre yok.
+
+Yazılırken çıkan eski kusur: `001_init.sql`'de `audit_log` için politika yazılmış ama RLS anahtarı
+açılmamıştı (politika etkisizdi).
+
+| Ölçüm | Sonuç |
+|---|---|
+| `pnpm typecheck` | 0 hata |
+| `vitest run` (PG_URL'siz) | 562 passed / 31 skipped (65 dosya passed, 1 skipped) |
+| `vitest run` (probe PG dahil) | 593 passed / 0 skipped (66 dosya) |
+| probe DB: tablo sahibi / `veriform_app` (kiracı seçmeden) | 270 müşteri, 277 site / 0, 0 |
+| probe DB: RLS açık kiracı tablosu | 11 / 11 |
+| Konteyner (probe 14621): Blok 15 curl senaryosu | 37/37 |
+| Konteyner: iki kiracılı RLS senaryosu (site, zamanlama, düzeltme, DSAR, müşteri, denetim) | 27/27; her reddin ardından A'nın verisi DB'de değişmemiş |
+| Konteyner: rol kanıtı — `select on sites` rolünden geçici alınınca | sahibin kendi sitesi 403; izin geri verilince 200 |
+| Sıfır veritabanından açılış (izole proje `vf-rls-fresh`, ölçüm sonunda kaldırıldı) | 9 migration, healthy 6 sn; kayıt → müşteri → site → zamanlama → DSAR → denetim; panel yeniden başlatınca 200 |
+| Kiracı kapsamlı çağrı maliyeti (panel → db, 300 ardışık çağrı) | düz sorgu 0,35 ms → 1,44 ms (+1,09 ms) |

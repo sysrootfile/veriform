@@ -57,7 +57,7 @@ export async function runScheduledScans(
   const notified: ScheduledScanOutcome["notified"] = [];
 
   for (const site of sites) {
-    const scans = await store.listScans(site.id);
+    const scans = await store.listAllScans(site.id);
     const prevScan = scans.at(-1);
     const lastScanAt = prevScan?.scannedAt;
     if (!isDue(site, lastScanAt, nowMs)) continue;
