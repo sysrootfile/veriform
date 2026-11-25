@@ -233,6 +233,57 @@ describe("sunucu rotaları", () => {
   }, 30_000);
 });
 
+describe("site anahtarı domain bağı — rota kapısı", () => {
+  // Tek taze hesap (kayıt limiter kovası dakika başına 5); her çağrı ayrı site
+  // açar, ingest limiter kovası site kimliğiyle anahtarlı olduğundan bölünmez.
+  let gateCookie: Promise<string> | null = null;
+  const gateToken = (): Promise<string> =>
+    (gateCookie ??= signUp().then((s) => s.cookie)).then((cookie) => siteTokenOf(cookie));
+  it("embed config yanlış Origin'de 403, kayıtlı domainde 200", async () => {
+    const token = await gateToken();
+    const bad = await call(`/api/embed/config?token=${token}`, { headers: { origin: "https://evil.com" } });
+    expect(bad.status).toBe(403);
+    const ok = await call(`/api/embed/config?token=${token}`, { headers: { origin: "https://example.com" } });
+    expect(ok.status).toBe(200);
+  });
+
+  it("ingest POST'ları tarayıcı CORS'unu geçer: preflight 204, yanıt ACAO *", async () => {
+    const pre = await fetch(`${BASE}/api/ingest/scan/receipt`, {
+      method: "OPTIONS",
+      headers: {
+        origin: "https://example.com",
+        "access-control-request-method": "POST",
+        "access-control-request-headers": "content-type",
+      },
+    });
+    expect(pre.status).toBe(204);
+    expect(pre.headers.get("access-control-allow-origin")).toBe("*");
+    expect(pre.headers.get("access-control-allow-methods")).toContain("POST");
+    const token = await gateToken();
+    const res = await fetch(`${BASE}/api/ingest/scan/receipt`, {
+      method: "POST",
+      headers: { "content-type": "application/json", origin: "https://example.com" },
+      body: JSON.stringify({ token, receipt: {} }),
+    });
+    expect(res.headers.get("access-control-allow-origin")).toBe("*");
+    await res.text();
+  });
+
+  it("kanıt ve tarama POST'u yanlış Origin'de 403", async () => {
+    const token = await gateToken();
+    const receipt = await call("/api/ingest/scan/receipt", {
+      body: JSON.stringify({ token, receipt: {} }),
+      headers: { "content-type": "application/json", origin: "https://evil.com" },
+    });
+    expect(receipt.status).toBe(403);
+    const scan = await call("/api/ingest/scan", {
+      body: JSON.stringify({ token, report: { siteOrigin: "https://example.com", formCount: 0, categoryCounts: [] } }),
+      headers: { "content-type": "application/json", origin: "https://evil.com" },
+    });
+    expect(scan.status).toBe(403);
+  });
+});
+
 describe("açılış kapıları", () => {
   it("Postgres modunda PANEL_URL yoksa açılış DB'ye bağlanmadan durur", async () => {
     await expect(

@@ -62,11 +62,11 @@ describe("createIngestApi", () => {
       timestamp: "2026-11-01T10:00:00.000Z",
     });
 
-    const entry = await api.receipt({ token: site.ingestToken, receipt });
+    const entry = await api.receipt({ token: site.ingestToken, receipt, origin: "https://musteri1.com" });
     expect(entry.chainHash).toMatch(/^[0-9a-f]{64}$/);
 
     const err = await api
-      .receipt({ token: site.ingestToken, receipt: { ...receipt, selfHash: "f".repeat(64) } })
+      .receipt({ token: site.ingestToken, receipt: { ...receipt, selfHash: "f".repeat(64) }, origin: "https://musteri1.com" })
       .catch((e) => e);
     expect(err).toBeInstanceOf(IngestError);
     expect((err as IngestError).status).toBe(422);
@@ -147,12 +147,12 @@ describe("createIngestApi", () => {
     });
     const api = createIngestApi(store);
 
-    expect(await api.embedConfig({ token: site.ingestToken })).toMatchObject({
+    expect(await api.embedConfig({ token: site.ingestToken, origin: "https://musteri1.com" })).toMatchObject({
       bannerVersion: "banner-2026-11",
     });
 
     await store.setBannerConfig(tenantId, site.id, null);
-    expect(await api.embedConfig({ token: site.ingestToken })).toBeNull();
+    expect(await api.embedConfig({ token: site.ingestToken, origin: "https://musteri1.com" })).toBeNull();
 
     const err = await api.embedConfig({ token: "yok" }).catch((e) => e);
     expect((err as IngestError).status).toBe(401);
@@ -162,9 +162,64 @@ describe("createIngestApi", () => {
     const { store, site, tenantId } = await setup();
     const api = createIngestApi(store);
     expect((await store.getSite(tenantId, site.id))?.embedLastSeenAt).toBeUndefined();
-    await api.embedConfig({ token: site.ingestToken });
+    await api.embedConfig({ token: site.ingestToken, origin: "https://musteri1.com" });
     const seen = (await store.getSite(tenantId, site.id))?.embedLastSeenAt;
     expect(seen).toBeDefined();
     expect(Number.isNaN(Date.parse(seen!))).toBe(false);
+  });
+});
+
+describe("createIngestApi — site anahtarı domain bağı", () => {
+  const receipt = () =>
+    buildConsentReceipt({
+      site: "https://musteri1.com",
+      bannerVersion: "banner-2026-11",
+      textsHash: "aaa111",
+      decisions,
+      timestamp: "2026-11-01T10:00:00.000Z",
+    });
+
+  it("kanıtı yalnızca kayıtlı domaindan gelen istek kabul eder", async () => {
+    const { store, site } = await setup();
+    const api = createIngestApi(store);
+    const r = await receipt();
+    const ok = await api.receipt({ token: site.ingestToken, receipt: r, origin: "https://www.musteri1.com" });
+    expect(ok.chainHash).toMatch(/^[0-9a-f]{64}$/);
+    for (const headers of [{}, { origin: "https://evil.com" }, { referer: "https://evil.com/x" }]) {
+      const err = await api.receipt({ token: site.ingestToken, receipt: r, ...headers }).catch((e) => e);
+      expect(err).toBeInstanceOf(IngestError);
+      expect((err as IngestError).status).toBe(403);
+    }
+  });
+
+  it("embed config yalnızca kayıtlı domainden çekilir", async () => {
+    const { store, site } = await setup();
+    const api = createIngestApi(store);
+    await expect(api.embedConfig({ token: site.ingestToken })).rejects.toMatchObject({ status: 403 });
+    await expect(
+      api.embedConfig({ token: site.ingestToken, origin: "https://evil.com" }),
+    ).rejects.toMatchObject({ status: 403 });
+    const config = await api.embedConfig({ token: site.ingestToken, origin: "https://musteri1.com" });
+    expect(config).toBeNull();
+  });
+
+  it("tarayıcı origin'i taşıyan tarama yanlış domainde 403 olur", async () => {
+    const { store, site } = await setup();
+    const api = createIngestApi(store);
+    const err = await api
+      .scan({ token: site.ingestToken, report: emptyReport(), origin: "https://evil.com" })
+      .catch((e) => e);
+    expect((err as IngestError).status).toBe(403);
+  });
+
+  it("header'sız (sunucu tarayıcı) taramada rapor origin'i siteyle uyuşmalı", async () => {
+    const { store, site } = await setup();
+    const api = createIngestApi(store);
+    const err = await api
+      .scan({ token: site.ingestToken, report: { ...emptyReport(), siteOrigin: "https://evil.com" } })
+      .catch((e) => e);
+    expect((err as IngestError).status).toBe(403);
+    const ok = await api.scan({ token: site.ingestToken, report: emptyReport() });
+    expect(ok.report.siteOrigin).toBe("https://musteri1.com");
   });
 });

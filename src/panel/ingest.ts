@@ -5,6 +5,7 @@ import type { FormInventoryReport } from "../report/types.js";
 import type { StoredReceiptEntry } from "./chain.js";
 import { applyCorrections } from "./corrections.js";
 import type { PanelStore } from "./store.js";
+import { requestOriginAllowed, siteHostOf } from "./site-origin.js";
 import type { ScanCookie, SiteBannerConfig, StoredScan } from "./types.js";
 
 /**
@@ -83,8 +84,16 @@ export interface IngestApi {
     report: unknown;
     cookies?: unknown;
     observedTargets?: unknown;
+    /** Tarayıcı isteklerinde Origin/Referer; sunucu köprüsünde yok. */
+    origin?: string | undefined;
+    referer?: string | undefined;
   }): Promise<StoredScan>;
-  receipt(input: { token: string; receipt: ConsentReceipt }): Promise<StoredReceiptEntry>;
+  receipt(input: {
+    token: string;
+    receipt: ConsentReceipt;
+    origin?: string | undefined;
+    referer?: string | undefined;
+  }): Promise<StoredReceiptEntry>;
   dsar(input: {
     token: string;
     type: DsarType;
@@ -93,7 +102,18 @@ export interface IngestApi {
     message?: string | undefined;
   }): Promise<DsarRequest>;
   /** Embed'in banner konfigürasyonunu çekmesi (yoksa null). */
-  embedConfig(input: { token: string }): Promise<SiteBannerConfig | null>;
+  embedConfig(input: {
+    token: string;
+    origin?: string | undefined;
+    referer?: string | undefined;
+  }): Promise<SiteBannerConfig | null>;
+}
+
+/** Anahtar herkese açık kimlik: tarayıcı kanıtı yalnızca kayıtlı domainden kabul edilir. */
+function assertBrowserOrigin(siteUrl: string, origin?: string, referer?: string): void {
+  if (!requestOriginAllowed(siteUrl, origin, referer)) {
+    throw new IngestError(403, "site anahtarı yalnızca kayıtlı domainde çalışır");
+  }
 }
 
 export function createIngestApi(store: PanelStore): IngestApi {
@@ -101,8 +121,15 @@ export function createIngestApi(store: PanelStore): IngestApi {
     async scan(input) {
       const site = await store.getSiteByToken(input.token);
       if (!site) throw new IngestError(401, "geçersiz ingest token'ı");
+      if (input.origin !== undefined || input.referer !== undefined) {
+        assertBrowserOrigin(site.url, input.origin, input.referer);
+      }
       const { cookies, observedTargets } = requireScanArrays(input.cookies, input.observedTargets);
       const report = requireScanReport(input.report);
+      // Header'sız köprü (kendi tarayıcımız) da olsa rapor, kayıtlı siteyi anlatmalı.
+      if (siteHostOf(report.siteOrigin) !== siteHostOf(site.url)) {
+        throw new IngestError(403, "tarama origin'i kayıtlı siteyle uyuşmuyor");
+      }
       // İnsan onaylı düzeltme haritası: kabul anında rapora uygulanır
       const corrections = await store.listAllCorrections(site.id);
       const corrected = applyCorrections(report, corrections);
@@ -117,6 +144,7 @@ export function createIngestApi(store: PanelStore): IngestApi {
     async receipt(input) {
       const site = await store.getSiteByToken(input.token);
       if (!site) throw new IngestError(401, "geçersiz ingest token'ı");
+      assertBrowserOrigin(site.url, input.origin, input.referer);
       try {
         return await store.appendReceipt({ siteId: site.id, receipt: input.receipt });
       } catch (error) {
@@ -143,6 +171,7 @@ export function createIngestApi(store: PanelStore): IngestApi {
     async embedConfig(input) {
       const site = await store.getSiteByToken(input.token);
       if (!site) throw new IngestError(401, "geçersiz ingest token'ı");
+      assertBrowserOrigin(site.url, input.origin, input.referer);
       // Config çekimi izleme kodunun yüklenişidir: bağlantı sinyali olarak damgalanır.
       await store.markEmbedSeen(site.id);
       return site.bannerConfig ?? null;

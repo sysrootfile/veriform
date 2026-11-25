@@ -645,13 +645,30 @@ export const server = createServer(async (req, res) => {
 
     // Ingest rotaları — makine kimliklendirmesi site token'ı iledir (oturum değil);
     // oturum guard'ının ÖNCESİNDE olmalı
-    if (req.method === "POST" && url.pathname.startsWith("/api/ingest/")) {
+    if (url.pathname.startsWith("/api/ingest/")) {
+      // Embed müşteri sitesinden (farklı origin) POST'lar: JSON preflight'ı yanıtlanmalı.
+      const cors = { "access-control-allow-origin": "*" };
+      if (req.method === "OPTIONS") {
+        res.writeHead(204, {
+          ...cors,
+          "access-control-allow-methods": "POST, OPTIONS",
+          "access-control-allow-headers": "content-type",
+          "access-control-max-age": "600",
+        });
+        res.end();
+        return;
+      }
+      if (req.method !== "POST") {
+        res.writeHead(405, { "content-type": "application/json", ...cors });
+        res.end(JSON.stringify({ error: "yalnızca POST" }));
+        return;
+      }
       let body: Record<string, unknown>;
       try {
         body = JSON.parse(await readBody(req)) as Record<string, unknown>;
       } catch (error) {
         if (error instanceof BodyTooLargeError) throw error;
-        res.writeHead(400, { "content-type": "application/json" });
+        res.writeHead(400, { "content-type": "application/json", ...cors });
         res.end(JSON.stringify({ error: "geçersiz istek" }));
         return;
       }
@@ -660,15 +677,17 @@ export const server = createServer(async (req, res) => {
           const entry = await ingest.receipt({
             token: String(body.token ?? ""),
             receipt: body.receipt as never,
+            origin: req.headers.origin,
+            referer: req.headers.referer,
           });
-          res.writeHead(200, { "content-type": "application/json" });
+          res.writeHead(200, { "content-type": "application/json", ...cors });
           res.end(JSON.stringify({ id: entry.id, chainHash: entry.chainHash }));
           return;
         }
         if (url.pathname === "/api/ingest/scan") {
           const site = await store.getSiteByToken(String(body.token ?? ""));
           if (site && !ingestLimiter.allow(site.id)) {
-            res.writeHead(429, { "content-type": "application/json" });
+            res.writeHead(429, { "content-type": "application/json", ...cors });
             res.end(JSON.stringify({ error: "çok fazla istek — bir dakika sonra tekrar deneyin" }));
             return;
           }
@@ -677,19 +696,21 @@ export const server = createServer(async (req, res) => {
             report: body.report,
             cookies: body.cookies,
             observedTargets: body.observedTargets,
+            origin: req.headers.origin,
+            referer: req.headers.referer,
           });
-          res.writeHead(200, { "content-type": "application/json" });
+          res.writeHead(200, { "content-type": "application/json", ...cors });
           res.end(JSON.stringify({ id: scan.id }));
           return;
         }
-        res.writeHead(404, { "content-type": "application/json" });
+        res.writeHead(404, { "content-type": "application/json", ...cors });
         res.end(JSON.stringify({ error: "bilinmeyen ingest ucu" }));
       } catch (error) {
         if (error instanceof IngestError) {
-          res.writeHead(error.status, { "content-type": "application/json" });
+          res.writeHead(error.status, { "content-type": "application/json", ...cors });
           res.end(JSON.stringify({ error: error.message }));
         } else {
-          res.writeHead(400, { "content-type": "application/json" });
+          res.writeHead(400, { "content-type": "application/json", ...cors });
           res.end(JSON.stringify({ error: "geçersiz istek" }));
         }
       }
@@ -703,6 +724,8 @@ export const server = createServer(async (req, res) => {
       try {
         const config = await ingest.embedConfig({
           token: url.searchParams.get("token") ?? "",
+          origin: req.headers.origin,
+          referer: req.headers.referer,
         });
         res.writeHead(200, { "content-type": "application/json", ...cors });
         res.end(JSON.stringify({ bannerConfig: config }));
