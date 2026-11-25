@@ -52,7 +52,8 @@ function nav(active: NavActive): string {
     (item) =>
       `<a href="${item.href}"${item.key === active ? ' aria-current="page"' : ""}>${item.label}</a>`,
   ).join("\n");
-  return `<nav class="topnav" aria-label="Panel">
+  return `<nav class="sidenav" aria-label="Panel">
+<p class="sidenav-title mono">VERİFORM PANEL</p>
 ${links}
 <a href="/logout" class="nav-logout">Çıkış</a>
 </nav>`;
@@ -70,12 +71,13 @@ export const panelPage = (title: string, body: string, accent?: string | undefin
 ${STYLE}</style>
 </head>
 <body>
-${navActive ? nav(navActive) : ""}
+${navActive ? `<div class="panel-shell">${nav(navActive)}<div class="panel-main">` : ""}
 ${sheetOpen(escapeHtml(title))}
 ${setup ? setupStrip(setup) : ""}
 ${body}
 <footer>Veriform panel — izleyici ham veri saklamaz; kanıtlar kurcalama kanıtlı zincirde.</footer>
 </div>
+${navActive ? "</div></div>" : ""}
 </body>
 </html>`;
 
@@ -287,7 +289,7 @@ export function renderSitePage(input: {
   <button type="submit">Onay bağlantısı gönder</button>
 </form>`
       : `<h2 id="banner">Rıza Bannerı Konfigürasyonu</h2>
-<p class="empty">Bu metinler ziyaretçinin gördüğü izin penceresidir. Kaydedince izleme kodu otomatik çeker; sürüm değişirse ziyaretçiden yeniden izin istenir.</p>
+<p class="empty">Banner, ziyaretçinin sitenize girince gördüğü izin kutusudur. Bu metinleri kaydedince izleme kodu kutuyu otomatik gösterir; ziyaretçi seçim yapınca kanıt anında bu siteye düşer. Yayınlamazsanız ziyaretçi izin kutusu görmez. Sürüm değişirse ziyaretçiden yeniden izin istenir.</p>
 <form method="post" action="/sites/${e(input.siteId)}/banner">
   <input name="bannerVersion" placeholder="banner-2026-11" value="${e(bc?.bannerVersion ?? "")}" required>
   <input name="title" placeholder="Başlık" value="${e(bc?.texts.title ?? "Çerez Tercihleriniz")}" required>
@@ -422,7 +424,7 @@ export function renderClientDetailPage(input: {
   const installSection =
     input.emailVerified === false
       ? `<p class="badge-warn">İzleme kodunu kurmak için e-posta adresinizi onaylayın — <a href="/settings/account">Hesap ayarları</a>.</p>`
-      : `<p class="empty">İzleme kodunu sitenizin <code>&lt;head&gt;</code> bölümüne ekleyin; <code>data-site-token</code> yerine aşağıdaki site anahtarını yazın. Kod çalışınca ziyaretçiden izin alınmaya başlar ve panel bağlantıyı doğrular.</p>
+      : `<p class="empty">İzleme kodunu sitenizin <code>&lt;head&gt;</code> bölümüne ekleyin; <code>data-site-token</code> yerine aşağıdaki site anahtarını yazın. Kod çalışınca ziyaretçiden izin alınmaya başlar ve panel bağlantıyı doğrular. Anahtar yalnızca bu sitede çalışır; başka sitede kullanılamaz.</p>
 <p><code>&lt;script src="${e(input.embedSrc ?? "/embed.js")}" data-site-token="…"&gt;&lt;/script&gt;</code></p>`;
 
   return panelPage(

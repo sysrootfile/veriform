@@ -971,10 +971,19 @@ describe("anlaşılırlık — panel müşteri dili", () => {
     expect(html).toContain("Kayıt ve ilk tarama");
   });
 
+  it("panel gezinmesi sol sütundur ve aktif sayfayı işaretler", () => {
+    const html = renderClientsPage({ tenantName: "A", clients: [] });
+    expect(html).toContain('class="panel-shell"');
+    expect(html).toContain('class="sidenav"');
+    expect(html).toContain('href="/clients" aria-current="page"');
+    expect(renderLoginPage()).not.toContain('class="sidenav"');
+  });
+
   it("izleme kodu talimatı ne kazandıracağını söyler", () => {
     const detail = renderClientDetailPage({ clientName: "M", clientHref: "/clients/c1", sites: [] });
     expect(detail).toContain("ziyaretçiden izin alınmaya başlar");
     expect(detail).toContain("panel bağlantıyı doğrular");
+    expect(detail).toContain("başka sitede kullanılamaz");
   });
 
   it("boş durumlar sıradaki işi ve kazanımı söyler", () => {
@@ -984,5 +993,7 @@ describe("anlaşılırlık — panel müşteri dili", () => {
     expect(detail).toContain("tarama ve izin kaydı bu siteye bağlanır");
     const site = renderSitePage({ siteId: "s1", siteUrl: "https://musteri1.com", chainValid: true, scans: [] });
     expect(site).toContain("sitenin ne topladığını rapor olarak görün");
+    expect(site).toContain("izin kutusudur");
+    expect(site).toContain("Yayınlamazsanız ziyaretçi izin kutusu görmez");
   });
 });
