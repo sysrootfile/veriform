@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createConsoleEmailSender } from "./mailer.js";
+import { createConsoleEmailSender, createMailSenderFromEnv } from "./mailer.js";
 
 describe("createConsoleEmailSender", () => {
   it("mailin tam metnini loglar — bağlantı token'ları dev'de görünür", async () => {
@@ -19,5 +19,21 @@ describe("createConsoleEmailSender", () => {
     } finally {
       spy.mockRestore();
     }
+  });
+});
+describe("createMailSenderFromEnv üretim kapısı", () => {
+  it("https panelde SMTP yoksa açılış durur (mail sessizce kaybolmaz)", () => {
+    expect(() => createMailSenderFromEnv({ PANEL_URL: "https://panel.test" })).toThrow(/SMTP_HOST/);
+  });
+
+  it("açıkça istenmiş console gönderici kabul edilir (yerel deneme)", () => {
+    expect(
+      createMailSenderFromEnv({ PANEL_URL: "https://panel.test", ALLOW_CONSOLE_MAIL: "1" }),
+    ).toBeDefined();
+  });
+
+  it("yerel http panelde SMTP yoksa console gönderici döner", () => {
+    expect(createMailSenderFromEnv({ PANEL_URL: "http://localhost:4620" })).toBeDefined();
+    expect(createMailSenderFromEnv({})).toBeDefined();
   });
 });

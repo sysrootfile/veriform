@@ -1,6 +1,6 @@
 /**
  * E-posta gönderim portu — SMTP (nodemailer, lazy import) veya console (geliştirme).
- * Prod'da SMTP_HOST vb. ortam değişkenleriyle yapılandırılır; yoksa mail yerine
+ * Üretimde (https panel) SMTP_HOST vb. zorunludur; geliştirmede SMTP yoksa mail yerine
  * log düşer (nazik düşüş, panel çalışmaya devam eder).
  */
 
@@ -51,7 +51,10 @@ export function createSmtpEmailSender(config: {
   };
 }
 
-/** Ortam değişkenlerinden gönderici seçer — SMTP yoksa console. */
+/**
+ * Ortam değişkenlerinden gönderici seçer. SMTP yoksa console'a loglar; ama PANEL_URL https ise
+ * (herkese açık kurulum) açılış durur — mail sessizce kaybolamaz. Yerel deneme: ALLOW_CONSOLE_MAIL=1.
+ */
 export function createMailSenderFromEnv(
   env: Record<string, string | undefined> = process.env,
 ): EmailSender {
@@ -63,6 +66,12 @@ export function createMailSenderFromEnv(
       ...(env.SMTP_PASS ? { pass: env.SMTP_PASS } : {}),
       from: env.SMTP_FROM ?? "Veriform <noreply@veriform.io>",
     });
+  }
+  const isPublicDeployment = (env.PANEL_URL ?? "").trim().startsWith("https://");
+  if (isPublicDeployment && env.ALLOW_CONSOLE_MAIL !== "1") {
+    throw new Error(
+      "SMTP_HOST zorunlu: https panelde e-posta console'a loglanarak kaybedilemez. SMTP_* tanımla; yerel deneme için ALLOW_CONSOLE_MAIL=1",
+    );
   }
   return createConsoleEmailSender();
 }
