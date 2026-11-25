@@ -1,0 +1,248 @@
+import { randomUUID } from "node:crypto";
+import { once } from "node:events";
+import type { Server } from "node:http";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+
+/**
+ * Panel sunucusu entegrasyon testi: gerçek süreç içi sunucu, gerçek HTTP istekleri.
+ * Rota bağlantısı burada ölçülür (hız sınırları, çerez, mail bağlantısı kökü);
+ * iş mantığı kendi modüllerinin testlerinde.
+ */
+
+const PORT = 20000 + Math.floor(Math.random() * 20000);
+const BASE = `http://127.0.0.1:${PORT}`;
+const PANEL = "https://panel.test";
+const PASSWORD = "Probe-pass-16!";
+
+let server: Server;
+let logs: string[] = [];
+
+async function boot(env: Record<string, string | undefined>): Promise<void> {
+  for (const key of ["DATABASE_URL", "PANEL_URL", "ALLOW_CONSOLE_MAIL", "SMTP_HOST"]) delete process.env[key];
+  Object.assign(process.env, env);
+  vi.resetModules();
+  const mod = (await import("./server.js")) as { server: Server };
+  server = mod.server;
+  if (!server.listening) await once(server, "listening");
+}
+
+beforeAll(async () => {
+  logs = [];
+  vi.spyOn(console, "log").mockImplementation((...parts: unknown[]) => {
+    logs.push(parts.map(String).join(" "));
+  });
+  await boot({ SESSION_SECRET: "test-sirri-".repeat(4), PORT: String(PORT), PANEL_URL: PANEL, ALLOW_CONSOLE_MAIL: "1" });
+}, 30_000);
+
+afterAll(async () => {
+  await new Promise<void>((resolve) => server.close(() => resolve()));
+  vi.restoreAllMocks();
+});
+
+interface Reply {
+  status: number;
+  location: string;
+  cookie: string;
+  text: string;
+}
+
+async function call(
+  path: string,
+  init: { body?: BodyInit; cookie?: string; headers?: Record<string, string> } = {},
+): Promise<Reply> {
+  const posting = init.body !== undefined;
+  const res = await fetch(`${BASE}${path}`, {
+    method: posting ? "POST" : "GET",
+    redirect: "manual",
+    ...(posting ? { body: init.body } : {}),
+    headers: {
+      ...(posting ? { "content-type": "application/x-www-form-urlencoded" } : {}),
+      ...(init.cookie ? { cookie: init.cookie } : {}),
+      ...init.headers,
+    },
+  });
+  const setCookie = res.headers.getSetCookie()[0];
+  return {
+    status: res.status,
+    location: res.headers.get("location") ?? "",
+    cookie: setCookie ? setCookie.split(";")[0]! : "",
+    text: await res.text(),
+  };
+}
+
+const form = (fields: Record<string, string>) => new URLSearchParams(fields).toString();
+
+function lastMailLink(kind: "verify-email" | "reset-password"): string {
+  const links = [...logs.join("\n").matchAll(new RegExp(`${PANEL}/${kind}\\?token=([0-9a-f]+)`, "g"))];
+  const token = links.at(-1)?.[1];
+  if (!token) throw new Error(`mail bağlantısı bulunamadı: ${kind}`);
+  return token;
+}
+
+interface Session {
+  cookie: string;
+  email: string;
+  password: string;
+}
+
+// Kayıt sınırı dakikada 5: hesaplar paylaşılır, her test yeni hesap açmaz
+let shared: Promise<Session> | null = null;
+const session = (): Promise<Session> => (shared ??= signUp());
+
+async function signUp(): Promise<Session> {
+  const email = `sunucu-${randomUUID()}@test.test`;
+  const registered = await call("/register", {
+    body: form({ name: "Test Ajansı", email, password: PASSWORD }),
+  });
+  expect(registered.status).toBe(302);
+  expect(await call("/verify-email", { body: form({ token: lastMailLink("verify-email") }) })).toMatchObject({
+    status: 200,
+  });
+  return { cookie: registered.cookie, email, password: PASSWORD };
+}
+
+async function siteTokenOf(cookie: string): Promise<string> {
+  expect((await call("/clients", { body: form({ name: "Müşteri" }), cookie })).status).toBe(302);
+  const list = await call("/clients", { cookie });
+  const clientId = list.text.match(/\/clients\/([0-9a-f-]{36})/)?.[1];
+  if (!clientId) throw new Error("müşteri kimliği bulunamadı");
+  const added = await call(`/clients/${clientId}/sites`, {
+    body: form({ url: "https://example.com" }),
+    cookie,
+  });
+  expect(added.status).toBe(302);
+  const detail = await call(`/clients/${clientId}`, { cookie });
+  const token = detail.text.match(/example\.com<\/a><\/td><td><code>([^<]+)<\/code>/)?.[1];
+  if (!token) throw new Error("site anahtarı bulunamadı");
+  return token;
+}
+
+describe("sunucu rotaları", () => {
+  it("mail bağlantısının kökü PANEL_URL'dir, istek Host başlığı değil", async () => {
+    const { email } = await session();
+    const res = await call("/forgot-password", {
+      body: form({ email }),
+      headers: { host: "evil.test" },
+    });
+    expect(res.status).toBe(303);
+    const mail = logs.join("\n");
+    expect(mail).toContain(`${PANEL}/reset-password?token=`);
+    expect(mail).not.toContain("evil.test");
+  });
+
+  it("kayıt kısa şifreyi 400 ile reddeder", async () => {
+    const res = await call("/register", {
+      body: form({ name: "Test Ajansı", email: `kisa-${randomUUID()}@test.test`, password: "kisa" }),
+    });
+    expect(res.status).toBe(400);
+    expect(res.text).toContain("en az 8");
+  });
+
+  it("e-posta onayı: GET token'ı tüketmez, POST tüketir", async () => {
+    const email = `onay-${randomUUID()}@test.test`;
+    expect(
+      (await call("/register", { body: form({ name: "Test Ajansı", email, password: PASSWORD }) })).status,
+    ).toBe(302);
+    const token = lastMailLink("verify-email");
+    const page = await call(`/verify-email?token=${token}`);
+    expect(page.status).toBe(200);
+    expect(page.text).toContain('action="/verify-email"');
+    const confirmed = await call("/verify-email", { body: form({ token }) });
+    expect(confirmed.status).toBe(200);
+    expect(confirmed.text).toContain("doğrulandı");
+    expect((await call("/verify-email", { body: form({ token }) })).text).toContain(
+      "geçersiz veya süresi dolmuş",
+    );
+  });
+
+  it("genel olmayan site adresi eklenmez", async () => {
+    const { cookie } = await session();
+    expect((await call("/clients", { body: form({ name: "Müşteri" }), cookie })).status).toBe(302);
+    const clientId = (await call("/clients", { cookie })).text.match(/\/clients\/([0-9a-f-]{36})/)?.[1];
+    const res = await call(`/clients/${clientId}/sites`, {
+      body: form({ url: "http://127.0.0.1:4620/" }),
+      cookie,
+    });
+    expect(res.status).toBe(302);
+    expect(res.location).toBe(`/clients/${clientId}?site=invalid`);
+  });
+
+  it("/tarama yerel adresi taranamaz", async () => {
+    const { cookie } = await session();
+    const res = await call("/tarama", { body: form({ url: "http://localhost/" }), cookie });
+    expect(res.status).toBe(400);
+    expect(res.text).toContain("Geçerli bir http(s) adresi girin");
+  });
+
+  it("API anahtarı yalnız üretim yanıtının gövdesinde taşınır", async () => {
+    const { cookie } = await session();
+    const created = await call("/settings/api-keys", { body: form({ name: "test-anahtarı" }), cookie });
+    expect(created.status).toBe(200);
+    expect(created.location).toBe("");
+    const key = created.text.match(/<pre>([^<]+)<\/pre>/)?.[1];
+    expect(key).toBeTruthy();
+    const page = await call("/settings/api-keys", { cookie });
+    expect(page.status).toBe(200);
+    expect(page.text).not.toContain(key!);
+  });
+
+  it("şifre değişince eski çerez düşer", async () => {
+    const current = await session();
+    const changed = await call("/settings/account/password", {
+      body: form({ currentPassword: current.password, newPassword: "Probe-yeni-16!" }),
+      cookie: current.cookie,
+    });
+    expect(changed.status).toBe(303);
+    shared = Promise.resolve({ ...current, cookie: changed.cookie, password: "Probe-yeni-16!" });
+    const old = await call("/clients", { cookie: current.cookie });
+    expect(old.status).toBe(302);
+    expect(old.location).toBe("/login");
+    expect((await call("/clients", { cookie: changed.cookie })).status).toBe(200);
+  });
+
+  it("5 MB üstü gövde 413 döner ve yanıt istemciye ulaşır", async () => {
+    const res = await call("/login", { body: `a=${"a".repeat(6 * 1024 * 1024)}` });
+    expect(res.status).toBe(413);
+    expect(res.text).toContain("çok büyük");
+  });
+
+  it("DSAR göndermesi dakikada 20 ile sınırlıdır", async () => {
+    const token = await siteTokenOf((await session()).cookie);
+    const statuses: number[] = [];
+    for (let i = 0; i < 21; i++) {
+      statuses.push((await call(`/dsar/${token}`, { body: form({ type: "bozuk" }) })).status);
+    }
+    expect(statuses.filter((s) => s === 400)).toHaveLength(20);
+    expect(statuses.filter((s) => s === 429)).toHaveLength(1);
+  }, 30_000);
+
+  it("ingest scan dakikada 60 ile sınırlıdır", async () => {
+    const token = await siteTokenOf((await session()).cookie);
+    const statuses: number[] = [];
+    for (let i = 0; i < 61; i++) {
+      const res = await fetch(`${BASE}/api/ingest/scan`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ token, report: {} }),
+      });
+      statuses.push(res.status);
+      await res.text();
+    }
+    expect(statuses.filter((s) => s === 400)).toHaveLength(60);
+    expect(statuses.filter((s) => s === 429)).toHaveLength(1);
+  }, 30_000);
+});
+
+describe("açılış kapıları", () => {
+  it("Postgres modunda PANEL_URL yoksa açılış DB'ye bağlanmadan durur", async () => {
+    await expect(
+      boot({ SESSION_SECRET: "test-sirri-".repeat(4), PORT: String(PORT), DATABASE_URL: "postgresql://u:p@127.0.0.1:1/x" }),
+    ).rejects.toThrow(/PANEL_URL zorunlu/);
+  });
+
+  it("https panelde SMTP yoksa açılış durur", async () => {
+    await expect(
+      boot({ SESSION_SECRET: "test-sirri-".repeat(4), PORT: String(PORT), PANEL_URL: PANEL, DATABASE_URL: "postgresql://u:p@127.0.0.1:1/x" }),
+    ).rejects.toThrow(/SMTP_HOST zorunlu/);
+  });
+});
