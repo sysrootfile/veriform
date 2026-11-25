@@ -32,6 +32,16 @@ services:
       WORKER_TOKEN: ${WORKER_TOKEN:-}
       # Operatör konsolu: owner e-postası bu virgül-listesinde olan kiracılar /operator/* görür
       OPERATOR_EMAILS: ${OPERATOR_EMAILS:-}
+      # Mail yolu: https PANEL_URL'de SMTP_HOST zorunlu, tanımsızsa açılış durur
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      # Yalnız yerel deneme: https panelde mail console'a düşse de açılır
+      ALLOW_CONSOLE_MAIL: ${ALLOW_CONSOLE_MAIL:-}
+      # İletişim formu taleplerinin gideceği adres; boşsa kod varsayılanını kullanır
+      CONTACT_OPERATOR_EMAIL: ${CONTACT_OPERATOR_EMAIL:-}
       ENABLE_SCAN_SCHEDULER: "1"
       SCAN_CHECK_INTERVAL_MS: "300000"
       CHROMIUM_EXECUTABLE_PATH: /usr/bin/chromium-browser

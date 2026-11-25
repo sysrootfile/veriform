@@ -44,6 +44,7 @@ Kapılar konteyner içinde ölçüldü (imajı `node dist/panel.mjs` ile doğrud
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | `PANEL_URL` https ise evet | `SMTP_HOST` yoksa ve panel http ise mail console'a log düşer. Panel https ise `SMTP_HOST` zorunlu, boot durur. İstisna: `ALLOW_CONSOLE_MAIL=1` | SMTP sağlayıcın |
 | `PANEL_URL` | `DATABASE_URL` doluysa evet | Hesap maillerindeki ve embed snippet'indeki mutlak adreslerin kökü. İstek `Host` başlığından türetilmez. compose bunu zorunlu kılar | `https://panel.ajans.com`; yerel compose `http://localhost:4620` |
 | `ALLOW_CONSOLE_MAIL` | hayır | `1` ise https panelde bile SMTP'siz açılır (yalnız yerel deneme). Mail kaybolur | — |
+| `CONTACT_OPERATOR_EMAIL` | hayır | Landing iletişim formu taleplerinin gideceği adres. Boşsa kod varsayılanı (`iletisim@veriform.io`) kullanılır | `iletisim@ajans.com` |
 
 `.env` dosyası asla repoya girmez (`.gitignore`); `cp .env.example .env` ile başla.
 
@@ -553,3 +554,63 @@ açılmamıştı (politika etkisizdi).
 | Konteyner: rol kanıtı — `select on sites` rolünden geçici alınınca | sahibin kendi sitesi 403; izin geri verilince 200 |
 | Sıfır veritabanından açılış (izole proje `vf-rls-fresh`, ölçüm sonunda kaldırıldı) | 9 migration, healthy 6 sn; kayıt → müşteri → site → zamanlama → DSAR → denetim; panel yeniden başlatınca 200 |
 | Kiracı kapsamlı çağrı maliyeti (panel → db, 300 ardışık çağrı) | düz sorgu 0,35 ms → 1,44 ms (+1,09 ms) |
+
+## 20. Canlı ölçüm kaydı — 2026-11-25 (compose e-posta aktarımı)
+
+Değişiklik: `docker-compose.yml` panel ortamına `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`,
+`SMTP_FROM`, `ALLOW_CONSOLE_MAIL` ve `CONTACT_OPERATOR_EMAIL` aktarımı eklendi. Hepsi `${VAR:-}`
+biçiminde: tanımsızken boş geçer, açılışı durdurmaz. Önceden bu adlar compose'ta hiç yoktu; `.env`'e
+yazılan değer konteynere geçmiyordu. Sonucu: https `PANEL_URL` ile panel, SMTP dolu `.env`'e rağmen
+"SMTP_HOST zorunlu" diye çıkıyordu; iletişim formu da operatör adresi yerine kod varsayılanını
+kullanıyordu. Koruma testi: `src/panel/compose-env.test.ts` (15 test) — mail yolunun okuduğu her ad
+panel ortamında bulunmalı ve isteğe bağlı aktarılmalı.
+
+| Ölçüm | Sonuç |
+|---|---|
+| `pnpm typecheck` | 0 hata |
+| `vitest run` (PG_URL'siz) | 577 passed / 31 skipped (66 dosya passed, 1 skipped) |
+| `vitest run` (probe PG dahil) | 608 passed / 0 skipped (67 dosya) |
+| `compose config`: panel ortamındaki mail adı | 7 (değişiklik öncesi 0) |
+| İzole proje `vf-env-probe`: https `PANEL_URL` + sahte SMTP | healthy, `/healthz` `ok:true`; `printenv` değerleri konteynerde görünüyor |
+| Aynı proje, SMTP tanımsız | çıkış `1`, "SMTP_HOST zorunlu" |
+| Eski compose (HEAD) + SMTP dolu override | çıkış `1`, aynı hata — kusurun kanıtı |
+| SMTP tanımsız + `ALLOW_CONSOLE_MAIL=1` | healthy; yerel deneme kapısı compose'tan geçiyor |
+
+Ölçüm sonunda izole proje, volume'u ve imajı kaldırıldı; `vf-ux-probe` ile `veriform-pg` dokunulmadı.
+
+**ÖLÇÜLMEDİ:** gerçek SMTP kutu teslimatı ve ters proxy arkasında Secure çerez oturum akışı (§6).
+Bu koşuda SMTP ana bilgisayarı sahteydi; yalnız açılış kapısı ve aktarım ölçüldü, mail gönderilmedi.
+→ İkisi de §21'de gerçek SMTP ve gerçek TLS ile ölçüldü.
+
+## 21. Canlı ölçüm kaydı — 2026-11-25 (gerçek SMTP + TLS/proxy oturumu)
+
+Denek: izole proje `vf-smtp-probe` (compose + §20 aktarımı), `PANEL_URL` Cloudflare hızlı tünelinin
+verdiği genel https adresi, `SESSION_COOKIE_SECURE=1`. Tünel `cloudflare/cloudflared` imajıyla ayrı
+konteynerde koştu (`tunnel --url http://host.docker.internal:4620`), hesap gerektirmedi. SMTP gerçek
+bir Gmail hesabıydı (uygulama şifresi, port 587); değerler `.env`'de, rapora basılmadı.
+
+| Ölçüm | Sonuç |
+|---|---|
+| Genel https `/healthz` | 200 `ok:true`, `ssl_verify_result=0` |
+| Sertifika | gerçek CA: Google Trust Services (WE1), `CN=trycloudflare.com`, geçerli tarih aralığı |
+| Tarayıcı oturum senaryosu (Playwright, gerçek sertifika doğrulaması açık) | 9/9 |
+| Çerez bayrakları | `Secure` + `HttpOnly` + `SameSite=Lax` |
+| Giriş → panel → rehber → çıkış | çıkış `/login`'e düşürdü, oturum düştü |
+| HSTS | tünel üzerinden `max-age=15552000; includeSubDomains`; düz http'de başlık yok |
+| Gmail 587 TCP (konteynerden) | bağlantı OK |
+| Doğrulama maili (`resend-verification`) | 303, 1,28 sn; gerçek kutuya düştü (kullanıcı gördü) |
+| Doğrulama bağlantısı tıklandı | DB `email_verified_at` = 2026-11-25 11:31:53 UTC; token `used_at` dolu |
+| Şifre sıfırlama maili (`forgot-password`) | 303, 3,2 sn; kutuya düştü, kullanıcı yeni şifreyi koydu ve giriş yaptı |
+| Sıfırlama tokenı | 1 token, `used_at` dolu (tek kullanımlık) |
+| Eski oturumlar | `sessions_valid_after` = 11:37:32 UTC; sıfırlama öncesi çerezle `/clients` → 302 `/login` |
+
+Bu koşuda çıkan iki kusur (ayrı iş, bu kayıtta düzeltilmedi):
+
+- SMTP erişilemezken kayıt isteği **42 sn** bekleyip 302 dönüyor. Mail hatası yutuluyor, kayıt
+  başarılı sayılıyor; kullanıcı 42 sn boş ekran görür. Gönderimde zaman aşımı yok.
+- `verify-email` tokenları kullanıldığında eskiler iptal edilmiyor: aynı hesap için 3 token
+  birikmişti, yalnız 1'i kullanıldı. Süreleri dolunca kendiliğinden geçersiz oluyorlar.
+
+**ÖLÇÜLMEDİ:** proxy arkasında limiter kovası — limiter `req.socket.remoteAddress` kullanıyor,
+tünel arkasında tüm istekler aynı konteyner IP'sinden görünüyor (tek kova). Çok kopyalı scheduler
+çakışması da hâlâ ölçülmedi.
