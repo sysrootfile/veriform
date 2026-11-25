@@ -38,6 +38,10 @@ export function createSmtpEmailSender(config: {
       const transport = nodemailer.createTransport({
         host: config.host,
         port: config.port,
+        // Erişilemeyen SMTP'de bağlantı denemesi dakikalarca sürebilir; kayıt isteği bunu bekler.
+        connectionTimeout: 10_000,
+        greetingTimeout: 10_000,
+        socketTimeout: 20_000,
         ...(config.user ? { auth: { user: config.user, pass: config.pass ?? "" } } : {}),
       });
       await transport.sendMail({
