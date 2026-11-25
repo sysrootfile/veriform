@@ -75,3 +75,21 @@ describe("landing — CSP hash sözleşmesi ve yasal bağlantılar", () => {
     expect(html).toContain('href="/cerez-politikasi"');
   });
 });
+
+describe("anlaşılırlık — müşterinin üç sorusu", () => {
+  it("ilk ekran ihtiyacı, ilerlemeyi ve kazanımı söyler", () => {
+    const html = renderLandingPage();
+    expect(html).toContain("Görün, izni alın, uyumu kanıtlayın");
+    expect(html).toContain("Üç adımda başlayın");
+    expect(html).toContain("tek satır kod");
+  });
+
+  it("ihtiyaç bölümü dört müşteri derdini çözümle eşler", () => {
+    const html = renderLandingPage();
+    expect(html).toContain("Hangi derdine derman?");
+    expect(html).toContain("Sitemde ne toplandığını bilmiyorum");
+    expect(html).toContain("Ziyaretçiden geçerli izin almam gerekiyor");
+    expect(html).toContain("Denetimde ne göstereceğim?");
+    expect(html).toContain("Müşteri siteleri değişince haberim olmuyor");
+  });
+});

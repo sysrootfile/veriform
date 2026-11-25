@@ -94,3 +94,16 @@ describe("renderDsarPanelPage", () => {
     expect(html).not.toContain("<script>x()");
   });
 });
+
+describe("anlaşılırlık — DSAR panel dili", () => {
+  it("boş durum başvuruların nereden geldiğini söyler", () => {
+    const html = renderDsarPanelPage({
+      siteUrl: "https://musteri1.com",
+      siteId: "s1",
+      requests: [],
+      now: "2026-10-01T10:00:00.000Z",
+    });
+    expect(html).toContain("ziyaretçiler sitenin başvuru formundan gönderir");
+    expect(html).toContain("yanıt süresini burada izlersiniz");
+  });
+});

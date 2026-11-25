@@ -535,14 +535,15 @@ export function renderLandingPage(options: LandingOptions = {}): string {
 <header class="nav">
   <a class="brand" href="#defter">VERİFORM<em>·</em>DEFTER</a>
   <nav class="nav-links" aria-label="Sayfa bölümleri">
-    <a href="#defter">Defter</a>
+    <a href="#defter">Başlangıç</a>
+    <a href="#ihtiyac">Ne işe yarar</a>
     <a href="#nasil">Nasıl işler</a>
     <a href="#paketler">Paketler</a>
     <a href="#iletisim">İletişim</a>
     <a href="/tarama">Örnek tarama</a>
     <a href="/login">Giriş</a>
   </nav>
-  <a class="nav-cta" href="/register">${icon("stamp", 15)} Defteri aç</a>
+  <a class="nav-cta" href="/register">${icon("stamp", 15)} Hesap oluştur</a>
 </header>
 
 <main>
@@ -551,16 +552,16 @@ export function renderLandingPage(options: LandingOptions = {}): string {
   <div class="antet"><span>VERİFORM — UYUM DEFTERİ</span><span>SAYFA 01 · GİREN KAYIT</span></div>
   <div class="defter-grid">
     <div>
-      <h1 class="rise">Siteniz ne topluyor? Kanıtı defterde.</h1>
-      <p class="lead rise" style="--d:60ms">Veriform formlarınızı, çerezlerinizi ve onay akışlarınızı izler; her taramayı bir öncekine <strong>sha256 halkasıyla</strong> mühürlenen bir deftere işler. İzleyici <strong>ham veri saklamaz</strong> — form alanlarının adlarını ve çerez kategorilerini kaydeder, içerikleri değil. KVKK denetiminde gösterilecek kanıt, ziyaretçinin eliyle kırılabilen bir zincirdir.</p>
+      <h1 class="rise">Siteniz ne topluyor? Görün, izni alın, uyumu kanıtlayın.</h1>
+      <p class="lead rise" style="--d:60ms">Veriform sitenizdeki formları ve çerezleri tarar; hangilerinin kişisel veri topladığını raporlar. <strong>Tek satır kodla</strong> ziyaretçiden izin alırsınız; her tercih denetimde gösterilecek şekilde kayda geçer. Ajanslar müşterilerinin sitelerini tek panelden izler, değişiklikte uyarı alır. İzleyici <strong>ham veri saklamaz</strong>: form alanlarının adlarını ve çerez kategorilerini kaydeder, ziyaretçinin yazdığı içeriği değil.</p>
       <div class="cta-row rise" style="--d:120ms">
-        <a class="stamp-btn" href="/register">${icon("stamp", 18)} Defteri aç</a>
+        <a class="stamp-btn" href="/register">${icon("stamp", 18)} Hesap oluştur</a>
         <a class="btn-quiet" href="/tarama">Örnek taramayı dene ${icon("arrow", 16)}</a>
       </div>
       <div class="entry-meta rise" style="--d:180ms">
-        <span>KAYIT <b>001</b></span>
-        <span>İZLEYİCİ <b>ham veri yok</b></span>
-        <span>KANIT <b>sha256 zinciri</b></span>
+        <span>KURULUM <b>tek satır kod</b></span>
+        <span>VERİ <b>ham veri yok</b></span>
+        <span>KANIT <b>denetime hazır</b></span>
         <span>UYUM <b>KVKK</b></span>
       </div>
     </div>
@@ -574,46 +575,83 @@ ${SEED_ROWS.map(renderSeedRow).join("\n")}
         <button class="ctrl" id="ctrl-tamper" type="button">${icon("pencil", 15)} Kurcala</button>
         <button class="ctrl" id="ctrl-verify" type="button">${icon("shield", 15)} Zinciri doğrula</button>
       </div>
-      <p class="demo-status" id="demo-status" aria-live="polite">İki örnek kayıt zincirli. Ekleyin, kurcalayın, doğrulayın — hash'ler gerçek sha256.</p>
+      <p class="demo-status" id="demo-status" aria-live="polite">Bu, denetimde göstereceğiniz kayıt zinciri. Ekleyin, kurcalayın, doğrulayın — bir kayıt değiştirilirse zincir kırılır.</p>
       <div class="demo-foot"><button class="reset-link" id="ctrl-reset" type="button">Defteri sıfırla</button></div>
+    </div>
+  </div>
+</section>
+
+<section class="sheet" id="ihtiyac" aria-label="Hangi ihtiyaçları karşılar">
+  <div class="holes" aria-hidden="true"><span class="hole"></span><span class="hole"></span><span class="hole"></span></div>
+  <div class="antet"><span>VERİFORM — UYUM DEFTERİ</span><span>SAYFA 02 · İHTİYAÇ</span></div>
+  <h2>Hangi derdine derman?</h2>
+  <p class="lead">Kişisel veri toplamak ve çerez kullanmak izne bağlı; izinsiz toplamak ceza sebebi. Veriform dört derdi tek panelde toplar.</p>
+  <div class="steps">
+    <div class="step">
+      <span class="step-num" aria-hidden="true">01</span>
+      <div>
+        <h3>Sitemde ne toplandığını bilmiyorum</h3>
+        <p>Site adresini gir, tarama raporu gelsin: hangi formlar var, hangi alanlar kişisel veri istiyor, hangi çerezler kuruluyor, veri hangi hedeflere gidiyor. Riskli olanlar işaretli.</p>
+      </div>
+    </div>
+    <div class="step">
+      <span class="step-num" aria-hidden="true">02</span>
+      <div>
+        <h3>Ziyaretçiden geçerli izin almam gerekiyor</h3>
+        <p>Tek satır kodu sitene ekle; ziyaretçi çerez tercihini seçsin. Her tercih zaman damgasıyla kayda geçer — "izin aldım" demek yetmez, göstermek gerekir.</p>
+      </div>
+    </div>
+    <div class="step">
+      <span class="step-num" aria-hidden="true">03</span>
+      <div>
+        <h3>Denetimde ne göstereceğim?</h3>
+        <p>Kayıtlar birbirine zincirlenir; sonradan değiştirilen kayıt doğrulamada yakalanır. Kanıtı CSV olarak indir, denetimde göster. Aydınlatma metni ve çerez politikası taslakları da panelde.</p>
+      </div>
+    </div>
+    <div class="step">
+      <span class="step-num" aria-hidden="true">04</span>
+      <div>
+        <h3>Müşteri siteleri değişince haberim olmuyor</h3>
+        <p>Ajanslar müşterilerini tek panelden izler: siteler çizelgeyle otomatik taranır, yeni form veya çerez çıkınca e-posta uyarısı gelir. Veri sahibi başvurusu (silme, erişim) kendi formundan yürür, süresi takip edilir.</p>
+      </div>
     </div>
   </div>
 </section>
 
 <section class="sheet" id="nasil" aria-label="Nasıl işler">
   <div class="holes" aria-hidden="true"><span class="hole"></span><span class="hole"></span><span class="hole"></span></div>
-  <div class="antet"><span>VERİFORM — UYUM DEFTERİ</span><span>SAYFA 02 · İŞLEYİŞ</span></div>
-  <h2>Üç adımda kanıt defteri</h2>
-  <p class="lead">Kurulum bir script etiketi kadardır. Sonrası defterin işi: izlemek, mühürlemek, uyarmak.</p>
+  <div class="antet"><span>VERİFORM — UYUM DEFTERİ</span><span>SAYFA 03 · İŞLEYİŞ</span></div>
+  <h2>Üç adımda başlayın</h2>
+  <p class="lead">Önce sitenizin ne topladığını görün, sonra tek satır kodla izni alın; gerisini panel biriktirir.</p>
   <div class="steps">
     <div class="step">
       <span class="step-num" aria-hidden="true">01</span>
       <div>
-        <h3>İzleyiciyi sitenize takın</h3>
-        <p>Panelde siteyi açın, size verilen tek satırlık snippet'i <code>&lt;head&gt;</code> bölümüne ekleyin. İzleyici form alanlarını ve çerez kategorilerini gözlemler; ziyaretçinin yazdığı içeriği hiçbir yere göndermez.</p>
-        <pre class="snippet"><code>&lt;<span class="tok">script</span> <span class="tok">src</span>=<span class="str">"https://panel-adresiniz/embed.js"</span> <span class="tok">data-site-token</span>=<span class="str">"SİTE_TOKENINIZ"</span>&gt;&lt;/<span class="tok">script</span>&gt;</code></pre>
+        <h3>Siteni ekle, ne topladığını gör</h3>
+        <p>Panelde siteyi açın, <strong>Şimdi tara</strong> deyin. Rapor dakikalar içinde gelir: formlar, alan adları, çerez kategorileri, veri giden hedefler ve risk işaretleri. Ziyaretçinin yazdığı içerik hiçbir yere gönderilmez.</p>
       </div>
     </div>
     <div class="step">
       <span class="step-num" aria-hidden="true">02</span>
       <div>
-        <h3>Her tarama deftere işlenir</h3>
-        <p>Tarama; formları, alan adlarını, çerez kategorilerini ve onay kayıtlarını çıkarır. Kayıt, bir önceki kaydın hash'ine bağlanarak sha256 ile mühürlenir. Aradan bir kayıt değiştirilirse zincir kırılır — yukarıdaki demoda kendi elinizle deneyin.</p>
+        <h3>Tek satır kodu sitene ekle</h3>
+        <p>Size verilen kod parçasını sitenizin <code>&lt;head&gt;</code> bölümüne ekleyin. Ziyaretçi çerez tercihini seçer, tercihi kayda geçer; panel bağlantıyı otomatik doğrular.</p>
+        <pre class="snippet"><code>&lt;<span class="tok">script</span> <span class="tok">src</span>=<span class="str">"https://panel-adresiniz/embed.js"</span> <span class="tok">data-site-token</span>=<span class="str">"SİTE_TOKENINIZ"</span>&gt;&lt;/<span class="tok">script</span>&gt;</code></pre>
       </div>
     </div>
     <div class="step">
       <span class="step-num" aria-hidden="true">03</span>
       <div>
-        <h3>Değişiklikte uyarı, denetimde rapor</h3>
-        <p>Yeni form, kaldırılan alan ya da yeni çerez kategorisi tespit edilince e-posta uyarısı gelir. Panelde aydınlatma metni, çerez politikası ve açık rıza taslakları üretilir; veri sahibi başvuruları (DSAR) kendi formundan yürür.</p>
+        <h3>Uyarıları al, kanıtı indir</h3>
+        <p>Yeni form, kaldırılan alan ya da yeni çerez kategorisi çıkınca e-posta uyarısı gelir. Denetimde göstermek için kayıt zincirini CSV indirin; KVKK metin taslaklarını kullanın; veri sahibi başvuruları kendi formundan yürür.</p>
       </div>
     </div>
   </div>
   <div class="annotation">
-    <h3>Defterin üç kuralı</h3>
+    <h3>Sözümüz</h3>
     <ul>
-      <li>${icon("check", 15)} Ham veri saklanmaz — yalnız alan adı ve kategori meta verisi</li>
-      <li>${icon("check", 15)} Her kayıt bir öncekine hash halkasıyla bağlıdır</li>
+      <li>${icon("check", 15)} Ham veri saklanmaz — yalnız alan adı ve kategori bilgisi</li>
+      <li>${icon("check", 15)} Kayıtlar birbirine zincirlidir; sonradan kurcalama doğrulamada görünür</li>
       <li>${icon("check", 15)} Değişiklik sessizce geçmez — uyarı ve rapor üretir</li>
     </ul>
   </div>
@@ -621,9 +659,9 @@ ${SEED_ROWS.map(renderSeedRow).join("\n")}
 
 <section class="sheet" id="paketler" aria-label="Paketler">
   <div class="holes" aria-hidden="true"><span class="hole"></span><span class="hole"></span><span class="hole"></span></div>
-  <div class="antet"><span>VERİFORM — UYUM DEFTERİ</span><span>SAYFA 03 · TARİFE</span></div>
+  <div class="antet"><span>VERİFORM — UYUM DEFTERİ</span><span>SAYFA 04 · TARİFE</span></div>
   <h2>Paketler</h2>
-  <p class="lead">Tek site sahibinden çok müşterili ajansa kadar aynı defter, farklı kapasite. Tüm paketlerde kanıt zinciri, uyarı mailleri ve KVKK taslakları vardır.</p>
+  <p class="lead">Tek siteniz de var, yüz müşteri siteniz de — aynı panel, farklı kapasite. Tüm paketlerde kayıt zinciri, uyarı mailleri ve KVKK taslakları vardır.</p>
   <div class="tariff">
     <div class="plan">
       <h3 class="plan-name">Starter</h3>
@@ -671,9 +709,9 @@ ${SEED_ROWS.map(renderSeedRow).join("\n")}
 
 <section class="sheet" id="iletisim" aria-label="İletişim">
   <div class="holes" aria-hidden="true"><span class="hole"></span><span class="hole"></span><span class="hole"></span></div>
-  <div class="antet"><span>VERİFORM — UYUM DEFTERİ</span><span>SAYFA 04 · TALEP KAYDI</span></div>
-  <h2>Talebinizi deftere işleyin</h2>
-  <p class="lead">Paket seçimi, kurulum yardımı ya da özel istek — formu doldurun, talebiniz kaydedilsin ve operatöre iletilsin.</p>
+  <div class="antet"><span>VERİFORM — UYUM DEFTERİ</span><span>SAYFA 05 · TALEP KAYDI</span></div>
+  <h2>Bize yazın</h2>
+  <p class="lead">Paket seçimi, kurulum yardımı ya da özel istek — formu doldurun, talebiniz kaydedilsin ve size dönelim.</p>
   <div class="form-grid">
     <div>
       ${stampBlock}

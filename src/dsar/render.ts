@@ -125,7 +125,7 @@ export function renderDsarPanelPage(input: {
 </tr>`;
         })
         .join("\n")
-    : '<tr><td colspan="5" class="empty">Henüz veri sahibi başvurusu yok.</td></tr>';
+    : '<tr><td colspan="5" class="empty">Henüz veri sahibi başvurusu yok — ziyaretçiler sitenin başvuru formundan gönderir; gelen taleplerin 30 günlük yanıt süresini burada izlersiniz.</td></tr>';
 
   return page(
     `DSAR — ${input.siteUrl}`,

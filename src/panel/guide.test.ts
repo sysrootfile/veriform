@@ -50,3 +50,15 @@ describe("renderGuidePage", () => {
     expect(html).toContain('lang="tr"');
   });
 });
+describe("anlaşılırlık — rehber müşteri dili", () => {
+  it("önce ihtiyacı ve kazanımı anlatır, mekanizma sonra gelir", () => {
+    const html = renderGuidePage();
+    expect(html).toContain("Ne işe yarar?");
+    expect(html).toContain("Hangi ihtiyaçları karşılar?");
+    expect(html).toContain("Elimde ne olacak?");
+    const need = html.indexOf("Hangi ihtiyaçları karşılar?");
+    const steps = html.indexOf("Sırayla ne yapacaksınız");
+    expect(need).toBeGreaterThan(-1);
+    expect(steps).toBeGreaterThan(need);
+  });
+});
