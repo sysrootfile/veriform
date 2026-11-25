@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { hashPassword, verifyPassword } from "./auth.js";
+import { hashPassword, passwordProblem, verifyPassword } from "./auth.js";
 import type { EmailSender } from "./mailer.js";
 import type { PanelStore } from "./store.js";
 import type { AccountTokenPurpose, PanelUser } from "./types.js";
@@ -100,10 +100,12 @@ export async function requestPasswordReset(
 }
 
 export async function resetPassword(store: PanelStore, token: string, newPassword: string): Promise<void> {
-  if (newPassword.length < 8) throw new Error("şifre en az 8 karakter olmalı");
+  const problem = passwordProblem(newPassword);
+  if (problem) throw new Error(problem);
   const consumed = await store.consumeAccountToken(hashAccountToken(token), "reset-password");
   if (!consumed) throw new Error(INVALID_LINK);
   await store.updateUserPassword(consumed.userId, await hashPassword(newPassword));
+  await store.invalidateSessions(consumed.userId);
 }
 
 export async function changePassword(
@@ -116,8 +118,10 @@ export async function changePassword(
   if (!user || !(await verifyPassword(currentPassword, user.passwordHash))) {
     throw new Error("mevcut şifre hatalı");
   }
-  if (newPassword.length < 8) throw new Error("şifre en az 8 karakter olmalı");
+  const problem = passwordProblem(newPassword);
+  if (problem) throw new Error(problem);
   await store.updateUserPassword(user.id, await hashPassword(newPassword));
+  await store.invalidateSessions(user.id);
 }
 
 export async function deleteAccount(store: PanelStore, tenantId: string): Promise<void> {

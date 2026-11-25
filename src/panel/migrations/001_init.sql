@@ -1,7 +1,8 @@
 -- Veriform Panel Şeması — Postgres 15+ (migration 001, src/panel/migrate.ts koşar)
 -- Bu şema, createInMemoryPanelStore ile aynı sözleşmeyi uygular (src/panel/store.ts).
--- Multi-tenancy: tablo başına RLS; API katmanı her bağlantıda
--- SET app.current_tenant = '<uuid>' ayarlar. Panel admin rolü bypass eder.
+-- Multi-tenancy: tablo başına RLS politikaları TANIMLIDIR ama etkin değildir —
+-- app.current_tenant hiç ayarlanmaz ve uygulama taban sahibi olarak bağlanır.
+-- Kiracı izolasyonu bugün uygulama katmanındaki sahiplik guard'larıyla sağlanır.
 
 create extension if not exists "pgcrypto";
 

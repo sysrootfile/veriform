@@ -152,19 +152,39 @@ describe("createInMemoryPanelStore", () => {
     expect(dsar.deadlineAt).toBe(computeDeadline("2026-11-02T10:00:00.000Z"));
     expect((await store.listDsars(site.id))).toHaveLength(1);
 
-    const extended = await store.updateDsar(dsar.id, { extend: true });
+    const extended = await store.updateDsar(site.id, dsar.id, { extend: true });
     expect(extended.extended).toBe(true);
 
-    await expect(store.updateDsar(dsar.id, { extend: true })).rejects.toThrow(/zaten/);
+    await expect(store.updateDsar(site.id, dsar.id, { extend: true })).rejects.toThrow(/zaten/);
 
-    const done = await store.updateDsar(dsar.id, {
+    const done = await store.updateDsar(site.id, dsar.id, {
       status: "completed",
       responseNote: "Veriler silindi",
     });
     expect(done.status).toBe("completed");
     expect(done.respondedAt).toBeDefined();
 
-    await expect(store.updateDsar("yok", { status: "completed" })).rejects.toThrow(/başvuru/);
+    await expect(store.updateDsar(site.id, "yok", { status: "completed" })).rejects.toThrow(/başvuru/);
+  });
+
+  it("updateDsar başka sitenin başvurusunu güncelleyemez (sahiplik)", async () => {
+    const store = createInMemoryPanelStore();
+    const tenant = await store.createTenant({ name: "A", kind: "direct" });
+    const client = await store.createClient({ tenantId: tenant.id, name: "M" });
+    const siteA = await store.createSite({ clientId: client.id, url: "https://a.com" });
+    const siteB = await store.createSite({ clientId: client.id, url: "https://b.com" });
+    const dsar = await store.saveDsar({
+      siteId: siteA.id,
+      type: "silme",
+      subjectName: "Ayşe Yılmaz",
+      subjectEmail: "ayse@example.com",
+      receivedAt: "2026-11-02T10:00:00.000Z",
+    });
+
+    await expect(
+      store.updateDsar(siteB.id, dsar.id, { status: "completed" }),
+    ).rejects.toThrow(/başvuru bulunamadı/);
+    expect((await store.listDsars(siteA.id))[0]!.status).toBe("new");
   });
 
   it("setClientBranding: per-client marka alanları yazar ve temizler", async () => {
@@ -564,5 +584,19 @@ describe("deneme + plan geçiş talepleri (in-memory)", () => {
     const req = await store.createPlanChangeRequest({ tenantId: t.id, toPackage: "pro" });
     await store.deleteTenant(t.id);
     expect((await store.listPlanChangeRequests()).some((r) => r.id === req.id)).toBe(false);
+  });
+});
+
+describe("invalidateSessions", () => {
+  it("kullanıcının oturum geçerlilik anını şimdiye çeker", async () => {
+    const store = createInMemoryPanelStore();
+    const tenant = await store.createTenant({ name: "Oturum Ajansı", kind: "agency" });
+    const user = await store.createUser({ tenantId: tenant.id, email: "oturum@probe.test", passwordHash: "h" });
+    expect(user.sessionsValidAfter).toBe("1970-01-01T00:00:00.000Z");
+
+    await store.invalidateSessions(user.id);
+
+    const found = await store.findUserByTenant(tenant.id);
+    expect(Date.parse(found!.sessionsValidAfter)).toBeGreaterThan(Date.now() - 60_000);
   });
 });

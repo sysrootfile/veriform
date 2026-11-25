@@ -147,3 +147,26 @@ describe("oturum çerezi bayrakları", () => {
     );
   });
 });
+
+import { createHmac } from "node:crypto";
+import { isSessionRevoked, verifySessionClaims } from "./auth.js";
+
+describe("oturum veriliş zamanı ve düşürme", () => {
+  it("veriliş zamanı token'da taşınır", () => {
+    const claims = verifySessionClaims(createSessionToken("tenant-1", SECRET, 1_000_000), [SECRET], 1_000_000);
+    expect(claims).toEqual({ tenantId: "tenant-1", issuedAt: 1_000_000 });
+  });
+
+  it("iki parçalı eski token kabul edilir; veriliş zamanı 0 sayılır", () => {
+    const payload = `tenant-1.${1_000_000 + SESSION_TTL_MS}`;
+    const legacy = `${Buffer.from(payload).toString("base64url")}.${createHmac("sha256", SECRET).update(payload).digest("base64url")}`;
+    expect(verifySessionClaims(legacy, [SECRET], 1_000_000)).toEqual({ tenantId: "tenant-1", issuedAt: 0 });
+  });
+
+  it("düşürme anından önce verilmiş oturum düşmüş sayılır", () => {
+    const claims = { tenantId: "tenant-1", issuedAt: 1_000 };
+    expect(isSessionRevoked(claims, "1970-01-01T00:00:00.000Z")).toBe(false);
+    expect(isSessionRevoked(claims, "1970-01-01T00:00:02.000Z")).toBe(true);
+    expect(isSessionRevoked(claims, "1970-01-01T00:00:01.000Z")).toBe(false);
+  });
+});

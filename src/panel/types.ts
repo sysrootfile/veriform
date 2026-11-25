@@ -84,6 +84,8 @@ export interface PanelUser {
   passwordHash: string;
   role: "owner" | "auditor";
   emailVerifiedAt?: string | undefined;
+  /** Bu tarihten önce verilen oturumlar geçersiz (şifre değişimi). */
+  sessionsValidAfter: string;
   createdAt: string;
 }
 

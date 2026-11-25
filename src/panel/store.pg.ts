@@ -21,8 +21,9 @@ import { deepClone, randomIngestToken } from "./shared.js";
 /**
  * PanelStore portunun gerçek Postgres adapter'ı — src/panel/schema.sql üstünde.
  * In-memory adapter ile birebir aynı sözleşmeyi uygular; kiracı izolasyonu
- * DB düzeyinde RLS ile (app.current_tenant), uygulama düzeyinde PanelService
- * sahiplik guard'ları ile sağlanır. Dönen her nesne derin kopyadır.
+ * uygulama düzeyinde PanelService sahiplik guard'ları ile sağlanır. Şemadaki RLS
+ * politikaları tanımlı ama ETKİN DEĞİL: app.current_tenant hiç ayarlanmaz ve uygulama
+ * taban sahibi olarak bağlanır (docs/deploy.md §10). Dönen her nesne derin kopyadır.
  */
 
 const iso = (value: Date | string): string =>
@@ -99,6 +100,7 @@ function mapUser(row: pg.QueryResultRow): PanelUser {
     passwordHash: String(row.password_hash),
     role: row.role as PanelUser["role"],
     ...(row.email_verified_at ? { emailVerifiedAt: iso(row.email_verified_at as Date) } : {}),
+    sessionsValidAfter: iso(row.sessions_valid_after as Date),
     createdAt: iso(row.created_at as Date),
   };
 }
@@ -375,6 +377,14 @@ export function createPostgresPanelStore(connectionString: string): PostgresPane
       }
     },
 
+    async invalidateSessions(userId) {
+      const result = await pool.query(
+        "update users set sessions_valid_after = $2 where id = $1",
+        [userId, new Date().toISOString()],
+      );
+      if (result.rowCount === 0) throw new Error(`kullanıcı bulunamadı: ${userId}`);
+    },
+
     async findUserByEmail(email) {
       const result = await pool.query("select * from users where email = $1", [email]);
       return result.rows[0] ? clone(mapUser(result.rows[0])) : null;
@@ -538,8 +548,11 @@ export function createPostgresPanelStore(connectionString: string): PostgresPane
       return clone(result.rows.map(mapDsar));
     },
 
-    async updateDsar(dsarId, patch) {
-      const current = await pool.query("select * from dsar_requests where id = $1", [dsarId]);
+    async updateDsar(siteId, dsarId, patch) {
+      const current = await pool.query(
+        "select * from dsar_requests where id = $1 and site_id = $2",
+        [dsarId, siteId],
+      );
       if (current.rowCount === 0) throw new Error(`başvuru bulunamadı: ${dsarId}`);
       const row = current.rows[0]!;
 
@@ -562,8 +575,8 @@ export function createPostgresPanelStore(connectionString: string): PostgresPane
         patch.responseNote !== undefined ? patch.responseNote : (row.response_note as string | null);
 
       const updated = await pool.query(
-        "update dsar_requests set deadline_at = $2, extended = $3, status = $4, responded_at = $5, response_note = $6 where id = $1 returning *",
-        [dsarId, deadlineAt, extended, status, respondedAt, responseNote],
+        "update dsar_requests set deadline_at = $2, extended = $3, status = $4, responded_at = $5, response_note = $6 where id = $1 and site_id = $7 returning *",
+        [dsarId, deadlineAt, extended, status, respondedAt, responseNote, siteId],
       );
       return clone(mapDsar(updated.rows[0]!));
     },
