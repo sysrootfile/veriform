@@ -604,13 +604,41 @@ bir Gmail hesabıydı (uygulama şifresi, port 587); değerler `.env`'de, rapora
 | Sıfırlama tokenı | 1 token, `used_at` dolu (tek kullanımlık) |
 | Eski oturumlar | `sessions_valid_after` = 11:37:32 UTC; sıfırlama öncesi çerezle `/clients` → 302 `/login` |
 
-Bu koşuda çıkan iki kusur (ayrı iş, bu kayıtta düzeltilmedi):
+Bu koşuda çıkan iki kusur §22'de düzeltildi:
 
-- SMTP erişilemezken kayıt isteği **42 sn** bekleyip 302 dönüyor. Mail hatası yutuluyor, kayıt
-  başarılı sayılıyor; kullanıcı 42 sn boş ekran görür. Gönderimde zaman aşımı yok.
-- `verify-email` tokenları kullanıldığında eskiler iptal edilmiyor: aynı hesap için 3 token
-  birikmişti, yalnız 1'i kullanıldı. Süreleri dolunca kendiliğinden geçersiz oluyorlar.
+- SMTP erişilemezken kayıt isteği **42 sn** bekleyip 302 dönüyordu. Mail hatası yutuluyor, kayıt
+  başarılı sayılıyordu; kullanıcı 42 sn boş ekran görüyordu. Gönderimde zaman aşımı yoktu.
+- `verify-email` tokenları kullanıldığında eskiler iptal edilmiyordu: aynı hesap için 3 token
+  birikmişti, yalnız 1'i kullanılmıştı. Süreleri dolunca kendiliğinden geçersiz oluyorlardı.
 
 **ÖLÇÜLMEDİ:** proxy arkasında limiter kovası — limiter `req.socket.remoteAddress` kullanıyor,
 tünel arkasında tüm istekler aynı konteyner IP'sinden görünüyor (tek kova). Çok kopyalı scheduler
 çakışması da hâlâ ölçülmedi.
+
+## 22. Canlı ölçüm kaydı — 2026-11-25 (mail sağlamlığı: zaman aşımı + token kardeşleri)
+
+§21'de çıkan iki kusur düzeltildi.
+
+1. SMTP gönderimi artık sınırılı: `connectionTimeout` 10 sn, `greetingTimeout` 10 sn,
+   `socketTimeout` 20 sn (`src/panel/mailer.ts`). Önceden sınır yoktu; erişilemeyen sunucuda
+   işletim sisteminin bağlantı denemesi dakikalarca sürebiliyor, kayıt isteği onu bekliyordu.
+   Mail hatası hâlâ yutuluyor (yumuşak kapı değişmedi), yalnız bekleme kısaldı.
+2. `consumeAccountToken` artık aynı kullanıcı + amaçtaki diğer bekleyen tokenları da kapatıyor.
+   Postgres'te tek atomik `update` (hedef + kardeşler), bellek içi depoda aynı kural. Böylece
+   kullanılmış bir doğrulama bağlantısının kardeşleri canlı kalmıyor.
+
+| Ölçüm | Sonuç |
+|---|---|
+| `pnpm typecheck` | 0 hata |
+| `vitest run` (PG_URL'siz) | 579 passed / 32 skipped (66 dosya passed, 1 skipped) |
+| `vitest run` (probe PG dahil) | 611 passed / 0 skipped (67 dosya) |
+| Kırmızı → yeşil | 2 yeni test önce kırmızıydı (mailer sınır, kardeş token); PG kardeş testi gerçek DB'de |
+| İzole proje `vf-mailfix-probe`, SMTP `10.255.255.1` (yanıt vermeyen adres) | kayıt 302, **10,25 sn** |
+| Aynı ağda önceki imaj (zaman aşımı yok) | kayıt 302, **21,28 sn** — önce/sonra kanıtı |
+| SMTP adresi çözümlenemiyorsa (`smtp.probe.invalid`) | kayıt 302, 0,37 sn (DNS hatası hızlı döner) |
+
+Ölçüm sonunda izole proje, volume'u, imajı ve karşılaştırma konteyneri kaldırıldı; kullanıcının
+`vf-smtp-probe` yığınına dokunulmadı.
+
+**ÖLÇÜLMEDİ:** kayıt isteği hâlâ mail gönderimini bekliyor (10 sn'ye kadar). Gönderimi arka plana
+alma kararı verilmedi; istenirse ayrı iş.
