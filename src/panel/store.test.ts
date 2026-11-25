@@ -464,6 +464,19 @@ describe("hesap yaşam döngüsü store portları", () => {
     expect(await store.consumeAccountToken("c".repeat(64), "verify-email")).toBeNull();
   });
 
+  it("kullanılan token aynı amaçtaki diğer bekleyen tokenları da iptal eder", async () => {
+    const store = createInMemoryPanelStore();
+    const t = await store.createTenant({ name: "A", kind: "agency" });
+    const u = await store.createUser({ tenantId: t.id, email: "u@x.com", passwordHash: "h" });
+    const expiresAt = new Date(Date.now() + 60_000).toISOString();
+    await store.createAccountToken({ userId: u.id, purpose: "verify-email", tokenHash: "a".repeat(64), expiresAt });
+    await store.createAccountToken({ userId: u.id, purpose: "verify-email", tokenHash: "b".repeat(64), expiresAt });
+    await store.createAccountToken({ userId: u.id, purpose: "reset-password", tokenHash: "d".repeat(64), expiresAt });
+    expect(await store.consumeAccountToken("a".repeat(64), "verify-email")).toEqual({ userId: u.id });
+    expect(await store.consumeAccountToken("b".repeat(64), "verify-email")).toBeNull();
+    expect(await store.consumeAccountToken("d".repeat(64), "reset-password")).toEqual({ userId: u.id });
+  });
+
   it("deleteTenant kiracıyı ve bağlı veriyi cascade siler", async () => {
     const store = createInMemoryPanelStore();
     const t = await store.createTenant({ name: "A", kind: "agency" });

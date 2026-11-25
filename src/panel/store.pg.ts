@@ -483,12 +483,14 @@ export function createPostgresPanelStore(connectionString: string): PostgresPane
     },
 
     async consumeAccountToken(tokenHash, purpose) {
-      // Tek atomik update: eşzamanlı iki istekten yalnız biri tüketebilir.
+      // Tek atomik update: hedef token'ı ve aynı kullanıcı+amaçtaki diğer bekleyen tokenları
+      // birlikte kapatır. Eşzamanlı iki istekten yalnız biri hedefi tüketebilir.
       const result = await pool.query(
-        "update account_tokens set used_at = now() where token_hash = $1 and purpose = $2 and used_at is null and expires_at > now() returning user_id",
+        "update account_tokens set used_at = now() where purpose = $2 and used_at is null and user_id in (select user_id from account_tokens where token_hash = $1 and purpose = $2 and used_at is null and expires_at > now()) returning user_id, token_hash",
         [tokenHash, purpose],
       );
-      return result.rows[0] ? { userId: String(result.rows[0].user_id) } : null;
+      const consumed = result.rows.find((row) => String(row.token_hash) === tokenHash);
+      return consumed ? { userId: String(consumed.user_id) } : null;
     },
 
     async createContactRequest(input) {
