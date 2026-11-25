@@ -2,6 +2,7 @@ import type { IncomingMessage } from "node:http";
 
 /** Panel uçları için gövde üst sınırı — tanımsız büyüklükte istek belleği tüketemesin. */
 export const MAX_BODY_BYTES = 5 * 1024 * 1024;
+const DRAIN_LIMIT_MS = 5_000;
 
 export class BodyTooLargeError extends Error {
   constructor(maxBytes: number) {
@@ -10,7 +11,7 @@ export class BodyTooLargeError extends Error {
   }
 }
 
-/** Gövdeyi sınır içinde okur; aşırsa okumayı bırakır (yanıt 413 + connection: close verilir). */
+/** Gövdeyi sınır içinde okur; aşırsa kalan gövde boşaltılır (yanıt 413 + connection: close verilir). */
 export function readBody(req: IncomingMessage, maxBytes = MAX_BODY_BYTES): Promise<string> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
@@ -23,7 +24,14 @@ export function readBody(req: IncomingMessage, maxBytes = MAX_BODY_BYTES): Promi
     };
     const fail = (error: Error) => {
       cleanup();
-      req.pause();
+      if (error instanceof BodyTooLargeError) {
+        // Okumadan kapatılan soket istemcide sıfırlanır ve 413 yanıtı istemciye ulaşamaz;
+        // kalan gövde depolamadan boşaltılır, süre sınırlıdır
+        req.resume();
+        setTimeout(() => req.destroy(), DRAIN_LIMIT_MS).unref();
+      } else {
+        req.pause();
+      }
       reject(error);
     };
     const onData = (chunk: Buffer) => {
