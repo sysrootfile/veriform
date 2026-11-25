@@ -34,6 +34,7 @@ Kapılar konteyner içinde ölçüldü (imajı `node dist/panel.mjs` ile doğrud
 | `SESSION_SECRET` | evet | `vf_session` çerezinin HMAC-SHA256 imza anahtarı | `openssl rand -hex 32` |
 | `SESSION_SECRET_PREVIOUS` | hayır | rotasyon penceresinde eski anahtarla açılmış oturumları yaşatır | rotasyon günü eski secret |
 | `SESSION_COOKIE_SECURE` | hayır | `1` ise `vf_session` çerezine `Secure` bayrağı eklenir (yalnız HTTPS'te gönderilir). TLS arkasında `1` yap; düz HTTP'de `0`/boş | — |
+| `TRUST_PROXY` | hayır | `1` ise limiter anahtarı `X-Forwarded-For`'dan okunur; güven yalnızca soket adresi özel ağ/loopback ise verilir (istemci spoofing'i kapalı). Compose varsayılanı `1`; doğrudan internete açık panelde `0`/boş | `1` |
 | `WORKER_TOKEN` | hayır | `/internal/run-scheduled` tetikleyici anahtarı. **Ayarlanmazsa uç her çağrıda 403 döner** (fail-closed) | `openssl rand -hex 16` |
 | `OPERATOR_EMAILS` | hayır | virgülle ayrılmış e-posta listesi; owner e-postası listede olan kiracılar `/operator/*` konsolunu görür (gelen kutusu + paket yönetimi). Boşsa konsol kimseye açılmaz | `sen@ornek.com` |
 | `DATABASE_URL` | hayır | doluysa Postgres store, boşsa in-memory. compose otomatik kurar | — |
@@ -613,7 +614,7 @@ Bu koşuda çıkan iki kusur §22'de düzeltildi:
 
 **ÖLÇÜLMEDİ:** proxy arkasında limiter kovası — limiter `req.socket.remoteAddress` kullanıyor,
 tünel arkasında tüm istekler aynı konteyner IP'sinden görünüyor (tek kova). Çok kopyalı scheduler
-çakışması da hâlâ ölçülmedi.
+çakışması da hâlâ ölçülmedi. → İkisi de §23'te ölçüldü ve düzeltildi.
 
 ## 22. Canlı ölçüm kaydı — 2026-11-25 (mail sağlamlığı: zaman aşımı + token kardeşleri)
 
@@ -641,4 +642,43 @@ tünel arkasında tüm istekler aynı konteyner IP'sinden görünüyor (tek kova
 `vf-smtp-probe` yığınına dokunulmadı.
 
 **ÖLÇÜLMEDİ:** kayıt isteği hâlâ mail gönderimini bekliyor (10 sn'ye kadar). Gönderimi arka plana
-alma kararı verilmedi; istenirse ayrı iş.
+alma kararı verilmedi; istenirse ayrı iş. → §23'te arka plana alındı ve ölçüldü.
+
+## 23. Canlı ölçüm kaydı — 2026-11-25 (kalan üç kapı + kayıt maili arka planda)
+
+§21/§22'den kalan maddeler kapatıldı. Dört değişiklik:
+
+1. **Proxy arkası limiter kovası.** `src/panel/client-ip.ts`: limiter anahtarı `TRUST_PROXY=1` iken
+   `X-Forwarded-For`'un ilk geçerli IP'si. Güven yalnızca soket adresi özel ağ/loopback ise verilir —
+   herkese açık istemcinin kendi XFF başlığı spoofing'dir, yok sayılır. Compose varsayılanı `1`.
+2. **Çok kopyalı scheduler.** `PanelStore.withSchedulerLock`: Postgres'te oturum düzeyi
+   `pg_try_advisory_lock` (anahtar `0x56465343`), kilit başka kopyadaysa tur `skipped: true` döner.
+   Bellek içi depoda tek süreç varsayımıyla kilit her zaman alınır. `/internal/run-scheduled` yanıtı
+   ve `[sched]` logu atlanan turu gösterir.
+3. **Kayıt maili arka planda.** `sendVerificationInBackground`: istek SMTP'yi beklemez, mail arka
+   planda 3 deneme (2 sn arayla) gönderilir; tükenirse `[account] … arka planda gönderilemedi` loglanır.
+   Süreç ölürse mail kaybolur — kullanıcı panelden yeniden isteyebilir (yumuşak kapı değişmedi).
+4. **İletişim maili görünürlüğü.** `handleContactSubmit` başarılı gönderimi `[contact] operatör maili
+   gönderildi: <adres>` diye loglar, hatayı `console.error` ile yazar; önceden hata sessizce yutuluyordu.
+
+| Ölçüm | Sonuç |
+|---|---|
+| `pnpm typecheck` | 0 hata |
+| `vitest run` (probe PG dahil) | 629 passed / 0 skipped (68 dosya) |
+| Kırmızı → yeşil | client-ip 5, scheduler kilidi 3 (biri gerçek PG), arka plan maili 4, iletişim logu 2 — önce kırmızı |
+| İzole proje `vf-gate-probe` + cloudflare tüneli, `TRUST_PROXY=1` | tünel üzerinden iletişim: 3×303 + 429 (sınır çalışıyor) |
+| Aynı yığın, doğrudan port, XFF=A×4 / B / C | A: 303,303,303,**429**; B: 303; C: 303 — ziyaretçi başına ayrı kova |
+| `TRUST_PROXY=0` ile aynı denek | A: 303,303,303,429; B: **429**; C: **429** — tek kova kusuru yeniden üretildi |
+| İletişim formu maili (gerçek Gmail SMTP, `CONTACT_OPERATOR_EMAIL` gerçek kutu) | 3× `[contact] operatör maili gönderildi`, DB'de 11 talep satırı; kutu teyidi kullanıcıda |
+| Kayıt, gerçek SMTP üzerinden tünel | 302 `/clients`, **237 ms** |
+| Kayıt, yanıt vermeyen SMTP (`10.255.255.1:587`) | 302 `/clients`, **98 ms** (§22'de 10,25 sn idi) |
+| Arka plan mail hatası görünürlüğü | 3 denemeden sonra 1× `[account] … arka planda gönderilemedi` logu |
+| Eşzamanlı iki `/internal/run-scheduled` (vakti gelen ölü site) | run1 `{"scanned":0,"failed":1}`, run2 `{"skipped":true}` — tur tek kazanır |
+| Kilit bırakılıyor mu? | Ardışık üçüncü tur kilidi aldı (`skipped` yok); gerçek PG testinde de doğrulandı |
+
+Ölçüm sonunda `vf-gate-probe` projesi, volume'u, imajı, tünel ve kara delik konteyneri kaldırıldı;
+kullanıcının `vf-smtp-probe` ve `vf-ux-probe` yığınlarına dokunulmadı.
+
+**Kalan:** iletişim mailinin gerçek kutuya düştüğü kullanıcı teyidi (SMTP kabulü ve log ölçüldü).
+Çok kopyalı dağıtımın kendisi (iki panel konteyneri) koşulmadı; kilit gerçek PG'de eşzamanlı iki
+tur ve advisory lock testiyle kanıtlandı.
