@@ -1,4 +1,5 @@
 import { initVeriform, type EmbedHandle } from "./core.js";
+import { createReceiptPusher } from "./push.js";
 import type { SiteBannerConfig } from "../panel/types.js";
 
 declare global {
@@ -39,10 +40,25 @@ async function loadBannerConfig(): Promise<
 
 (async () => {
   const bannerConfig = await loadBannerConfig();
+  const pusher =
+    scriptOrigin && siteToken
+      ? createReceiptPusher({ panelOrigin: scriptOrigin, token: siteToken })
+      : null;
+  if (pusher) {
+    // Sayfa kapanırken bekleyen kanıtlar beacon'la son şansını kullanır.
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "hidden") pusher.flushBeacon();
+    });
+  }
   const handle = initVeriform(
     document,
     w,
-    bannerConfig ? { banner: { bannerVersion: bannerConfig.bannerVersion, texts: bannerConfig.texts } } : {},
+    bannerConfig
+      ? {
+          banner: { bannerVersion: bannerConfig.bannerVersion, texts: bannerConfig.texts },
+          ...(pusher ? { onReceipt: (receipt) => void pusher.push(receipt) } : {}),
+        }
+      : {},
   );
   w.__veriform = handle;
 

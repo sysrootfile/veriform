@@ -40,6 +40,8 @@ export interface EmbedBannerOptions {
 export interface EmbedOptions {
   siteUrl?: string | undefined;
   banner?: EmbedBannerOptions | undefined;
+  /** Her karar anında çağrılır — panel kanıt gönderimi buna bağlanır. */
+  onReceipt?: ((receipt: ConsentReceipt) => void) | undefined;
 }
 
 export function initVeriform(doc: Document, win: NetworkWindow, options: EmbedOptions = {}): EmbedHandle {
@@ -100,6 +102,7 @@ export function initVeriform(doc: Document, win: NetworkWindow, options: EmbedOp
             tcf.notifyChange();
             if (consentReceipts.length >= MAX_CONSENT_RECEIPTS) consentReceipts.shift();
             consentReceipts.push(receipt);
+            options.onReceipt?.(receipt);
           },
         },
       );
