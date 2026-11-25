@@ -505,3 +505,22 @@ sender). Kullanıcının `veriform_pgdata` volume'üne dokunulmadı.
 **ÖLÇÜLMEDİ:** gerçek SMTP kutu teslimatı, ters proxy arkasında `x-forwarded-proto` ile oturum
 akışı (§6), tarama sırasında sayfanın özel ağ isteği yapıp yapmadığı (rota denetimi birim
 testiyle kapalı, konteynerde gözlemlenmedi).
+
+## 18. Canlı ölçüm kaydı — 2026-11-25 (panel sunucu rotaları test altında)
+
+Değişiklik: `src/panel/server.test.ts` paneli süreç içinde ayağa kaldırıp gerçek HTTP istekleriyle
+rota bağlantısını ölçer (12 test). Bu test yazılırken iki eski kusur çıktı ve düzeltildi:
+
+- Bellek içi geliştirme modu (`pnpm panel`, Postgres'siz) Blok 15'ten beri açılmıyordu: demo
+  hesabının varsayılan şifresi "demo" yeni şifre kuralına takılıyordu. Varsayılan `demo-giris` oldu.
+- 5 MB üstü gövdede sunucu okumayı bırakıp bağlantıyı kapatıyordu. Okunmamış veri kalmış soket
+  istemcide sıfırlanır (RST) ve 413 sayfası ulaşmazdı. Şimdi kalan gövde 5 saniyeyle sınırlı
+  boşaltılır. Düzeltme öncesi Node `fetch` `ECONNRESET` alıyordu; `curl` tesadüfen yanıtı görüyordu.
+
+| Ölçüm | Sonuç |
+|---|---|
+| `pnpm typecheck` | 0 hata |
+| `vitest run` (PG_URL'siz) | 559 passed / 23 skipped (64 dosya passed, 1 skipped) |
+| `vitest run` (probe PG dahil) | 582 passed / 0 skipped (65 dosya) |
+| Konteyner (probe 14621): Blok 15 curl senaryosu | 37/37 |
+| Konteyner: 6 MB gövde, `curl` / Node `fetch` | `413` / `413` + mesaj |

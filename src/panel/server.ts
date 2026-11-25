@@ -162,7 +162,7 @@ const COOKIE_SECURE = process.env.SESSION_COOKIE_SECURE === "1";
 let demoSiteId: string | null = null;
 if (!process.env.DATABASE_URL) {
   // Geliştirme varsayılanı — gerçek kimlik değildir; prod'da DEV_DEMO_PASSWORD kullanılmaz (Postgres modunda demo seed yok)
-  const devPassword = process.env.DEV_DEMO_PASSWORD ?? ["de", "mo"].join("");
+  const devPassword = process.env.DEV_DEMO_PASSWORD ?? "demo-giris";
   const { tenant } = await registerTenant(store, {
     name: "Demo Ajans",
     kind: "agency",
@@ -230,7 +230,7 @@ const LEGAL_PAGES: Record<string, () => string> = {
   "/cerez-politikasi": renderCookiePolicyPage,
 };
 
-const server = createServer(async (req, res) => {
+export const server = createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", `http://127.0.0.1:${PORT}`);
   const forwardedProto = req.headers["x-forwarded-proto"];
   const isHttps =
