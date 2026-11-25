@@ -8,6 +8,8 @@ describe("renderGuidePage", () => {
     expect(html).toContain("Form veri envanteri");
     expect(html).toContain("Rıza kanıt zinciri");
     expect(html).toContain("DSAR");
+    expect(html).toContain("yalnızca kayıtlı domainde");
+    expect(html).toContain("seçim yapınca kanıt anında");
     expect(html).toContain("Değişiklik uyarıları");
     expect(html).toContain("Müşteri ekle");
     expect(html).toContain("Site ekle");

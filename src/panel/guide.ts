@@ -14,7 +14,7 @@ export function renderGuidePage(setup?: SetupProgress | undefined): string {
 <h2>Ne işe yarar?</h2>
 <ul>
 <li><strong>Form veri envanteri:</strong> sitenizde hangi formların kişisel veri topladığını görün. TCKN, IBAN, kart gibi hassas alanlar sınıflandırılır; GET ile hassas veri gönderimi ve 3. taraf hedefler risk olarak işaretlenir.</li>
-<li><strong>Rıza kanıt zinciri:</strong> ziyaretçinin her izni zaman damgasıyla kayda geçer. Kayıtlar sha256 ile birbirine bağlanır; sonradan kurcalama doğrulamada görünür. Kanıtı CSV olarak indirip denetimde gösterirsiniz.</li>
+<li><strong>Rıza kanıt zinciri:</strong> ziyaretçinin her izni zaman damgasıyla kayda geçer. Ziyaretçi banner'da seçim yapınca kanıt anında paneldeki siteye düşer. Kayıtlar sha256 ile birbirine bağlanır; sonradan kurcalama doğrulamada görünür. Kanıtı CSV olarak indirip denetimde gösterirsiniz.</li>
 <li><strong>DSAR başvuruları:</strong> veri sahibinin silme/erişim talepleri site anahtarı üzerinden gelir. KVKK m.13 yanıt süresi (30 gün) izlenir, tek uzatma hakkı denetlenir.</li>
 <li><strong>Değişiklik uyarıları:</strong> iki tarama arasında yeni form/alan veya çerez kategorisi çıkınca site sayfasında raporlanır ve sahibine e-posta gider.</li>
 </ul>
@@ -58,7 +58,7 @@ export function renderGuidePage(setup?: SetupProgress | undefined): string {
 <h2>Terimler</h2>
 <ul>
 <li><strong>İzleme kodu (embed):</strong> sitenize eklenen tek satırlık script; izni alır ve tarama sinyali gönderir.</li>
-<li><strong>Site anahtarı (ingest token):</strong> bu siteye özel kimlik; kodda ve başvuru formunda kullanılır.</li>
+<li><strong>Site anahtarı (ingest token):</strong> bu siteye özel kimlik; kodda ve başvuru formunda kullanılır. Anahtar yalnızca kayıtlı domainde çalışır; başka sitede kullanılamaz.</li>
 <li><strong>Kanıt zinciri:</strong> kayıtların sha256 ile birbirine bağlanması; kurcalama doğrulamada görünür.</li>
 <li><strong>DSAR:</strong> veri sahibinin kişisel verisiyle ilgili başvurusu (silme, erişim, düzeltme).</li>
 </ul>

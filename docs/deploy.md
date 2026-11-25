@@ -682,3 +682,33 @@ kullanıcının `vf-smtp-probe` ve `vf-ux-probe` yığınlarına dokunulmadı.
 **Kalan:** iletişim mailinin gerçek kutuya düştüğü kullanıcı teyidi (SMTP kabulü ve log ölçüldü).
 Çok kopyalı dağıtımın kendisi (iki panel konteyneri) koşulmadı; kilit gerçek PG'de eşzamanlı iki
 tur ve advisory lock testiyle kanıtlandı.
+
+## 24. Canlı ölçüm kaydı — 2026-11-25 (panel normları: domain bağı, banner kanıtı, sol menü)
+
+Müşteri geri bildirimi üç maddede toplandı; sektör normlarına göre düzenlendi:
+
+1. **Site anahtarı domain bağı.** Anahtar sayfa kaynağında görünen herkese açık kimliktir;
+   `src/panel/site-origin.ts` tarayıcının `Origin`/`Referer` host'unu kayıtlı site adresiyle
+   karşılaştırır (www soyulur, alt domainler aynı site sayılır). Kanıt POST'u ve
+   `/api/embed/config` yanlış domainde **403**; header'sız sunucu köprüsünde (kendi tarayıcımız)
+   raporun `siteOrigin`'i kayıtlı siteyle uyuşmak zorunda. Ingest POST'ları tarayıcı CORS'u için
+   `Access-Control-Allow-Origin: *` taşır ve JSON preflight'ı 204 yanıtlanır.
+2. **Banner kanıtı canlı akar.** İzleme kodu artık her ziyaretçi kararını
+   `/api/ingest/scan/receipt` ucuna POST'lar (`src/embed/push.ts`); gönderim başarısızsa kanıt
+   bellekte bekler, sonraki kararda tekrar denenir, sayfa kapanırken beacon son şansı verir.
+   Panel metni banner'ı plain dille anlatır: "ziyaretçinin sitenize girince gördüğü izin kutusu".
+3. **Sol gezinme sütunu.** Panel menüsü yapışkan sol sütuna taşındı (aktif sayfa mavi sol çubukla
+   işaretli); 900px altında eski üst bar düzenine düşer. Operatör konsolunun üst menüsü değişmedi.
+
+| Ölçüm | Sonuç |
+|---|---|
+| `pnpm typecheck` | 0 hata |
+| `vitest run` | 660 test: 627 passed + 33 PG skip (70 dosya; PG CI'da koşar) |
+| Kırmızı → yeşil | site-origin 9, ingest domain 4, rota kapısı 3, push 5, onReceipt 1, sol menü 1, banner/domain metni 3 — önce kırmızı |
+| İki quick tünel (panel + örnek müşteri sitesi), gerçek Chromium | müşteri sitesinde banner çizildi; "Tümünü Kabul Et" sonrası `evidence.csv` **1 kanıt satırı**; site sayfası "Kanıt zinciri geçerli ✓" + "Bağlantı doğrulandı ✓" |
+| Yanlış Origin (sunucu testi) | config/receipt/scan **403**; preflight **204** + ACAO * |
+| Sol menü geometrisi (1440px) | `.panel-shell` flex; menü sağ kenarı 264px = kağıt sol kenarı; /rehber aktif işaret "Rehber" |
+| Mobil (390px) | shell block, menü row (üst bar), aktif alt çizgi |
+
+Ölçüm sonunda tünel konteynerleri (`vf-norm-tunnel-*`) ve yerel deneme paneli kaldırıldı;
+kullanıcının yığınlarına dokunulmadı. Ekran görüntüleri: `.impeccable/norm-*.png` (yerel, izlemesiz).

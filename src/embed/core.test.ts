@@ -174,3 +174,18 @@ describe("initVeriform", () => {
     handle.detach();
   });
 });
+
+describe("onReceipt köprüsü", () => {
+  it("her banner kararı callback'e akar (panel gönderimi buna bağlanır)", async () => {
+    setupPage();
+    const seen: import("../consent/receipt.js").ConsentReceipt[] = [];
+    const handle = initVeriform(document, win(), {
+      banner: { bannerVersion: "banner-2026-11", texts: bannerTexts },
+      onReceipt: (r) => seen.push(r),
+    });
+    document.querySelector('[data-vf="accept"]')!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await vi.waitFor(() => expect(seen).toHaveLength(1));
+    expect(seen[0]!.selfHash).toBe(handle.getConsentReceipts()[0]!.selfHash);
+    handle.detach();
+  });
+});

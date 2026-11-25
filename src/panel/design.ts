@@ -75,6 +75,28 @@ export const PANEL_CSS = `.topnav{position:sticky;top:0;z-index:50;display:flex;
   .topnav a:hover{color:var(--blue)}
   .topnav .nav-logout:hover{color:var(--red)}
 }
+/* Sol gezinme sütunu (SaaS panel normu): aktif sayfa işaretli, içerik sağda akar. */
+.panel-shell{display:flex;align-items:flex-start;max-width:1400px;margin:0 auto;padding:0 clamp(12px,2vw,28px)}
+.sidenav{position:sticky;top:0;flex:0 0 216px;max-height:100vh;overflow-y:auto;display:flex;flex-direction:column;gap:2px;padding:28px 18px 28px 0}
+.sidenav-title{margin:0 0 10px 12px;font-size:.68rem;font-weight:700;letter-spacing:.16em;color:var(--ink-faint)}
+.sidenav a{display:block;padding:8px 12px;border-left:3px solid transparent;color:var(--ink-soft);text-decoration:none;font-size:.9rem;font-weight:600}
+.sidenav a[aria-current="page"]{border-left-color:var(--blue);color:var(--blue);background:rgba(36,71,201,.07)}
+.sidenav .nav-logout{margin-top:14px;border-top:1px solid var(--rule);padding-top:12px;color:var(--ink-faint)}
+@media (hover:hover) and (pointer:fine){
+  .sidenav a:hover{color:var(--blue)}
+  .sidenav .nav-logout:hover{color:var(--red)}
+}
+.panel-main{flex:1;min-width:0}
+.panel-main .sheet{margin-left:0;margin-right:0}
+@media (max-width:900px){
+  .panel-shell{display:block;padding:0}
+  .sidenav{position:sticky;top:0;z-index:50;flex-basis:auto;max-height:none;overflow:visible;flex-direction:row;flex-wrap:wrap;align-items:center;gap:4px 10px;padding:10px clamp(16px,4vw,40px);background:var(--paper);border-bottom:2px solid var(--blue)}
+  .sidenav-title{display:none}
+  .sidenav a{display:inline-block;padding:6px 2px;border-left:none;font-size:.86rem}
+  .sidenav a[aria-current="page"]{background:none;text-decoration:underline;text-underline-offset:6px;text-decoration-thickness:2px}
+  .sidenav .nav-logout{margin-top:0;margin-left:auto;border-top:none;padding-top:6px}
+  .panel-main .sheet{margin:16px auto 28px}
+}
 h1{font-size:1.35rem;font-weight:800;letter-spacing:-.01em;line-height:1.2;margin:0 0 14px;color:var(--ink)}
 h2{font-size:1.02rem;font-weight:800;margin:1.9rem 0 .6rem;color:var(--ink)}
 p{margin:.6rem 0}
