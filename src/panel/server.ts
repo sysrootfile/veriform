@@ -9,7 +9,16 @@ import {
   resetPassword,
   verifyEmail,
 } from "./account-lifecycle.js";
-import { buildLogoutCookie, buildSessionCookie, createSessionToken, verifySessionTokenAny } from "./auth.js";
+import {
+  buildLogoutCookie,
+  buildSessionCookie,
+  createSessionToken,
+  isSessionRevoked,
+  verifySessionClaims,
+} from "./auth.js";
+import { mailBaseUrl, resolvePanelUrl } from "./runtime-config.js";
+import { BodyTooLargeError, readBody } from "./body.js";
+import { UnsafeTargetError, assertPublicHttpUrl } from "../scanner/url-guard.js";
 import { createIngestApi, IngestError } from "./ingest.js";
 import { receiptsToCsv } from "./chain.js";
 import { createApiKey } from "./api-keys.js";
@@ -37,9 +46,11 @@ import {
   renderOperatorPlanRequestsPage,
   renderOperatorTenantsPage,
   renderPlanPage,
+  registerErrorKind,
   renderRegisterPage,
   renderResetPasswordPage,
   renderSitePage,
+  renderVerifyEmailConfirmPage,
   renderVerifyEmailResultPage,
 } from "./render.js";
 import { DSAR_TYPES } from "../dsar/types.js";
@@ -82,6 +93,12 @@ if (!WORKER_TOKEN) {
   console.warn("[DEV] WORKER_TOKEN ayarlı değil — /internal/run-scheduled her çağrıda 403 döner");
 }
 
+// Mail bağlantılarının ve embed adresinin kökü yapılandırmadan gelir; istek Host başlığına güvenilmez.
+const PANEL_URL = resolvePanelUrl(process.env as Record<string, string | undefined>);
+const panelBaseUrl = mailBaseUrl(PANEL_URL, PORT);
+// Mail gönderici DB'ye bağlanmadan seçilir: https panelde SMTP yoksa açılış burada durur.
+const mailSender = createMailSenderFromEnv(process.env as Record<string, string>);
+
 // Şema güncelliği açılışta garanti edilir — başarısız migration süreci durdurur (fail-fast).
 if (process.env.DATABASE_URL) {
   const migration = await migrateDatabase(process.env.DATABASE_URL);
@@ -93,7 +110,6 @@ const store = process.env.DATABASE_URL
   ? createPostgresPanelStore(process.env.DATABASE_URL)
   : createInMemoryPanelStore();
 const ingest = createIngestApi(store);
-const mailSender = createMailSenderFromEnv(process.env as Record<string, string>);
 
 // Sürekli izleme döngüsü — ENABLE_SCAN_SCHEDULER=1 ile açılır (compose scanner imajı).
 // Her turda isDue kontrolü yapılır: yalnızca vakti gelen siteler taranır.
@@ -131,6 +147,10 @@ const registerLimiter = createRateLimiter({ max: 5, windowMs: 60_000 });
 const resetLimiter = createRateLimiter({ max: 3, windowMs: 60_000 });
 // Landing iletişim formu: IP başına 3 talep / dakika
 const contactLimiter = createRateLimiter({ max: 3, windowMs: 60_000 });
+// DSAR ve ingest: anahtar site kimliği (token doğrulandıktan sonra) — proxy arkasında IP tek balta olur,
+// ziyaretçi IP'sine göre sınırlamak köklü kullanımı yanlışlıkla düşürür
+const dsarLimiter = createRateLimiter({ max: 20, windowMs: 60_000 });
+const ingestLimiter = createRateLimiter({ max: 60, windowMs: 60_000 });
 const OPERATOR_EMAIL = process.env.CONTACT_OPERATOR_EMAIL ?? "iletisim@veriform.io";
 // Operatör konsolu yetkisi: owner e-postası bu listede olan kiracılar /operator/* görebilir.
 const OPERATOR_EMAILS = process.env.OPERATOR_EMAILS;
@@ -156,11 +176,6 @@ if (!process.env.DATABASE_URL) {
   console.log(`[DEV] demo giriş: demo@veriform.dev / ${devPassword}`);
 }
 
-async function readBody(req: import("node:http").IncomingMessage): Promise<string> {
-  const chunks: Buffer[] = [];
-  for await (const chunk of req) chunks.push(chunk as Buffer);
-  return Buffer.concat(chunks).toString("utf8");
-}
 
 function parseCookies(req: import("node:http").IncomingMessage): Record<string, string> {
   const out: Record<string, string> = {};
@@ -171,9 +186,15 @@ function parseCookies(req: import("node:http").IncomingMessage): Record<string, 
   return out;
 }
 
-function sessionTenantId(req: import("node:http").IncomingMessage): string | null {
+async function resolveSessionTenant(req: import("node:http").IncomingMessage): Promise<string | null> {
   const token = parseCookies(req)["vf_session"];
-  return token ? verifySessionTokenAny(token, SESSION_SECRETS) : null;
+  if (!token) return null;
+  const claims = verifySessionClaims(token, SESSION_SECRETS);
+  if (!claims) return null;
+  // Şifresi değişen ya da silinen hesabın eski çerezi geçersiz sayılır
+  const user = await store.findUserByTenant(claims.tenantId);
+  if (!user || isSessionRevoked(claims, user.sessionsValidAfter)) return null;
+  return claims.tenantId;
 }
 
 function setSessionHeader(res: import("node:http").ServerResponse, token: string): void {
@@ -182,20 +203,12 @@ function setSessionHeader(res: import("node:http").ServerResponse, token: string
 
 /** Embed snippet'inde gösterilen mutlak adres — proxy arkasında x-forwarded-proto esas alınır. */
 function embedUrl(req: import("node:http").IncomingMessage): string {
+  if (PANEL_URL) return `${PANEL_URL}/embed.js`;
   const host = req.headers.host;
   if (!host) return "/embed.js";
   const forwarded = req.headers["x-forwarded-proto"];
   const proto = (typeof forwarded === "string" ? forwarded.split(",")[0]!.trim() : "") || "http";
   return `${proto}://${host}/embed.js`;
-}
-
-/** Hesap maillerindeki bağlantılar için mutlak panel adresi. */
-function panelBaseUrl(req: import("node:http").IncomingMessage): string {
-  const host = req.headers.host;
-  if (!host) return `http://127.0.0.1:${PORT}`;
-  const forwarded = req.headers["x-forwarded-proto"];
-  const proto = (typeof forwarded === "string" ? forwarded.split(",")[0]!.trim() : "") || "http";
-  return `${proto}://${host}`;
 }
 
 /** JSON yanıtları için standart başlıklar — nosniff MIME-sniffing ile HTML render'ı engeller. */
@@ -358,7 +371,7 @@ const server = createServer(async (req, res) => {
         });
         // Doğrulama maili hatası kaydı düşürmez — bağlantı panelden yeniden istenebilir.
         try {
-          await issueEmailVerification(store, mailSender, user, panelBaseUrl(req));
+          await issueEmailVerification(store, mailSender, user, panelBaseUrl);
         } catch (error) {
           console.error("[account] doğrulama maili gönderilemedi:", error);
         }
@@ -367,7 +380,7 @@ const server = createServer(async (req, res) => {
         res.end();
       } catch (error) {
         const message = error instanceof Error ? error.message : "";
-        const errorKind = /zaten kayıtlı/.test(message) ? "duplicate" : "generic";
+        const errorKind = registerErrorKind(message);
         res.writeHead(400, { "content-type": "text/html; charset=utf-8" });
         res.end(renderRegisterPage({ errorKind }));
       }
@@ -396,7 +409,7 @@ const server = createServer(async (req, res) => {
       const form = new URLSearchParams(await readBody(req));
       // Yanıt varlık sızdırmaz: mail hatası da dahil her durumda aynı yönlendirme.
       try {
-        await requestPasswordReset(store, mailSender, form.get("email") ?? "", panelBaseUrl(req));
+        await requestPasswordReset(store, mailSender, form.get("email") ?? "", panelBaseUrl);
       } catch (error) {
         console.error("[account] sıfırlama maili gönderilemedi:", error);
       }
@@ -432,10 +445,20 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+    // GET yalnızca onay sayfası gösterir: posta güvenlik tarayıcıları bağlantıyı ön okur,
+    // tek kullanımlık token'ı GET'te tüketmek doğrulamayı sessizce bozar.
     if (req.method === "GET" && url.pathname === "/verify-email") {
+      const token = url.searchParams.get("token") ?? "";
+      res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      res.end(token ? renderVerifyEmailConfirmPage(token) : renderVerifyEmailResultPage({ ok: false }));
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/verify-email") {
+      const form = new URLSearchParams(await readBody(req));
       let ok = false;
       try {
-        await verifyEmail(store, url.searchParams.get("token") ?? "");
+        await verifyEmail(store, form.get("token") ?? "");
         ok = true;
       } catch {
         ok = false;
@@ -455,6 +478,11 @@ const server = createServer(async (req, res) => {
         res.end("Başvuru formu bulunamadı");
         return;
       }
+      if (!dsarLimiter.allow(site.id)) {
+        res.writeHead(429, { "content-type": "text/html; charset=utf-8" });
+        res.end("Çok fazla başvuru denemesi — bir dakika sonra tekrar deneyin");
+        return;
+      }
       res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
       res.end(renderDsarFormPage({ siteUrl: site.url, formAction: `/dsar/${token}` }));
       return;
@@ -466,6 +494,11 @@ const server = createServer(async (req, res) => {
       if (!site) {
         res.writeHead(404, { "content-type": "text/html; charset=utf-8" });
         res.end("Başvuru formu bulunamadı");
+        return;
+      }
+      if (!dsarLimiter.allow(site.id)) {
+        res.writeHead(429, { "content-type": "text/html; charset=utf-8" });
+        res.end("Çok fazla başvuru denemesi — bir dakika sonra tekrar deneyin");
         return;
       }
       const form = new URLSearchParams(await readBody(req));
@@ -551,8 +584,7 @@ const server = createServer(async (req, res) => {
       const rawUrl = form.get("url") ?? "";
       let target: URL;
       try {
-        target = new URL(rawUrl);
-        if (target.protocol !== "http:" && target.protocol !== "https:") throw new Error("protokol");
+        target = assertPublicHttpUrl(rawUrl);
       } catch {
         res.writeHead(400, { "content-type": "text/html; charset=utf-8" });
         res.end(renderScanRequestPage({ formAction: "/tarama", error: "Geçerli bir http(s) adresi girin" }));
@@ -583,6 +615,16 @@ const server = createServer(async (req, res) => {
         res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
         res.end(renderScanRequestPage({ formAction: "/tarama", resultHtml: report }));
       } catch (error) {
+        if (error instanceof UnsafeTargetError) {
+          res.writeHead(400, { "content-type": "text/html; charset=utf-8" });
+          res.end(
+            renderScanRequestPage({
+              formAction: "/tarama",
+              error: "Bu adres taranamıyor: yalnızca genel internetteki http(s) siteleri taranır",
+            }),
+          );
+          return;
+        }
         console.error("[tarama] başarısız:", error);
         res.writeHead(500, { "content-type": "text/html; charset=utf-8" });
         res.end(
@@ -598,7 +640,15 @@ const server = createServer(async (req, res) => {
     // Ingest rotaları — makine kimliklendirmesi site token'ı iledir (oturum değil);
     // oturum guard'ının ÖNCESİNDE olmalı
     if (req.method === "POST" && url.pathname.startsWith("/api/ingest/")) {
-      const body = JSON.parse(await readBody(req)) as Record<string, unknown>;
+      let body: Record<string, unknown>;
+      try {
+        body = JSON.parse(await readBody(req)) as Record<string, unknown>;
+      } catch (error) {
+        if (error instanceof BodyTooLargeError) throw error;
+        res.writeHead(400, { "content-type": "application/json" });
+        res.end(JSON.stringify({ error: "geçersiz istek" }));
+        return;
+      }
       try {
         if (url.pathname === "/api/ingest/scan/receipt") {
           const entry = await ingest.receipt({
@@ -610,6 +660,12 @@ const server = createServer(async (req, res) => {
           return;
         }
         if (url.pathname === "/api/ingest/scan") {
+          const site = await store.getSiteByToken(String(body.token ?? ""));
+          if (site && !ingestLimiter.allow(site.id)) {
+            res.writeHead(429, { "content-type": "application/json" });
+            res.end(JSON.stringify({ error: "çok fazla istek — bir dakika sonra tekrar deneyin" }));
+            return;
+          }
           const scan = await ingest.scan({
             token: String(body.token ?? ""),
             report: body.report,
@@ -671,7 +727,7 @@ const server = createServer(async (req, res) => {
     }
 
     // Korunan rotalar — oturum zorunlu
-    const tenantId = sessionTenantId(req);
+    const tenantId = await resolveSessionTenant(req);
     if (!tenantId) {
       res.writeHead(302, { location: "/login" });
       res.end();
@@ -808,7 +864,7 @@ const server = createServer(async (req, res) => {
       const setup = await service.getOnboardingStatus();
       res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
       res.end(
-        renderApiKeysPage({ keys, newKey: url.searchParams.get("created") ?? undefined, setup }),
+        renderApiKeysPage({ keys, setup }),
       );
       return;
     }
@@ -817,11 +873,11 @@ const server = createServer(async (req, res) => {
       const form = new URLSearchParams(await readBody(req));
       const secret = await createApiKey(store, tenantId, { name: form.get("name") ?? "anahtar" });
       await store.recordAudit(tenantId, "apikey.created", { keyId: secret.id, name: form.get("name") });
-      const sep = secret.key.includes("?") ? "&" : "?";
-      res.writeHead(302, {
-        location: `/settings/api-keys${sep}created=${encodeURIComponent(secret.key)}`,
-      });
-      res.end();
+      // Anahtar yalnız bu yanıtta gösterilir; adres çubuğuna, tarayıcı geçmişine ve erişim loglarına düşmez
+      const keys = await store.listApiKeys(tenantId);
+      const setup = await service.getOnboardingStatus();
+      res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      res.end(renderApiKeysPage({ keys, newKey: secret.key, setup }));
       return;
     }
 
@@ -920,7 +976,7 @@ const server = createServer(async (req, res) => {
       const user = await store.findUserByTenant(tenantId);
       if (user && !user.emailVerifiedAt) {
         try {
-          await issueEmailVerification(store, mailSender, user, panelBaseUrl(req));
+          await issueEmailVerification(store, mailSender, user, panelBaseUrl);
           res.writeHead(303, { location: "/settings/account?notice=verify-sent" });
         } catch (error) {
           console.error("[account] doğrulama maili gönderilemedi:", error);
@@ -938,6 +994,8 @@ const server = createServer(async (req, res) => {
       try {
         await changePassword(store, tenantId, form.get("currentPassword") ?? "", form.get("newPassword") ?? "");
         await store.recordAudit(tenantId, "account.password_changed", {});
+        // Eski oturumlar düştü; bu tarayıcıya yeni çerez verilir
+        setSessionHeader(res, createSessionToken(tenantId, SESSION_SECRET));
         res.writeHead(303, { location: "/settings/account?notice=password-changed" });
         res.end();
       } catch (error) {
@@ -1020,6 +1078,7 @@ const server = createServer(async (req, res) => {
           embedSrc: embedUrl(req),
           quotaFull: url.searchParams.get("quota") === "full",
           emailVerified: Boolean(detailUser?.emailVerifiedAt),
+          siteInvalid: url.searchParams.get("site") === "invalid",
           setup: await service.getOnboardingStatus(),
         }),
       );
@@ -1053,6 +1112,11 @@ const server = createServer(async (req, res) => {
       } catch (error) {
         if (error instanceof Error && /site kotası doldu/.test(error.message)) {
           res.writeHead(302, { location: `/clients/${clientId}?quota=full` });
+          res.end();
+          return;
+        }
+        if (error instanceof UnsafeTargetError) {
+          res.writeHead(302, { location: `/clients/${clientId}?site=invalid` });
           res.end();
           return;
         }
@@ -1270,6 +1334,13 @@ const server = createServer(async (req, res) => {
   } catch (error) {
     // service katmanındaki "erişim reddedildi" ve benzeri hatalar —
     // varoluş sızdırmak için tek tip yanıt; gerçek sebep yalnızca loga yazılır
+    if (error instanceof BodyTooLargeError) {
+      // Gövde okumayı bıraktık; kalan baytları boşuna almadan bağlantıyı kapat
+      res.setHeader("connection", "close");
+      res.writeHead(413, { "content-type": "text/plain; charset=utf-8" });
+      res.end("İstek gövdesi çok büyük (en fazla 5 MB)");
+      return;
+    }
     console.error("[panel] istek hatası:", error);
     res.writeHead(403, { "content-type": "text/html; charset=utf-8" });
     res.end("Erişim reddedildi");
