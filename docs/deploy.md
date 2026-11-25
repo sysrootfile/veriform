@@ -580,3 +580,37 @@ panel ortamında bulunmalı ve isteğe bağlı aktarılmalı.
 
 **ÖLÇÜLMEDİ:** gerçek SMTP kutu teslimatı ve ters proxy arkasında Secure çerez oturum akışı (§6).
 Bu koşuda SMTP ana bilgisayarı sahteydi; yalnız açılış kapısı ve aktarım ölçüldü, mail gönderilmedi.
+→ İkisi de §21'de gerçek SMTP ve gerçek TLS ile ölçüldü.
+
+## 21. Canlı ölçüm kaydı — 2026-11-25 (gerçek SMTP + TLS/proxy oturumu)
+
+Denek: izole proje `vf-smtp-probe` (compose + §20 aktarımı), `PANEL_URL` Cloudflare hızlı tünelinin
+verdiği genel https adresi, `SESSION_COOKIE_SECURE=1`. Tünel `cloudflare/cloudflared` imajıyla ayrı
+konteynerde koştu (`tunnel --url http://host.docker.internal:4620`), hesap gerektirmedi. SMTP gerçek
+bir Gmail hesabıydı (uygulama şifresi, port 587); değerler `.env`'de, rapora basılmadı.
+
+| Ölçüm | Sonuç |
+|---|---|
+| Genel https `/healthz` | 200 `ok:true`, `ssl_verify_result=0` |
+| Sertifika | gerçek CA: Google Trust Services (WE1), `CN=trycloudflare.com`, geçerli tarih aralığı |
+| Tarayıcı oturum senaryosu (Playwright, gerçek sertifika doğrulaması açık) | 9/9 |
+| Çerez bayrakları | `Secure` + `HttpOnly` + `SameSite=Lax` |
+| Giriş → panel → rehber → çıkış | çıkış `/login`'e düşürdü, oturum düştü |
+| HSTS | tünel üzerinden `max-age=15552000; includeSubDomains`; düz http'de başlık yok |
+| Gmail 587 TCP (konteynerden) | bağlantı OK |
+| Doğrulama maili (`resend-verification`) | 303, 1,28 sn; gerçek kutuya düştü (kullanıcı gördü) |
+| Doğrulama bağlantısı tıklandı | DB `email_verified_at` = 2026-11-25 11:31:53 UTC; token `used_at` dolu |
+| Şifre sıfırlama maili (`forgot-password`) | 303, 3,2 sn; kutuya düştü, kullanıcı yeni şifreyi koydu ve giriş yaptı |
+| Sıfırlama tokenı | 1 token, `used_at` dolu (tek kullanımlık) |
+| Eski oturumlar | `sessions_valid_after` = 11:37:32 UTC; sıfırlama öncesi çerezle `/clients` → 302 `/login` |
+
+Bu koşuda çıkan iki kusur (ayrı iş, bu kayıtta düzeltilmedi):
+
+- SMTP erişilemezken kayıt isteği **42 sn** bekleyip 302 dönüyor. Mail hatası yutuluyor, kayıt
+  başarılı sayılıyor; kullanıcı 42 sn boş ekran görür. Gönderimde zaman aşımı yok.
+- `verify-email` tokenları kullanıldığında eskiler iptal edilmiyor: aynı hesap için 3 token
+  birikmişti, yalnız 1'i kullanıldı. Süreleri dolunca kendiliğinden geçersiz oluyorlar.
+
+**ÖLÇÜLMEDİ:** proxy arkasında limiter kovası — limiter `req.socket.remoteAddress` kullanıyor,
+tünel arkasında tüm istekler aynı konteyner IP'sinden görünüyor (tek kova). Çok kopyalı scheduler
+çakışması da hâlâ ölçülmedi.
